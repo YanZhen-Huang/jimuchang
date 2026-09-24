@@ -40,6 +40,7 @@ const Executor = {
     this.playing = true;
     this.vars = {};
     this.lastMessage = null;
+    this.timerT0 = performance.now();
     // 放映机模式：脚本已由导出时预编译注入，跳过 Blockly 编译
     if (!this.presetScripts) {
       this.scripts = this.compileAll();
@@ -183,6 +184,119 @@ const Executor = {
           else p.fill = instr.color;
           if (Stage.elDom(instr.elId)) Stage.refresh(instr.elId);
         }
+        break;
+      }
+      case 'timer.reset': this.timerT0 = performance.now(); break;
+      case 'el.set': {
+        const fs1 = Project.findElementById(instr.elId);
+        if (!fs1) break;
+        const v1 = Number(await this.evalExpr(instr.value, ctx)) || 0;
+        const e1 = fs1.element;
+        if (instr.prop === 'rotation') e1.rotation = v1;
+        else if (instr.prop === 'opacity') e1.opacity = Math.max(0, Math.min(1, v1));
+        else if (instr.prop === 'w') e1.w = Math.max(10, v1);
+        else if (instr.prop === 'h') e1.h = Math.max(10, v1);
+        else if (instr.prop === 'x' || instr.prop === 'y') e1[instr.prop] = v1;
+        const d1 = Stage.elDom(instr.elId);
+        if (d1) {
+          if (instr.prop === 'w' || instr.prop === 'h') Stage.refresh(instr.elId);
+          else Elements.applyBox(e1, d1);
+        }
+        break;
+      }
+      case 'el.layer': {
+        const fl = Project.findElementById(instr.elId);
+        if (!fl) break;
+        const zs = fl.scene.elements.map(x => x.z || 0);
+        fl.element.z = instr.where === 'front' ? Math.max(...zs) + 1 : Math.min(...zs) - 1;
+        const dl = Stage.elDom(instr.elId);
+        if (dl) dl.style.zIndex = fl.element.z;  // 不重建 DOM（避免清掉气泡/动画状态）
+        break;
+      }
+      case 'el.say': {
+        const txt = String(await this.evalExpr(instr.text, ctx));
+        Bubbles.show(instr.elId, txt, Number(instr.seconds) || 0);
+        break;
+      }
+      case 'el.say.stop': Bubbles.hide(instr.elId); break;
+      case 'el.clone': {
+        const fc1 = Project.findElementById(instr.elId);
+        if (!fc1) break;
+        const copy = JSON.parse(JSON.stringify(fc1.element));
+        copy.id = Project.uid('el');
+        copy.name = fc1.element.name + '·副本';
+        copy.x += 24; copy.y += 24;
+        copy.z = Math.max(...fc1.scene.elements.map(x => x.z || 0)) + 1;
+        fc1.scene.elements.push(copy);
+        if (Stage.currentSceneId === fc1.scene.id) Stage.render(fc1.scene);
+        break;
+      }
+      case 'el.remove': {
+        const fr = Project.findElementById(instr.elId);
+        if (!fr) break;
+        const dr = Stage.elDom(instr.elId);
+        if (dr) dr.remove();
+        Project.removeElement(fr.scene, instr.elId);
+        if (Editor.selectedId === instr.elId) Editor.select(null);
+        break;
+      }
+      case 'scene.replay': {
+        const sr = Stage.currentScene();
+        if (sr) {
+          Stage.render(sr);
+          await this.fireSceneEnter(sr.id);
+        }
+        break;
+      }
+      case 'scene.restart': {
+        const first = Project.data.scenes[0];
+        if (first) await this.sceneGo(first.id, ctx);
+        break;
+      }
+      case 'scene.bg': {
+        const sb = Stage.currentScene();
+        if (!sb) break;
+        sb.background = { type: 'color', value: instr.color };
+        if (Stage.layerEl) {
+          const bgEl = Stage.layerEl.querySelector('.scene-bg');
+          if (bgEl) bgEl.style.background = instr.color;
+        }
+        break;
+      }
+      case 'ctrl.waituntil': {
+        const tw = performance.now();
+        while (!this.truthy(await this.evalExpr(instr.cond, ctx))) {
+          if (ctx.aborted) return;
+          if (performance.now() - tw > 600000) break;
+          await this.sleepAbort(60, ctx);
+        }
+        break;
+      }
+      case 'ctrl.repeatuntil': {
+        let guard = 0;
+        while (!this.truthy(await this.evalExpr(instr.cond, ctx))) {
+          if (ctx.aborted) return;
+          if (++guard > 5000) { console.warn('重复直到：次数过多，已强制退出'); break; }
+          await this.run(instr.body, ctx);
+        }
+        break;
+      }
+      case 'ctrl.stopscript': ctx.aborted = true; break;
+      case 'media.volume':
+        if (AudioMgr.bgm) {
+          try { AudioMgr.bgm.volume = Math.max(0, Math.min(1, Number(instr.value) / 100)); } catch (e) { }
+        }
+        break;
+      case 'media.stopall': AudioMgr.stopAll(); break;
+      case '3d.scale': {
+        const ins = Model3D.instances.get(instr.elId);
+        const sv = Number(await this.evalExpr(instr.value, ctx)) || 1;
+        if (ins && ins.model) ins.model.scale.setScalar(Math.max(0.05, sv));
+        break;
+      }
+      case '3d.animctl': {
+        const ina = Model3D.instances.get(instr.elId);
+        if (ina && ina.mixer) ina.mixer.timeScale = instr.action === 'pause' ? 0 : 1;
         break;
       }
       case 'el.glide': {
@@ -424,6 +538,18 @@ const Executor = {
       case 'bool': return e.v;
       case 'var': return ctx.vars[e.name] !== undefined ? ctx.vars[e.name] : 0;
       case 'call': return await this.execFunc(e.name, ctx);
+      case 'prop': {
+        const fp = Project.findElementById(e.el);
+        if (!fp) return 0;
+        if (e.prop === 'opacity') return fp.element.opacity === undefined ? 1 : fp.element.opacity;
+        return fp.element[e.prop] || 0;
+      }
+      case 'scenename': {
+        const scn = Stage.currentScene();
+        return scn ? scn.name : '';
+      }
+      case 'timer': return (performance.now() - (this.timerT0 || 0)) / 1000;
+      case 'randcolor': return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
       case 'bin': {
         const a = Number(await this.evalExpr(e.a, ctx)), b = Number(await this.evalExpr(e.b, ctx));
         switch (e.op) {

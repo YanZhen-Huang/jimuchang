@@ -1,3 +1,42 @@
+// 说话气泡（Scratch 式）
+const Bubbles = {
+  show(elId, text, seconds) {
+    const f = Project.findElementById(elId);
+    if (f) f.element._bubble = { text: String(text), until: seconds > 0 ? Date.now() + seconds * 1000 : 0 };
+    this.attach(elId, text, seconds);
+  },
+  // 纯 DOM 操作（渲染恢复时复用；场景被重建后自动恢复气泡）
+  attach(elId, text, seconds, domRef) {
+    const dom = domRef || Stage.elDom(elId);
+    if (!dom) return;
+    let b = dom.querySelector(':scope > .el-bubble');
+    if (!b) {
+      b = document.createElement('div');
+      b.className = 'el-bubble';
+      dom.appendChild(b);
+    }
+    b.textContent = text;
+    b.classList.remove('on');
+    void b.offsetWidth;  // 重播过渡动画
+    b.classList.add('on');
+    clearTimeout(b._timer);
+    if (seconds > 0) {
+      b._timer = setTimeout(() => {
+        b.classList.remove('on');
+        const f = Project.findElementById(elId);
+        if (f && f.element._bubble) delete f.element._bubble;
+      }, seconds * 1000);
+    }
+  },
+  hide(elId) {
+    const f = Project.findElementById(elId);
+    if (f) delete f.element._bubble;
+    const dom = Stage.elDom(elId);
+    const b = dom && dom.querySelector(':scope > .el-bubble');
+    if (b) { clearTimeout(b._timer); b.classList.remove('on'); }
+  }
+};
+
 // 元素渲染：outer(定位) > rot(旋转) > anim(动画) > content(内容)
 const Elements = {
   render(el) {
@@ -13,8 +52,17 @@ const Elements = {
     rot.appendChild(anim);
     d.appendChild(rot);
     this.applyBox(el, d);
-    Effects.attach(el, d);
+    this.attach(el, d);
     return d;
+  },
+
+  attach(el, dom) {
+    if (window.Effects) Effects.attach(el, dom);
+    // 恢复说话气泡（场景重建后）
+    if (el._bubble && (!el._bubble.until || Date.now() < el._bubble.until)) {
+      const remain = el._bubble.until ? (el._bubble.until - Date.now()) / 1000 : 0;
+      Bubbles.attach(el.id, el._bubble.text, remain, dom);
+    }
   },
 
   applyBox(el, dom) {
@@ -39,7 +87,7 @@ const Elements = {
     anim.innerHTML = '';
     anim.appendChild(this.buildContent(el));
     this.applyBox(el, dom);
-    Effects.attach(el, dom);
+    this.attach(el, dom);
   },
 
   buildContent(el) {
