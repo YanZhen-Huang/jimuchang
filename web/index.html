@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>积木剧场</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/blockly/blockly.min.js"></script>
+<script src="vendor/blockly/msg/zh-hans.js"></script>
+<script src="vendor/jszip/jszip.min.js"></script>
+<script src="vendor/echarts/echarts.min.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+</head>
+<body>
+  <header id="toolbar">
+    <div class="brand">积木剧场<span id="dirty-dot" title="有未保存修改"></span></div>
+    <div class="tb-group">
+      <button id="btn-new" class="tbtn">新建</button>
+      <button id="btn-open" class="tbtn">打开</button>
+      <button id="btn-save" class="tbtn">保存</button>
+      <button id="btn-undo" class="tbtn" title="撤销 (Ctrl+Z)" disabled>↶</button>
+      <button id="btn-redo" class="tbtn" title="重做 (Ctrl+Y)" disabled>↷</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <button id="btn-add-text" class="tbtn">＋文字</button>
+      <button id="btn-add-image" class="tbtn">＋图片</button>
+      <button id="btn-add-video" class="tbtn">＋视频</button>
+      <button id="btn-add-audio" class="tbtn">＋音频</button>
+      <div class="tb-dropdown">
+        <button class="tbtn">＋更多 ▾</button>
+        <div class="tb-menu">
+          <div class="menu-title">插入元素</div>
+          <button id="btn-add-shape">形状</button>
+          <button id="btn-add-icon">图标</button>
+          <button id="btn-add-chart">图表</button>
+          <button id="btn-add-sprite">帧动画</button>
+          <button id="btn-add-model3d">3D 模型</button>
+          <button id="btn-add-webapp">小程序</button>
+          <div class="menu-title">文件</div>
+          <button id="btn-export">导出放映包…</button>
+          <button id="btn-restore-autosave">恢复自动保存</button>
+          <button id="btn-home">主页 / 最近文件…</button>
+        </div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
+    <button id="btn-help" class="tbtn" title="帮助">？</button>
+    <button id="btn-demo" class="tbtn">示例</button>
+    <button id="btn-play" class="tbtn primary">▶ 播放</button>
+  </header>
+
+  <main id="layout">
+    <section id="blocklyDiv"></section>
+    <section id="right">
+      <div id="scene-tabs"></div>
+      <div id="stage-wrap"></div>
+      <div id="props"></div>
+    </section>
+  </main>
+
+  <div id="home-overlay" class="hidden">
+    <div class="help-panel home-panel">
+      <div class="help-head">
+        <span>积木剧场</span>
+        <button class="p-btn" onclick="document.getElementById('home-overlay').classList.add('hidden')">关闭</button>
+      </div>
+      <div class="home-body">
+        <div class="home-actions">
+          <button id="home-new" class="home-card"><b>＋</b><span>空白项目</span></button>
+          <button id="home-demo" class="home-card"><b>▶</b><span>示例演示</span></button>
+          <button id="home-open" class="home-card"><b>📂</b><span>打开文件…</span></button>
+        </div>
+        <div class="home-recent-wrap">
+          <h4>最近打开</h4>
+          <div id="home-recent"></div>
+        </div>
+        <div class="help-dim" style="margin-top:10px">提示：保存过的项目会出现在这里，点击即可打开。</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="help-overlay" class="hidden">
+    <div class="help-panel">
+      <div class="help-head">
+        <span>帮助 · 三分钟上手</span>
+        <button id="btn-help-close" class="p-btn" onclick="document.getElementById('help-overlay').classList.add('hidden')">关闭</button>
+      </div>
+      <div class="help-body">
+        <div class="help-col">
+          <h4>怎么用</h4>
+          <ol>
+            <li>左侧拖动<b>积木</b>到工作区，拼出演示流程</li>
+            <li>右侧舞台放<b>元素</b>（工具栏添加，拖动摆位置）</li>
+            <li>选中元素可在<b>属性面板</b>调外观、入场动画、关键帧</li>
+            <li>点右上角<b>▶ 播放</b>全屏放映（空格推进、Esc 退出）</li>
+            <li><b>保存</b>为 .bdp 单文件；<b>更多→导出放映包</b>发给别人</li>
+          </ol>
+          <h4>快捷键</h4>
+          <table class="help-keys">
+            <tr><td>Ctrl+S / Ctrl+O / Ctrl+N</td><td>保存 / 打开 / 新建</td></tr>
+            <tr><td>Ctrl+Z / Ctrl+Y</td><td>撤销 / 重做（元素编辑）</td></tr>
+            <tr><td>Del</td><td>删除选中元素</td></tr>
+            <tr><td>方向键（+Shift）</td><td>微调位置 1px / 10px</td></tr>
+            <tr><td>F5</td><td>播放</td></tr>
+            <tr><td>空格 / ← → / Esc</td><td>放映时：推进 / 切场景 / 退出</td></tr>
+          </table>
+        </div>
+        <div class="help-col">
+          <h4>积木分类</h4>
+          <table class="help-keys">
+            <tr><td style="color:#E6A23C">事件</td><td>当演示开始 / 进入场景 / 按键 / 点击 / 收到小程序消息</td></tr>
+            <tr><td style="color:#4C7DF0">场景</td><td>切换场景 / 下一场景 / 设置转场</td></tr>
+            <tr><td style="color:#4CC38A">元素</td><td>显示隐藏 / 改文字 / 移动 / 大小 / 颜色</td></tr>
+            <tr><td style="color:#F0824C">动画</td><td>播放动画（20 种）/ 关键帧动画 / 等待</td></tr>
+            <tr><td style="color:#A06CD5">媒体</td><td>音效 / 背景音乐 / 视频 / 帧动画 / 刷新图表</td></tr>
+            <tr><td style="color:#E86CA0">特效</td><td>粒子爆发（星尘/彩带/爱心/花瓣）</td></tr>
+            <tr><td style="color:#E0574C">3D</td><td>镜头 / 环绕 / 推拉 / 骨骼动画 / 灯光 / 自动旋转</td></tr>
+            <tr><td style="color:#4CC2C0">高级</td><td>执行 JS 代码 / 小程序消息</td></tr>
+          </table>
+          <h4>AI 接一口（可选）</h4>
+          <p class="help-dim">本程序开着的时候，AI 工具（如 opencode）可以通过 MCP 直接帮你生成演示：说一句"用积木剧场做个 XX"就行。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="kf-overlay" class="hidden">
+    <div class="kf-panel">
+      <div class="kf-head">
+        <span class="kf-title">关键帧动画</span>
+        <label>时长 <input id="kf-dur" type="number" step="0.1" min="0.2" max="60" value="3">秒</label>
+        <label class="p-chk"><input id="kf-loop" type="checkbox">循环</label>
+        <button id="kf-play" class="p-btn">▶ 试播</button>
+        <button id="kf-clear" class="p-btn">清空</button>
+        <div class="spacer"></div>
+        <button id="kf-close" class="p-btn">完成</button>
+      </div>
+      <div id="kf-edit" class="kf-edit hidden">
+        <span class="kf-selname"></span>
+        <label>时间 <input id="kfe-t" type="number" step="0.05" min="0"></label>
+        <label>值 <input id="kfe-v" type="number" step="1"></label>
+        <label>缓动 <select id="kfe-e"></select></label>
+      </div>
+      <div id="kf-tracks"></div>
+      <div class="kf-hint">点击轨道空白处打点 · 拖动关键帧点改时间 · 双击或右键删除 · 面板编辑会自动保存</div>
+    </div>
+  </div>
+
+  <div id="play-hint">空格 推进 · ← → 切场景 · Esc 退出</div>
+  <div id="toast"></div>
+
+  <script src="js/easing.js"></script>
+  <script src="js/project.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/three-scene.js"></script>
+  <script src="js/elements.js"></script>
+  <script src="js/stage.js"></script>
+  <script src="js/animations.js"></script>
+  <script src="js/blocks.js"></script>
+  <script src="js/executor.js"></script>
+  <script src="js/keyframes.js"></script>
+  <script src="js/jimu-api.js"></script>
+  <script src="js/api-bridge.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+#!/usr/bin/env node
+// 积木剧场 MCP 服务器：把本地 HTTP API 包装成 MCP 工具
+// 使用前：1) 启动积木剧场  2) 在 AI 客户端注册本脚本（stdio）
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+// 依赖查找：环境变量 > 脚本旁 node_modules（推荐 cd tools && npm install）> 用户级安装
+const MODULE_BASES = [
+  process.env.JIMUCHANG_MCP_MODULES,
+  path.join(__dirname, 'node_modules'),
+  path.join(os.homedir(), '.local/lib/jimuchang-mcp/node_modules')
+].filter(Boolean);
+function req(name) {
+  for (const base of MODULE_BASES) {
+    try { return require(path.join(base, name)); } catch (e) { }
+  }
+  throw new Error('缺少依赖：请在 tools 目录执行  npm install @modelcontextprotocol/sdk zod');
+}
+const { McpServer } = req('@modelcontextprotocol/sdk/dist/cjs/server/mcp.js');
+const { StdioServerTransport } = req('@modelcontextprotocol/sdk/dist/cjs/server/stdio.js');
+const { z } = req('zod');
+
+const API_CFG = path.join(os.homedir(), '.config/jimuchang/api.json');
+
+async function api(method, p, body) {
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(API_CFG, 'utf8'));
+  } catch (e) {
+    throw new Error('读不到 ' + API_CFG + '，请先启动积木剧场（API 自动开启）');
+  }
+  const res = await fetch(`http://127.0.0.1:${cfg.port}${p}`, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + cfg.token,
+      'Content-Type': 'application/json'
+    },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  return await res.json();
+}
+
+const ok = data => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
+const fail = e => ({
+  isError: true,
+  content: [{ type: 'text', text: '错误：' + (e && e.message ? e.message : String(e)) }]
+});
+
+const server = new McpServer({ name: 'jimuchang', version: '0.1.0' });
+const tool = (name, desc, schema, fn) => {
+  server.tool(name, desc, schema, async (args) => {
+    try { return ok(await fn(args || {})); } catch (e) { return fail(e); }
+  });
+};
+
+// ---------- 状态 / 帮助 ----------
+tool('jc_status', '查看积木剧场状态（项目、当前场景、是否放映中）', {}, () => api('GET', '/api/status'));
+tool('jc_help', '列出全部 API 端点和用法', {}, () => api('GET', '/api/help'));
+
+// ---------- 项目 ----------
+tool('jc_get_project', '读取当前项目的完整数据（场景/元素/资源列表）', {}, () => api('GET', '/api/project'));
+tool('jc_put_project', '用完整 JSON 覆盖项目（AI 一次性生成整个演示）', { project: z.any() }, a => api('PUT', '/api/project', { project: a.project }));
+tool('jc_new_project', '新建空项目', { name: z.string().optional() }, a => api('POST', '/api/project/new', a));
+tool('jc_open_project', '打开磁盘上的 .bdp 项目文件', { path: z.string() }, a => api('POST', '/api/project/open', a));
+tool('jc_save_project', '保存项目到 .bdp（不传 path 则覆盖原路径）', { path: z.string().optional() }, a => api('POST', '/api/project/save', a));
+
+// ---------- 场景 ----------
+tool('jc_list_scenes', '列出全部场景', {}, () => api('GET', '/api/scenes'));
+tool('jc_add_scene', '新建场景', { name: z.string().optional() }, a => api('POST', '/api/scenes', a));
+tool('jc_update_scene', '修改场景（name/background/transition/fx 任意子集）', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/scenes/' + a.id, a.patch));
+tool('jc_delete_scene', '删除场景（至少保留一个）', { id: z.string() }, a => api('DELETE', '/api/scenes/' + a.id));
+
+// ---------- 元素 ----------
+tool('jc_list_elements', '列出某场景的元素', { sceneId: z.string() }, a => api('GET', '/api/scenes/' + a.sceneId + '/elements'));
+tool('jc_add_element', '新建元素。type 可选：text/image/shape/icon/video/audio/chart/sprite/model3d/webapp；可带 name/x/y/w/h/props', { element: z.any() }, a => api('POST', '/api/elements', a.element));
+tool('jc_update_element', '修改元素（x/y/w/h/rotation/opacity/visible/entrance/effects/keyframes/props 任意子集）', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/elements/' + a.id, a.patch));
+tool('jc_delete_element', '删除元素', { id: z.string() }, a => api('DELETE', '/api/elements/' + a.id));
+tool('jc_animate_element', '对元素播放动画（类型如 fadeIn/flyInLeft/zoomIn/bounceIn/typewriter/pulse/shake/glowPulse 等）', {
+  id: z.string(), type: z.string(),
+  duration: z.number().optional(), delay: z.number().optional(), easing: z.string().optional()
+}, a => api('POST', '/api/elements/' + a.id + '/animate', { type: a.type, duration: a.duration, delay: a.delay, easing: a.easing }));
+tool('jc_set_keyframes', '设置元素关键帧动画（tracks: x/y/scale/rotation/opacity 数组，元素 {t,v,e}）', { id: z.string(), keyframes: z.any() }, a => api('PUT', '/api/elements/' + a.id + '/keyframes', a.keyframes));
+
+// ---------- 积木脚本 ----------
+tool('jc_set_scene_blocks', '设置某场景的积木脚本（Blockly 序列化 JSON）', { sceneId: z.string(), blocks: z.any() }, a => api('PUT', '/api/scenes/' + a.sceneId + '/blocks', { blocks: a.blocks }));
+tool('jc_set_global_blocks', '设置全局积木脚本（当演示开始/按键等）', { blocks: z.any() }, a => api('PUT', '/api/global-blocks', { blocks: a.blocks }));
+
+// ---------- 资源 ----------
+tool('jc_upload_resource', '把本地文件上传进项目（图片/音频/视频/模型等），返回资源 id', { path: z.string(), mime: z.string().optional() }, a => {
+  const data = fs.readFileSync(a.path);
+  return api('POST', '/api/resources', { name: path.basename(a.path), mime: a.mime, base64: data.toString('base64') });
+});
+
+// ---------- 播放 / 截图 ----------
+tool('jc_play', '开始全屏放映', {}, () => api('POST', '/api/play'));
+tool('jc_stop', '停止放映回到编辑', {}, () => api('POST', '/api/play/stop'));
+tool('jc_export', '导出单文件 HTML 放映包（浏览器双击即放，可发给别人）', { path: z.string().describe('导出目标路径，如 /home/user/桌面/我的演示.html') }, a => api('POST', '/api/export', { path: a.path }));
+tool('jc_screenshot', '截取当前窗口画面（返回 base64 PNG），用于 AI 自检演示效果', {}, () => api('GET', '/api/screenshot'));
+
+const transport = new StdioServerTransport();
+server.connect(transport).catch(e => {
+  process.stderr.write('MCP 启动失败: ' + e.message + '\n');
+  process.exit(1);
+});

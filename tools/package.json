@@ -1,0 +1,12 @@
+{
+  "name": "jimuchang-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "积木剧场 MCP 服务器：让 AI 客户端直接操控积木剧场",
+  "main": "jimuchang-mcp",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.24.0"
+  }
+}

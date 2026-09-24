@@ -1,0 +1,22 @@
+{
+  "name": "jimuchang",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "blockly": "^13.3.0",
+    "echarts": "^6.1.0",
+    "jszip": "^3.10.2",
+    "three": "^0.186.0"
+  }
+}

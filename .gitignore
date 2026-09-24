@@ -1,0 +1,13 @@
+# 构建产物
+build/
+.qt/
+CMakeCache.txt
+CMakeFiles/
+
+# 依赖（前端资源已 vendor 进 web/vendor，无需 node_modules）
+node_modules/
+
+# 编辑器/系统
+*.user
+*.swp
+.DS_Store
