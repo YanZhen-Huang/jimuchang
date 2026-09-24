@@ -105,6 +105,19 @@ const Sprites = {
       case 'pause': st.playing = false; break;
       case 'stop': st.playing = false; st.t0 = performance.now(); st.lastFrame = -1; this.draw(st, 0); break;
       case 'speed': st.speed = Math.max(0.1, Number(value) || 1); break;
+      case 'frame':
+        st.playing = false;
+        st.lastFrame = -1;
+        this.draw(st, Math.max(0, Math.round(Number(value) || 0) - 1) % this.frameCount(st));
+        st.lastFrame = Math.max(0, Math.round(Number(value) || 0) - 1) % this.frameCount(st);
+        break;
+      case 'next': {
+        st.playing = false;
+        const total = this.frameCount(st);
+        st.lastFrame = (st.lastFrame + 1) % total;
+        this.draw(st, st.lastFrame);
+        break;
+      }
     }
   }
 };

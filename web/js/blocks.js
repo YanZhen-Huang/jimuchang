@@ -91,7 +91,8 @@
     jimu_media: { colourPrimary: C.media },
     jimu_fx: { colourPrimary: C.fx },
     jimu_3d: { colourPrimary: C.three },
-    jimu_adv: { colourPrimary: '#4CC2C0' }
+    jimu_adv: { colourPrimary: '#4CC2C0' },
+    jimu_motion: { colourPrimary: '#4C8DF0' }
   };
 
   // Blockly 13 移除了内置 FieldColour，用轻量替代（hex 输入 + 校验）
@@ -371,6 +372,84 @@
     }
   };
 
+  // ---- 运动（Scratch 式动作积木）----
+  const CHANGE_PROPS = [
+    ['x', 'x'], ['y', 'y'], ['旋转', 'rotation'], ['大小(%)', 'size'], ['透明度(%)', 'opacity']
+  ];
+
+  defs['jimu_glide'] = {
+    init() {
+      this.appendDummyInput().appendField('让')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('在');
+      this.appendValueInput('DUR');
+      this.appendDummyInput().appendField('秒内滑行到');
+      this.appendValueInput('X');
+      this.appendDummyInput().appendField('y:');
+      this.appendValueInput('Y');
+      this.appendDummyInput().appendField('缓动')
+        .appendField(new Blockly.FieldDropdown(EASINGS), 'EASE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_steps'] = {
+    init() {
+      this.appendDummyInput().appendField('让')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('沿朝向移动');
+      this.appendValueInput('STEPS');
+      this.appendDummyInput().appendField('步');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_face'] = {
+    init() {
+      this.appendDummyInput().appendField('让')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('面向');
+      this.appendValueInput('ANGLE');
+      this.appendDummyInput().appendField('度');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_change'] = {
+    init() {
+      this.appendDummyInput().appendField('将')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('的')
+        .appendField(new Blockly.FieldDropdown(CHANGE_PROPS), 'PROP')
+        .appendField('增加');
+      this.appendValueInput('DELTA');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_frame'] = {
+    init() {
+      this.appendDummyInput().appendField('让')
+        .appendField(new Blockly.FieldDropdown(spriteElementOptions), 'ELEMENT')
+        .appendField(new Blockly.FieldDropdown([
+          ['下一个造型', 'next'], ['切换到第', 'set']
+        ]), 'ACTION');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+
   // ---- 3D ----
   const VIEW_PRESETS = [['正面', 'front'], ['侧面', 'side'], ['背面', 'back'], ['俯视', 'top'], ['45 度', 'corner']];
   const LIGHT_PRESETS = [['柔和', 'soft'], ['明亮', 'bright'], ['昏暗', 'dark'], ['冷色', 'cool'], ['暖色', 'warm']];
@@ -603,6 +682,16 @@
             ]
           },
           {
+            kind: 'category', name: '运动', colour: '#4C8DF0',
+            contents: [
+              { kind: 'block', type: 'jimu_glide', inputs: { DUR: { shadow: { type: 'math_number', fields: { NUM: 0.5 } } }, X: { shadow: { type: 'math_number', fields: { NUM: 100 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_steps', inputs: { STEPS: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_face', inputs: { ANGLE: { shadow: { type: 'math_number', fields: { NUM: 0 } } } } },
+              { kind: 'block', type: 'jimu_change', inputs: { DELTA: { shadow: { type: 'math_number', fields: { NUM: 10 } } } } },
+              { kind: 'block', type: 'jimu_frame', inputs: { VALUE: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } }
+            ]
+          },
+          {
             kind: 'category', name: '动画', colour: C.anim,
             contents: [
               { kind: 'block', type: 'jimu_anim' },
@@ -790,6 +879,25 @@ const IRCompiler = {
       };
       case 'jimu_webapp_send': return {
         op: 'webapp.send', elId: b.getFieldValue('ELEMENT'), msg: this.expr(b, 'MSG')
+      };
+      case 'jimu_glide': return {
+        op: 'el.glide', elId: b.getFieldValue('ELEMENT'),
+        duration: this.expr(b, 'DUR'), x: this.expr(b, 'X'), y: this.expr(b, 'Y'),
+        easing: b.getFieldValue('EASE')
+      };
+      case 'jimu_steps': return {
+        op: 'el.steps', elId: b.getFieldValue('ELEMENT'), steps: this.expr(b, 'STEPS')
+      };
+      case 'jimu_face': return {
+        op: 'el.face', elId: b.getFieldValue('ELEMENT'), angle: this.expr(b, 'ANGLE')
+      };
+      case 'jimu_change': return {
+        op: 'el.change', elId: b.getFieldValue('ELEMENT'),
+        prop: b.getFieldValue('PROP'), delta: this.expr(b, 'DELTA')
+      };
+      case 'jimu_frame': return {
+        op: 'el.frame', elId: b.getFieldValue('ELEMENT'),
+        action: b.getFieldValue('ACTION'), value: this.expr(b, 'VALUE')
       };
       case 'jimu_3d_view': return {
         op: '3d.view', elId: b.getFieldValue('ELEMENT'), preset: b.getFieldValue('PRESET'),

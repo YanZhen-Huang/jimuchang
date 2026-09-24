@@ -185,6 +185,80 @@ const Executor = {
         }
         break;
       }
+      case 'el.glide': {
+        const fg = Project.findElementById(instr.elId);
+        if (!fg) break;
+        const tx = Number(await this.evalExpr(instr.x, ctx)) || 0;
+        const ty = Number(await this.evalExpr(instr.y, ctx)) || 0;
+        const dur = Math.max(0, Number(await this.evalExpr(instr.duration, ctx)) || 0);
+        const dom = Stage.elDom(instr.elId);
+        if (!dom || dur <= 0) {
+          fg.element.x = tx; fg.element.y = ty;
+          if (dom) Elements.applyBox(fg.element, dom);
+          break;
+        }
+        const animEl = dom.querySelector('.el-anim');
+        const sx = fg.element.x, sy = fg.element.y;
+        let anim = null;
+        if (animEl) {
+          anim = animEl.animate(
+            [{ transform: `translate(${sx - tx}px, ${sy - ty}px)` }, { transform: 'translate(0,0)' }],
+            { duration: dur * 1000, easing: Easing.css(instr.easing || 'easeInOutCubic') });
+          try { await anim.finished; } catch (e) { }
+        }
+        fg.element.x = tx; fg.element.y = ty;
+        if (dom) {
+          Elements.applyBox(fg.element, dom);
+          if (anim) { try { anim.cancel(); } catch (e) { } }
+        }
+        break;
+      }
+      case 'el.steps': {
+        const fs2 = Project.findElementById(instr.elId);
+        if (!fs2) break;
+        const steps = Number(await this.evalExpr(instr.steps, ctx)) || 0;
+        const rad = (fs2.element.rotation || 0) * Math.PI / 180;
+        fs2.element.x += Math.round(Math.cos(rad) * steps);
+        fs2.element.y += Math.round(Math.sin(rad) * steps);
+        const dom2 = Stage.elDom(instr.elId);
+        if (dom2) Elements.applyBox(fs2.element, dom2);
+        break;
+      }
+      case 'el.face': {
+        const ff = Project.findElementById(instr.elId);
+        if (!ff) break;
+        ff.element.rotation = Number(await this.evalExpr(instr.angle, ctx)) || 0;
+        const dom3 = Stage.elDom(instr.elId);
+        if (dom3) Elements.applyBox(ff.element, dom3);
+        break;
+      }
+      case 'el.change': {
+        const fc = Project.findElementById(instr.elId);
+        if (!fc) break;
+        const d = Number(await this.evalExpr(instr.delta, ctx)) || 0;
+        const el = fc.element;
+        if (instr.prop === 'x') el.x += Math.round(d);
+        else if (instr.prop === 'y') el.y += Math.round(d);
+        else if (instr.prop === 'rotation') el.rotation = (el.rotation || 0) + d;
+        else if (instr.prop === 'size') {
+          const k = Math.max(0.05, 1 + d / 100);
+          el.w = Math.round(el.w * k);
+          el.h = Math.round(el.h * k);
+        } else if (instr.prop === 'opacity') {
+          el.opacity = Math.max(0, Math.min(1, (el.opacity === undefined ? 1 : el.opacity) + d / 100));
+        }
+        const dom4 = Stage.elDom(instr.elId);
+        if (dom4) {
+          if (instr.prop === 'size') Stage.refresh(instr.elId);
+          else Elements.applyBox(el, dom4);
+        }
+        break;
+      }
+      case 'el.frame': {
+        const val = await this.evalExpr(instr.value, ctx);
+        Sprites.control(instr.elId, instr.action === 'next' ? 'next' : 'frame', Number(val) || 1);
+        break;
+      }
       case 'el.anim': {
         const f = Project.findElementById(instr.elId);
         if (!f) break;
