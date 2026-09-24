@@ -94,6 +94,17 @@
     jimu_adv: { colourPrimary: '#4CC2C0' }
   };
 
+  // Blockly 13 移除了内置 FieldColour，用轻量替代（hex 输入 + 校验）
+  class FieldHex extends Blockly.FieldTextInput {
+    constructor(value) {
+      super(value || '#6C8CFF', v => {
+        const str = String(v == null ? '' : v).trim();
+        if (!/^#[0-9a-fA-F]{6}$/.test(str)) return null;
+        return str.toLowerCase();
+      });
+    }
+  }
+
   const defs = {};
   // ---- 事件（帽子块）----
   defs['jimu_on_start'] = {
@@ -224,7 +235,7 @@
       this.appendDummyInput().appendField('把')
         .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
         .appendField('的颜色设为')
-        .appendField(new Blockly.FieldColour('#6C8CFF'), 'COLOR');
+        .appendField(new FieldHex('#6C8CFF'), 'COLOR');
       this.setPreviousStatement(true);
       this.setNextStatement(true);
       this.setStyle('jimu_element');
