@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>积木剧场 · 发布页</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0B0E14;
+    --panel: rgba(255, 255, 255, .035);
+    --line: rgba(255, 255, 255, .09);
+    --text: #E8EBF2;
+    --dim: #8A93A6;
+    --c1: #6C8CFF;
+    --c2: #A06CD5;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Source Han Sans SC", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7; overflow-x: hidden;
+  }
+  /* 背景光晕 */
+  .glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  }
+  .glow::before, .glow::after {
+    content: ''; position: absolute; border-radius: 50%;
+    filter: blur(120px); opacity: .35;
+    animation: breathe 9s ease-in-out infinite alternate;
+  }
+  .glow::before {
+    width: 640px; height: 640px; top: -220px; left: -140px;
+    background: radial-gradient(circle, rgba(108,140,255,.5), transparent 70%);
+  }
+  .glow::after {
+    width: 560px; height: 560px; top: 200px; right: -180px;
+    background: radial-gradient(circle, rgba(160,108,213,.45), transparent 70%);
+    animation-delay: -4s;
+  }
+  @keyframes breathe { from { opacity: .22; transform: scale(.95); } to { opacity: .4; transform: scale(1.06); } }
+
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  header.hero { padding: 96px 0 56px; text-align: center; }
+  .badge {
+    display: inline-flex; gap: 10px; align-items: center;
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 18px; font-size: 13px; color: var(--dim);
+    background: var(--panel); margin-bottom: 26px;
+    animation: up .7s ease both;
+  }
+  .badge b { color: var(--c1); font-weight: 600; }
+  h1 {
+    font-size: clamp(44px, 8vw, 84px); font-weight: 700; letter-spacing: 2px;
+    background: linear-gradient(120deg, #FFFFFF 10%, var(--c1) 45%, var(--c2) 80%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    animation: up .7s .08s ease both;
+  }
+  .tagline { font-size: clamp(18px, 3vw, 26px); color: var(--text); margin-top: 18px; animation: up .7s .16s ease both; }
+  .sub { max-width: 640px; margin: 18px auto 0; color: var(--dim); font-size: 15.5px; animation: up .7s .24s ease both; }
+  .actions { display: flex; gap: 14px; justify-content: center; margin-top: 36px; flex-wrap: wrap; animation: up .7s .32s ease both; }
+  .btn {
+    display: inline-block; padding: 13px 34px; border-radius: 12px;
+    border: 1px solid var(--line); color: var(--text); text-decoration: none;
+    font-size: 15px; background: var(--panel);
+    transition: all .22s ease;
+  }
+  .btn:hover { transform: translateY(-2px); border-color: rgba(108,140,255,.5); background: rgba(108,140,255,.1); }
+  .btn.primary {
+    background: linear-gradient(120deg, var(--c1), var(--c2));
+    border: none; color: #fff; font-weight: 600;
+    box-shadow: 0 10px 34px rgba(108,140,255,.35);
+  }
+  .btn.primary:hover { box-shadow: 0 14px 44px rgba(108,140,255,.5); }
+  @keyframes up { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+
+  /* 主截图 */
+  .hero-shot {
+    margin: 46px auto 0; max-width: 920px;
+    border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 30px 90px rgba(0,0,0,.55);
+    animation: up .8s .4s ease both;
+    transition: transform .3s ease;
+  }
+  .hero-shot:hover { transform: translateY(-4px) scale(1.005); }
+  .hero-shot img { width: 100%; display: block; }
+
+  section { padding: 64px 0 8px; }
+  h2 {
+    font-size: 30px; font-weight: 700; text-align: center; margin-bottom: 10px;
+  }
+  h2 span {
+    background: linear-gradient(120deg, var(--c1), var(--c2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .section-sub { text-align: center; color: var(--dim); font-size: 14.5px; margin-bottom: 40px; }
+
+  /* 功能卡片 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 24px 22px; transition: all .25s ease;
+  }
+  .card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(108,140,255,.45);
+    box-shadow: 0 18px 50px rgba(108,140,255,.13);
+    background: rgba(108,140,255,.05);
+  }
+  .card .ico { font-size: 28px; margin-bottom: 12px; }
+  .card h3 { font-size: 16.5px; margin-bottom: 8px; font-weight: 600; }
+  .card p { color: var(--dim); font-size: 13.5px; line-height: 1.75; }
+
+  /* 截图网格 */
+  .shots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .shot { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #000; transition: all .3s ease; }
+  .shot:hover { transform: scale(1.015); border-color: rgba(108,140,255,.4); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+  .shot img { width: 100%; display: block; }
+  .shot .cap { padding: 10px 16px; font-size: 13px; color: var(--dim); border-top: 1px solid var(--line); background: var(--panel); }
+
+  /* 数字条 */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 8px; }
+  .stat { text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px 12px; }
+  .stat b {
+    display: block; font-size: 38px; font-weight: 700;
+    background: linear-gradient(120deg, var(--c1), var(--c2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .stat span { color: var(--dim); font-size: 13.5px; }
+
+  /* 时间线 */
+  .timeline { position: relative; max-width: 620px; margin: 0 auto; padding-left: 30px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px;
+    background: linear-gradient(180deg, var(--c1), var(--c2));
+    border-radius: 2px; opacity: .5;
+  }
+  .tl-item { position: relative; padding: 0 0 22px 12px; }
+  .tl-item::before {
+    content: ''; position: absolute; left: -29px; top: 8px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--bg); border: 3px solid var(--c1);
+  }
+  .tl-item b { color: var(--text); font-size: 15px; }
+  .tl-item b em { color: var(--c1); font-style: normal; margin-right: 10px; font-weight: 700; }
+  .tl-item p { color: var(--dim); font-size: 13.5px; margin-top: 2px; }
+
+  /* 技术栈 */
+  .tech-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .chip {
+    padding: 8px 18px; border-radius: 999px; font-size: 13.5px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    transition: all .2s ease;
+  }
+  .chip:hover { border-color: rgba(108,140,255,.5); color: var(--c1); }
+
+  footer {
+    margin-top: 84px; padding: 36px 24px 44px; text-align: center;
+    border-top: 1px solid var(--line); color: var(--dim); font-size: 13.5px;
+  }
+  footer a { color: var(--c1); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 700px) {
+    header.hero { padding: 64px 0 40px; }
+    .shots { grid-template-columns: 1fr; }
+    section { padding: 46px 0 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="badge">v0.1.0 正式发布 · <b>MIT 开源</b> · 完全离线</div>
+    <h1>积木剧场</h1>
+    <p class="tagline">用图形化积木编排带 2D / 3D 动画的演示</p>
+    <p class="sub">"Scratch 的手感 + PPT 的舞台" —— 拖积木定义演示流程，一键全屏放映，还能导出单文件网页放映包，发给任何人都能看。</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/YanZhen-Huang/jimuchang" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a class="btn" href="https://github.com/YanZhen-Huang/jimuchang/wiki" target="_blank" rel="noopener">项目 Wiki</a>
+      <a class="btn" href="https://github.com/YanZhen-Huang/jimuchang/blob/main/docs/使用文档.md" target="_blank" rel="noopener">使用文档</a>
+    </div>
+    <div class="hero-shot"><img src="imgs/editor.png" alt="积木剧场编辑界面"></div>
+  </header>
+
+  <section>
+    <h2>它能做什么</h2>
+    <p class="section-sub">把"演示文稿"和"图形化编程"合在一起</p>
+    <div class="grid">
+      <div class="card"><div class="ico">🧩</div><h3>60 块中文积木</h3><p>事件 / 场景 / 元素 / 运动 / 感知 / 动画 / 媒体 / 特效 / 3D / 高级，配 Blockly 原生逻辑、变量与函数（含返回值）</p></div>
+      <div class="card"><div class="ico">🎬</div><h3>10 种演示元素</h3><p>文字、图片、视频、音频、形状、emoji 图标、图表、帧动画、3D 模型、网页小程序</p></div>
+      <div class="card"><div class="ico">✨</div><h3>三层动画体系</h3><p>元素预设入场（20 种动画 × 12 条缓动）→ 积木命令 → 关键帧动画编辑器（5 条属性轨道）</p></div>
+      <div class="card"><div class="ico">🎆</div><h3>特效库</h3><p>光晕 / 霓虹 / 扫光 / 故障，星空 / 飘雪 / 微粒 / 极光，粒子爆发（星尘 / 彩带 / 爱心 / 花瓣）</p></div>
+      <div class="card"><div class="ico">🧊</div><h3>3D 与镜头</h3><p>Three.js 模型元素、骨骼动画、镜头环绕推拉、灯光预设——与 2D 元素无缝混排</p></div>
+      <div class="card"><div class="ico">💬</div><h3>说话气泡</h3><p>Scratch 式对白气泡，限时或常驻，场景重建后自动恢复</p></div>
+      <div class="card"><div class="ico">🖥</div><h3>全屏放映</h3><p>空格推进、按键交互、场景转场（8 种）、光标自动隐藏</p></div>
+      <div class="card"><div class="ico">📦</div><h3>单文件项目</h3><p>.bdp 内打包全部素材，换电脑、发微信不丢资源</p></div>
+      <div class="card"><div class="ico">🌐</div><h3>导出放映包</h3><p>生成单个 HTML 文件，浏览器双击即放、可交互、无需安装</p></div>
+      <div class="card"><div class="ico">🤖</div><h3>AI 接口</h3><p>本地 HTTP API + MCP 服务器（23 工具），AI 助手可直接生成、修改、截图自检演示</p></div>
+      <div class="card"><div class="ico">🎨</div><h3>深色 / 浅色主题</h3><p>简约高级风界面，一键切换，记忆偏好</p></div>
+      <div class="card"><div class="ico">⚡</div><h3>轻量离线</h3><p>全部资源编译进单个可执行文件，启动即用，运行时零外部依赖</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>界面一览</h2>
+    <p class="section-sub">三栏布局 · 舞台所见即所得 · 积木即时间轴</p>
+    <div class="shots">
+      <div class="shot"><img src="imgs/3d.png" alt="3D 模型展示"><div class="cap">3D 模型 · 骨骼动画 · 镜头控制</div></div>
+      <div class="shot"><img src="imgs/charts.png" alt="图表与特效"><div class="cap">图表 · 星空特效 · 粒子爆发</div></div>
+      <div class="shot"><img src="imgs/help.png" alt="内置帮助"><div class="cap">内置帮助页 · 三分钟上手</div></div>
+      <div class="shot"><img src="imgs/light.png" alt="浅色主题"><div class="cap">浅色主题 · 一键切换</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>数字一览</h2>
+    <div class="stats">
+      <div class="stat"><b>60</b><span>块中文积木</span></div>
+      <div class="stat"><b>10</b><span>种演示元素</span></div>
+      <div class="stat"><b>20+</b><span>种动画特效</span></div>
+      <div class="stat"><b>10万</b><span>行代码</span></div>
+      <div class="stat"><b>8</b><span>个开发阶段</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>技术一览</h2>
+    <p class="section-sub">Qt6 WebEngine 外壳 × Web 前端引擎 × 原生 C++ API</p>
+    <div class="tech-row">
+      <span class="chip">Qt 6 / C++17</span>
+      <span class="chip">WebEngine</span>
+      <span class="chip">Blockly 13</span>
+      <span class="chip">Three.js</span>
+      <span class="chip">ECharts 6</span>
+      <span class="chip">Web Animations API</span>
+      <span class="chip">JSZip</span>
+      <span class="chip">QHttpServer</span>
+      <span class="chip">MCP 协议</span>
+      <span class="chip">单文件发布</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>开发历程</h2>
+    <p class="section-sub">从技术验证到打磨发布，八步走完</p>
+    <div class="timeline">
+      <div class="tl-item"><b><em>P0</em>技术验证</b><p>WebEngine / Blockly / 视频 / 截图能力全链路验证</p></div>
+      <div class="tl-item"><b><em>P1</em>核心闭环</b><p>三栏编辑界面、积木、IR 执行引擎、播放、项目存取</p></div>
+      <div class="tl-item"><b><em>P2</em>媒体与特效</b><p>音视频、图表、帧动画、特效库、撤销重做、自动保存</p></div>
+      <div class="tl-item"><b><em>P3</em>关键帧动画</b><p>属性轨道编辑器：打点、补间、逐点缓动、试播</p></div>
+      <div class="tl-item"><b><em>P4</em>3D 与自制程序</b><p>Three.js 子系统、JS API、网页小程序、函数积木</p></div>
+      <div class="tl-item"><b><em>P5</em>AI 接口</b><p>本地 HTTP API + MCP 服务器（23 个工具）</p></div>
+      <div class="tl-item"><b><em>P6</em>导出放映包</b><p>单文件 HTML，浏览器双击即放</p></div>
+      <div class="tl-item"><b><em>P7</em>三轮打磨</b><p>辅助线、帮助页、浅色主题、右键菜单、性能优化、积木库扩充至 60 块</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><a href="https://github.com/YanZhen-Huang/jimuchang" target="_blank" rel="noopener">github.com/YanZhen-Huang/jimuchang</a></p>
+    <p style="margin-top: 8px">MIT License © 2026 YanZhen-Huang · 用积木，讲好一个故事</p>
+  </footer>
+
+</div>
+</body>
+</html>
