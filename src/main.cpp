@@ -195,6 +195,20 @@ public slots:
         s.setValue(QStringLiteral("recentFiles"), list);
     }
 
+    QString exportPptx(const QString &base64, const QString &suggestedName) {
+        if (!m_win) return QString();
+        const QString path = QFileDialog::getSaveFileName(
+            m_win, QStringLiteral("导出为 PPT"),
+            QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("演示.pptx") : suggestedName),
+            QStringLiteral("PPT 演示文稿 (*.pptx)"));
+        if (path.isEmpty()) return QString();
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly)) return QString();
+        f.write(QByteArray::fromBase64(base64.toLatin1()));
+        f.close();
+        return path;
+    }
+
     QString autosavePath() {
         const QString dir = QDir::homePath() + QStringLiteral("/.cache/jimuchang");
         QDir().mkpath(dir);
@@ -316,6 +330,10 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-guides"))) {
             q.addQueryItem(QStringLiteral("testguides"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-ppt"))) {
+            q.addQueryItem(QStringLiteral("testppt"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (args.contains(QStringLiteral("--test-menu"))) {

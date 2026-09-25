@@ -8,6 +8,7 @@
 <script src="vendor/blockly/msg/zh-hans.js"></script>
 <script src="vendor/jszip/jszip.min.js"></script>
 <script src="vendor/echarts/echarts.min.js"></script>
+<script src="vendor/pptxgenjs/pptxgen.bundle.js"></script>
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 </head>
 <body>
@@ -38,6 +39,7 @@
           <button id="btn-add-webapp">小程序</button>
           <div class="menu-title">文件</div>
           <button id="btn-export">导出放映包…</button>
+          <button id="btn-export-ppt">导出为 PPT…</button>
           <button id="btn-restore-autosave">恢复自动保存</button>
           <button id="btn-home">主页 / 最近文件…</button>
         </div>
@@ -58,6 +60,34 @@
       <div id="props"></div>
     </section>
   </main>
+
+  <div id="ppt-overlay" class="hidden">
+    <div class="help-panel ppt-panel">
+      <div class="help-head">
+        <span>导出为 PPT</span>
+        <button class="p-btn" onclick="document.getElementById('ppt-overlay').classList.add('hidden')">关闭</button>
+      </div>
+      <div class="ppt-body">
+        <div class="ppt-group">
+          <h4>转换模式</h4>
+          <label class="ppt-radio"><input type="radio" name="ppt-mode" value="editable" checked>
+            <span>可编辑<small>文字 / 形状 / 图片 / 图标 / 图表 重建为 PPT 原生对象，可继续编辑</small></span></label>
+          <label class="ppt-radio"><input type="radio" name="ppt-mode" value="fidelity" disabled>
+            <span>高保真（开发中）<small>每个场景整页截图铺满，视觉 100% 一致但不可编辑</small></span></label>
+        </div>
+        <div class="ppt-group">
+          <h4>选项</h4>
+          <label class="ppt-check"><input type="checkbox" id="ppt-anim" disabled>
+            <span>转换动画（开发中）<small>把积木脚本的动画尽力转换为 PPT 动画</small></span></label>
+        </div>
+        <div class="ppt-warn">⚠ 当前版本：3D 模型 / 小程序 / 特效 / 帧动画暂不包含（下期加截图补位）；动画转换下期上线。</div>
+      </div>
+      <div class="ppt-foot">
+        <button class="p-btn" onclick="document.getElementById('ppt-overlay').classList.add('hidden')">取消</button>
+        <button class="p-btn primary" id="ppt-generate">生成 PPT</button>
+      </div>
+    </div>
+  </div>
 
   <div id="home-overlay" class="hidden">
     <div class="help-panel home-panel">
@@ -163,6 +193,7 @@
   <script src="js/executor.js"></script>
   <script src="js/keyframes.js"></script>
   <script src="js/jimu-api.js"></script>
+  <script src="js/export-pptx.js"></script>
   <script src="js/api-bridge.js"></script>
   <script src="js/history.js"></script>
   <script src="js/editor.js"></script>

@@ -108,6 +108,17 @@ const App = {
       this.applyTheme('light');
       console.log('P7TEST|theme|light');
     }
+    if (params.get('testppt') === '1') {
+      await sleep(800);
+      try {
+        console.log('PTTEST|gen|start');
+        const b64 = await PptxExport.generate({ mode: 'editable' });
+        const ok = await this.host.saveProjectDirect('/tmp/test_export.pptx', b64);
+        console.log('PTTEST|save|' + ok + '|' + b64.length);
+      } catch (e) {
+        console.log('PTTEST|error|' + (e.message || e));
+      }
+    }
     if (params.get('testmenu') === '1') {
       await sleep(600);
       const dd2 = document.querySelector('.tb-dropdown');
@@ -199,6 +210,8 @@ const App = {
     on('btn-add-model3d', () => Editor.addElement('model3d'));
     on('btn-add-webapp', () => Editor.addElement('webapp'));
     on('btn-export', () => this.exportPlayer());
+    on('btn-export-ppt', () => this.showPptDialog());
+    on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
     on('btn-help', () => this.toggleHelp());
     on('btn-theme', () => this.toggleTheme());
@@ -571,6 +584,34 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.clearDirty();
       try { await this.host.addRecentFile(path); } catch (e) { console.warn("记录最近文件失败:", e.message || e); }
       toast('已保存：' + path.split('/').pop());
+    }
+  },
+
+  showPptDialog() {
+    document.getElementById('ppt-overlay').classList.remove('hidden');
+  },
+
+  async generatePpt() {
+    if (!this.host) { toast('浏览器预览模式无法导出'); return; }
+    await this.hostReady;
+    const btn = document.getElementById('ppt-generate');
+    const mode = document.querySelector('input[name="ppt-mode"]:checked').value;
+    btn.disabled = true;
+    btn.textContent = '生成中…';
+    try {
+      const b64 = await PptxExport.generate({ mode });
+      const name = (Project.data.name || '未命名演示') + '.pptx';
+      const path = await this.host.exportPptx(b64, name);
+      if (path) {
+        toast('已导出：' + path.split('/').pop() + '（可用 WPS/PowerPoint 打开）');
+        document.getElementById('ppt-overlay').classList.add('hidden');
+      }
+    } catch (e) {
+      console.error('PPT 导出失败', e);
+      toast('导出失败：' + (e.message || e));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '生成 PPT';
     }
   },
 
