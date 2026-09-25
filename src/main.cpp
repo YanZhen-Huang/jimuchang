@@ -2,6 +2,7 @@
 // 验证：WebEngine 起窗、qrc 加载、Blockly、中文字体、QWebChannel、全屏、
 //       键盘、mp4 视频、Three.js(ESM/WebGL)、ECharts
 #include <QApplication>
+#include <QBuffer>
 #include <QCloseEvent>
 #include <QDebug>
 #include <QDir>
@@ -221,16 +222,44 @@ public slots:
 
     void setDirty(bool d) { m_dirty = d; }
 
+    void raiseWindow() {
+        if (m_win) { m_win->raise(); m_win->activateWindow(); }
+    }
+
+    QString captureWindow() {
+        if (!m_view) return QString();
+        QPixmap pm = m_view->grab();
+        // 黑帧检测（窗口被遮挡/未渲染时返回空，由页面重试）
+        bool black = true;
+        const QImage img = pm.toImage().convertToFormat(QImage::Format_Grayscale8);
+        if (!img.isNull()) {
+            for (int y = 0; y < img.height() && black; y += 17) {
+                const uchar *line = img.constScanLine(y);
+                for (int x = 0; x < img.width(); x += 23) {
+                    if (line[x] > 24) { black = false; break; }
+                }
+            }
+        }
+        if (black) return QString();
+        QByteArray ba;
+        QBuffer buf(&ba);
+        buf.open(QIODevice::WriteOnly);
+        pm.save(&buf, "PNG");
+        return QString::fromLatin1(ba.toBase64());
+    }
+
     void quitApp() { QCoreApplication::quit(); }
 
 public:
     void setApiServer(ApiServer *api) { m_api = api; }
+    void setView(QWebEngineView *v) { m_view = v; }
 
 public:
     bool isDirty() const { return m_dirty; }
 
 private:
     QWidget *m_win = nullptr;
+    QWebEngineView *m_view = nullptr;
     ApiServer *m_api = nullptr;
     bool m_dirty = false;
 };
@@ -290,6 +319,7 @@ int main(int argc, char *argv[]) {
 
     auto *bridge = new HostBridge(&win);
     bridge->setWindow(&win);
+    bridge->setView(view);
     win.setBridge(bridge);
     auto *channel = new QWebChannel(page);
     channel->registerObject(QStringLiteral("host"), bridge);

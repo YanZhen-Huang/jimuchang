@@ -72,15 +72,15 @@
           <h4>转换模式</h4>
           <label class="ppt-radio"><input type="radio" name="ppt-mode" value="editable" checked>
             <span>可编辑<small>文字 / 形状 / 图片 / 图标 / 图表 重建为 PPT 原生对象，可继续编辑</small></span></label>
-          <label class="ppt-radio"><input type="radio" name="ppt-mode" value="fidelity" disabled>
-            <span>高保真（开发中）<small>每个场景整页截图铺满，视觉 100% 一致但不可编辑</small></span></label>
+          <label class="ppt-radio"><input type="radio" name="ppt-mode" value="fidelity">
+            <span>高保真<small>每个场景整页截图铺满，视觉 100% 一致但不可编辑（3D / 小程序 / 特效也能保留）</small></span></label>
         </div>
         <div class="ppt-group">
           <h4>选项</h4>
-          <label class="ppt-check"><input type="checkbox" id="ppt-anim" disabled>
-            <span>转换动画（开发中）<small>把积木脚本的动画尽力转换为 PPT 动画</small></span></label>
+          <label class="ppt-check"><input type="checkbox" id="ppt-anim" checked>
+            <span>转换动画<small>把积木脚本的动画转换为 PPT 动画（淡入 / 飞入 / 缩放，其余效果近似为淡入）</small></span></label>
         </div>
-        <div class="ppt-warn">⚠ 当前版本：3D 模型 / 小程序 / 特效 / 帧动画暂不包含（下期加截图补位）；动画转换下期上线。</div>
+        <div class="ppt-warn">💡 可编辑模式暂不包含 3D / 小程序 / 特效 / 帧动画——需要这些请用「高保真」模式。</div>
       </div>
       <div class="ppt-foot">
         <button class="p-btn" onclick="document.getElementById('ppt-overlay').classList.add('hidden')">取消</button>

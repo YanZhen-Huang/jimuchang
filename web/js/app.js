@@ -112,9 +112,12 @@ const App = {
       await sleep(800);
       try {
         console.log('PTTEST|gen|start');
-        const b64 = await PptxExport.generate({ mode: 'editable' });
+        const b64 = await PptxExport.generate({ mode: 'editable', anim: true });
         const ok = await this.host.saveProjectDirect('/tmp/test_export.pptx', b64);
         console.log('PTTEST|save|' + ok + '|' + b64.length);
+        const b64f = await PptxExport.generate({ mode: 'fidelity' });
+        const okf = await this.host.saveProjectDirect('/tmp/test_fidelity.pptx', b64f);
+        console.log('PTTEST|fidelity|' + okf + '|' + b64f.length);
       } catch (e) {
         console.log('PTTEST|error|' + (e.message || e));
       }
@@ -599,7 +602,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     btn.disabled = true;
     btn.textContent = '生成中…';
     try {
-      const b64 = await PptxExport.generate({ mode });
+      const anim = !!(document.getElementById('ppt-anim') || {}).checked;
+      const b64 = await PptxExport.generate({ mode, anim });
       const name = (Project.data.name || '未命名演示') + '.pptx';
       const path = await this.host.exportPptx(b64, name);
       if (path) {

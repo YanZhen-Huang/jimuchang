@@ -475,6 +475,12 @@ body.hide-cursor, body.hide-cursor * { cursor: none !important; }
 }
 
 /* ---------------- PPT 导出面板 ---------------- */
+#ppt-overlay {
+  position: fixed; inset: 0; background: rgba(8, 10, 14, .72);
+  z-index: 500; display: flex; align-items: center; justify-content: center;
+}
+#ppt-overlay.hidden { display: none; }
+body.light #ppt-overlay { background: rgba(240, 242, 245, .8); }
 .ppt-panel { width: min(600px, 92vw) !important; }
 .ppt-body { padding: 18px 22px 8px; }
 .ppt-group { margin-bottom: 16px; }

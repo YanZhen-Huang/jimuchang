@@ -24,7 +24,129 @@ const PptxExport = {
     } else {
       this.buildEditable(pptx);
     }
-    return await pptx.write({ outputType: 'base64' });
+    let b64 = await pptx.write({ outputType: 'base64' });
+    if (opts.anim) {
+      try {
+        const animMap = this.collectSceneAnims();
+        b64 = await this.injectAnimations(b64, animMap);
+      } catch (e) {
+        console.warn('动画注入失败（已输出无动画版本）:', e.message || e);
+      }
+    }
+    return b64;
+  },
+
+  // ---------- 动画提取（积木 IR → 每页动画序列）----------
+  collectSceneAnims() {
+    const out = {};
+    let scripts = null;
+    try { scripts = Executor.compileAll(); } catch (e) { scripts = { scenes: {} }; }
+    for (const scene of Project.data.scenes) {
+      const list = [];
+      for (const el of scene.elements) {
+        if (el.entrance && el.entrance.type && el.entrance.type !== 'none') {
+          list.push({ elId: el.id, anim: el.entrance.type, duration: el.entrance.duration, delay: el.entrance.delay });
+        }
+      }
+      ((scripts.scenes || {})[scene.id] || [])
+        .filter(s => s.kind === 'onSceneEnter')
+        .forEach(s => this.walkAnim(s.body, list));
+      out[scene.id] = list;
+    }
+    return out;
+  },
+
+  walkAnim(body, out) {
+    (body || []).forEach(instr => {
+      if (!instr) return;
+      if (instr.op === 'el.anim' && instr.anim && !String(instr.anim).endsWith('Out')) {
+        out.push({ elId: instr.elId, anim: instr.anim, duration: instr.duration, delay: instr.delay });
+      } else if (instr.op === 'ctrl.repeat') {
+        this.walkAnim(instr.body, out);
+      } else if (instr.op === 'ctrl.repeatuntil') {
+        this.walkAnim(instr.body, out);
+      } else if (instr.op === 'ctrl.if') {
+        (instr.branches || []).forEach(br => this.walkAnim(br.body, out));
+        if (instr.elseBody) this.walkAnim(instr.elseBody, out);
+      }
+    });
+  },
+
+  // ---------- 动画注入（改 slide XML 的 <p:timing>）----------
+  async injectAnimations(pptxBase64, animMap) {
+    const zip = await JSZip.loadAsync(pptxBase64, { base64: true });
+    let injected = 0;
+    for (let i = 0; i < Project.data.scenes.length; i++) {
+      const scene = Project.data.scenes[i];
+      const list = animMap[scene.id];
+      if (!list || !list.length) continue;
+      const path = 'ppt/slides/slide' + (i + 1) + '.xml';
+      const f = zip.file(path);
+      if (!f) continue;
+      let xml = await f.async('string');
+      const spMap = this.parseSpIds(xml);
+      const timing = this.buildTiming(list, spMap);
+      if (timing) {
+        xml = xml.replace('</p:sld>', timing + '</p:sld>');
+        zip.file(path, xml);
+        injected++;
+      }
+    }
+    console.log('动画注入：' + injected + ' 页');
+    return await zip.generateAsync({ type: 'base64' });
+  },
+
+  parseSpIds(xml) {
+    const map = {};
+    const re = /<p:cNvPr\b[^>]*>/g;
+    let m;
+    while ((m = re.exec(xml))) {
+      const name = /name="JC_([^"]+)"/.exec(m[0]);
+      const id = /id="(\d+)"/.exec(m[0]);
+      if (name && id) map[name[1]] = id[1];
+    }
+    return map;
+  },
+
+  buildEffect(anim, spid, dur, get) {
+    const setVisible = '<p:set><p:cBhvr><p:cTn id="' + get() + '" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>';
+    const fade = '<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="' + get() + '" dur="' + dur + '"/><p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl></p:cBhvr></p:animEffect>';
+    if (anim.indexOf('flyIn') === 0) {
+      const dirs = { Left: '-1.1 0', Right: '1.1 0', Top: '0 -0.8', Bottom: '0 0.8' };
+      const d = dirs[anim.slice(5)] || '-1.1 0';
+      const motion = '<p:animMotion origin="layout" path="M ' + d + ' L 0 0" pathEditMode="relative" rAng="0" ptsTypes=""><p:cBhvr><p:cTn id="' + get() + '" dur="' + dur + '" fill="hold"/><p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl><p:attrNameLst><p:attrName>ppt_x</p:attrName><p:attrName>ppt_y</p:attrName></p:attrNameLst></p:cBhvr></p:animMotion>';
+      return { presetID: 2, subtype: 4, inner: setVisible + fade + motion };
+    }
+    if (anim === 'zoomIn' || anim === 'bounceIn') {
+      const scale = '<p:animScale><p:cBhvr><p:cTn id="' + get() + '" dur="' + dur + '" fill="hold"/><p:tgtEl><p:spTgt spid="' + spid + '"/></p:tgtEl></p:cBhvr><p:from x="20000" y="20000"/><p:to x="100000" y="100000"/></p:animScale>';
+      return { presetID: 23, subtype: 16, inner: setVisible + fade + scale };
+    }
+    return { presetID: 10, subtype: 0, inner: setVisible + fade };
+  },
+
+  buildTiming(anims, spMap) {
+    let id = 3;
+    const get = () => id++;
+    const pars = [];
+    anims.forEach(a => {
+      const spid = spMap[a.elId];
+      if (!spid) return;
+      const dur = Math.max(200, Math.round((Number(a.duration) || 0.6) * 1000));
+      const delay = Math.max(0, Math.round((Number(a.delay) || 0) * 1000));
+      const nodeType = pars.length === 0 ? 'clickEffect' : 'afterEffect';
+      const eff = this.buildEffect(a.anim, spid, dur, get);
+      pars.push('<p:par><p:cTn id="' + get() + '" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+        '<p:par><p:cTn id="' + get() + '" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>' +
+        '<p:par><p:cTn id="' + get() + '" presetID="' + eff.presetID + '" presetClass="entr" presetSubtype="' + eff.subtype + '" fill="hold" grpId="0" nodeType="' + nodeType + '">' +
+        '<p:stCondLst><p:cond delay="' + delay + '"/></p:stCondLst><p:childTnLst>' + eff.inner + '</p:childTnLst></p:cTn></p:par>' +
+        '</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>');
+    });
+    if (!pars.length) return '';
+    return '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>' +
+      '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' + pars.join('') + '</p:childTnLst></p:cTn>' +
+      '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>' +
+      '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>' +
+      '</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>';
   },
 
   // ---------- 可编辑模式 ----------
@@ -58,7 +180,7 @@ const PptxExport = {
 
   addElement(slide, el) {
     const p = el.props || {};
-    const base = { x: this.x(el.x), y: this.y(el.y), w: this.x(el.w), h: this.y(el.h) };
+    const base = { x: this.x(el.x), y: this.y(el.y), w: this.x(el.w), h: this.y(el.h), objectName: 'JC_' + el.id };
     if (el.rotation) base.rotate = Math.round(el.rotation);
     const opacityPct = el.opacity !== undefined && el.opacity < 1 ? Math.round((1 - el.opacity) * 100) : 0;
 
@@ -152,26 +274,56 @@ const PptxExport = {
     }
   },
 
-  // ---------- 高保真模式（P-B 实现）----------
+  // ---------- 高保真模式：逐场景截图铺满 ----------
   async buildFidelity(pptx) {
     if (typeof App === 'undefined' || !App.host || !App.host.captureWindow) {
-      throw new Error('高保真模式需要程序环境支持（开发中）');
+      throw new Error('高保真模式需要桌面程序环境');
     }
     const scenes = Project.data.scenes;
     const current = Stage.currentSceneId;
+    const sel = Editor.selectedId;
+    Editor.select(null);
     for (const scene of scenes) {
-      // 逐场景渲染并截图
       Stage.render(scene);
-      await sleep(260);
-      const png = await App.host.captureWindow();  // 返回 base64 PNG（含窗口 UI 区域，后续裁剪）
-      if (png) {
-        const slide = pptx.addSlide();
-        slide.addImage({ data: 'data:image/png;base64,' + png, x: 0, y: 0, w: this.SLIDE_W, h: this.SLIDE_H, sizing: { type: 'cover', w: this.SLIDE_W, h: this.SLIDE_H } });
-        slide.addNotes('场景：' + scene.name);
+      if (App.host.raiseWindow) App.host.raiseWindow();
+      await sleep(360);
+      let fullB64 = await App.host.captureWindow();
+      if (!fullB64) {           // 黑帧：等重绘后重试一次
+        await sleep(340);
+        fullB64 = await App.host.captureWindow();
       }
+      if (!fullB64) continue;
+      const dataUrl = await this.cropStage(fullB64);
+      if (!dataUrl) continue;
+      const slide = pptx.addSlide();
+      slide.addImage({ data: dataUrl, x: 0, y: 0, w: this.SLIDE_W, h: this.SLIDE_H });
+      slide.addNotes('场景：' + scene.name);
     }
-    // 恢复
     const back = Project.getScene(current) || scenes[0];
     if (back) Stage.render(back);
+    if (sel) Editor.select(sel);
+  },
+
+  // 从整窗截图里裁出舞台区域，输出 1280×720 PNG dataURL
+  cropStage(fullB64) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const r = Stage.rootEl.getBoundingClientRect();
+          const sx = img.width / window.innerWidth;
+          const sy = img.height / window.innerHeight;
+          console.log('CROP|grab=' + img.width + 'x' + img.height + '|inner=' + window.innerWidth + 'x' + window.innerHeight + '|dpr=' + window.devicePixelRatio + '|stage=' + [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(','));
+          const c = document.createElement('canvas');
+          c.width = 1280;
+          c.height = 720;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, r.left * sx, r.top * sy, r.width * sx, r.height * sy, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/png'));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = 'data:image/png;base64,' + fullB64;
+    });
   }
 };
