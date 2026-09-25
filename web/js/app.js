@@ -108,6 +108,16 @@ const App = {
       this.applyTheme('light');
       console.log('P7TEST|theme|light');
     }
+    if (params.get('testmenu') === '1') {
+      await sleep(600);
+      const dd2 = document.querySelector('.tb-dropdown');
+      const ddR = dd2.getBoundingClientRect();
+      dd2.classList.add('open');
+      await sleep(300);
+      const mR = dd2.querySelector('.tb-menu').getBoundingClientRect();
+      console.log('DBG|dd=' + JSON.stringify({ x: Math.round(ddR.x), y: Math.round(ddR.y), w: Math.round(ddR.width) })
+        + '|menu=' + JSON.stringify({ x: Math.round(mR.x), y: Math.round(mR.y), w: Math.round(mR.width), h: Math.round(mR.height) }));
+    }
     if (params.get('testhelp') === '1') {
       await sleep(500);
       this.toggleHelp();
@@ -198,6 +208,18 @@ const App = {
     on('home-open', () => { document.getElementById('home-overlay').classList.add('hidden'); this.open(); });
     // 自动保存：每 2 分钟（有修改且不在播放时）
     setInterval(() => this.autoSave(), 120000);
+    // "更多"下拉菜单：JS 控制 + 延迟关闭（划过间隙不消失）
+    const dd = document.querySelector('.tb-dropdown');
+    if (dd) {
+      let hideTimer = 0;
+      dd.addEventListener('mouseenter', () => { clearTimeout(hideTimer); dd.classList.add('open'); });
+      dd.addEventListener('mouseleave', () => {
+        hideTimer = setTimeout(() => dd.classList.remove('open'), 280);
+      });
+      dd.querySelector('.tb-menu').addEventListener('click', e => {
+        if (e.target.closest('button')) dd.classList.remove('open');
+      });
+    }
     document.addEventListener('keydown', e => this.onKeyDown(e));
     window.addEventListener('mousemove', () => {
       if (!this.playing) return;

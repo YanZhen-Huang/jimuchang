@@ -318,6 +318,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testguides"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-menu"))) {
+            q.addQueryItem(QStringLiteral("testmenu"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (args.contains(QStringLiteral("--test-home"))) {
             q.addQueryItem(QStringLiteral("testhome"), QStringLiteral("1"));
             hasQuery = true;
