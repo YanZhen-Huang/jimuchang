@@ -41,6 +41,7 @@ const Executor = {
     this.vars = {};
     this.lastMessage = null;
     this.timerT0 = performance.now();
+    this.cloneCount = 0;
     // 放映机模式：脚本已由导出时预编译注入，跳过 Blockly 编译
     if (!this.presetScripts) {
       this.scripts = this.compileAll();
@@ -83,6 +84,18 @@ const Executor = {
     }
   },
 
+  triggerCloneStart(cloneId) {
+    const list = [];
+    (this.scripts.global || []).forEach(s => { if (s.kind === 'onCloneStart') list.push(s); });
+    (this.scripts.scenes[Stage.currentSceneId] || []).forEach(s => { if (s.kind === 'onCloneStart') list.push(s); });
+    list.forEach(s => {
+      const c = this.newCtx();
+      c.selfElId = cloneId;
+      this.run(s.body, c);
+    });
+    return list.length;
+  },
+
   async trigger(kind, value, payload) {
     if (!this.playing) return 0;
     if (payload !== undefined) this.lastMessage = payload;
@@ -112,6 +125,11 @@ const Executor = {
   },
 
   async exec(instr, ctx) {
+    // 克隆体自我引用：@self → 当前克隆体 id
+    if (instr.elId === '@self') {
+      if (!ctx.selfElId) return;
+      instr = Object.assign({}, instr, { elId: ctx.selfElId });
+    }
     switch (instr.op) {
       case 'wait': {
         const sec = Number(await this.evalExpr(instr.sec, ctx)) || 0;
@@ -190,8 +208,17 @@ const Executor = {
       case 'el.set': {
         const fs1 = Project.findElementById(instr.elId);
         if (!fs1) break;
-        const v1 = Number(await this.evalExpr(instr.value, ctx)) || 0;
+        const rawV = await this.evalExpr(instr.value, ctx);
         const e1 = fs1.element;
+        if (instr.prop === 'color') {
+          const cs = String(rawV == null ? '' : rawV);
+          if (!/^#[0-9a-fA-F]{6}$/.test(cs)) break;
+          if (e1.type === 'text' || e1.type === 'icon') e1.props.color = cs;
+          else e1.props.fill = cs;
+          if (Stage.elDom(e1.id)) Stage.refresh(e1.id);
+          break;
+        }
+        const v1 = Number(rawV) || 0;
         if (instr.prop === 'rotation') e1.rotation = v1;
         else if (instr.prop === 'opacity') e1.opacity = Math.max(0, Math.min(1, v1));
         else if (instr.prop === 'w') e1.w = Math.max(10, v1);
@@ -219,6 +246,24 @@ const Executor = {
         break;
       }
       case 'el.say.stop': Bubbles.hide(instr.elId); break;
+      case 'el.clone.start': {
+        const fcs = Project.findElementById(instr.elId);
+        if (!fcs) break;
+        this.cloneCount = (this.cloneCount || 0) + 1;
+        if (this.cloneCount > 200) { console.warn('克隆体超过 200 个，已忽略'); break; }
+        const copy2 = JSON.parse(JSON.stringify(fcs.element));
+        copy2.id = Project.uid('el');
+        copy2.name = fcs.element.name + '·克隆';
+        copy2._clone = true;
+        copy2.z = Math.max(...fcs.scene.elements.map(x => x.z || 0)) + 1;
+        fcs.scene.elements.push(copy2);
+        if (Stage.currentSceneId === fcs.scene.id) {
+          const layer = Stage.layerEl && Stage.layerEl.querySelector('.scene-els');
+          if (layer) layer.appendChild(Elements.render(copy2));
+        }
+        this.triggerCloneStart(copy2.id);
+        break;
+      }
       case 'el.clone': {
         const fc1 = Project.findElementById(instr.elId);
         if (!fc1) break;
@@ -550,6 +595,60 @@ const Executor = {
       }
       case 'timer': return (performance.now() - (this.timerT0 || 0)) / 1000;
       case 'randcolor': return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+      case 'randint': {
+        const ra = Math.ceil(Number(await this.evalExpr(e.a, ctx)) || 0);
+        const rb = Math.floor(Number(await this.evalExpr(e.b, ctx)) || 0);
+        if (rb < ra) return ra;
+        return Math.floor(Math.random() * (rb - ra + 1)) + ra;
+      }
+      case 'randfloat': return Math.random();
+      case 'round': {
+        const rv = Number(await this.evalExpr(e.v, ctx)) || 0;
+        if (e.op === 'ROUNDUP') return Math.ceil(rv);
+        if (e.op === 'ROUNDDOWN') return Math.floor(rv);
+        return Math.round(rv);
+      }
+      case 'mod': {
+        const ma = Number(await this.evalExpr(e.a, ctx)) || 0;
+        const mb = Number(await this.evalExpr(e.b, ctx)) || 1;
+        return mb === 0 ? 0 : ma % mb;
+      }
+      case 'single': {
+        const sv = Number(await this.evalExpr(e.v, ctx)) || 0;
+        switch (e.op) {
+          case 'ABS': return Math.abs(sv);
+          case 'NEG': return -sv;
+          case 'ROOT': return Math.sqrt(sv);
+          case 'LN': return Math.log(sv);
+          case 'LOG10': return Math.log10(sv);
+          case 'EXP': return Math.exp(sv);
+          case 'POW10': return Math.pow(10, sv);
+          default: return sv;
+        }
+      }
+      case 'numprop': {
+        const nv = Number(await this.evalExpr(e.v, ctx)) || 0;
+        switch (e.op) {
+          case 'EVEN': return nv % 2 === 0;
+          case 'ODD': return Math.abs(nv % 2) === 1;
+          case 'PRIME': {
+            if (nv < 2) return false;
+            for (let i = 2; i <= Math.sqrt(nv); i++) if (nv % i === 0) return false;
+            return true;
+          }
+          case 'WHOLE': return nv % 1 === 0;
+          case 'POSITIVE': return nv > 0;
+          case 'NEGATIVE': return nv < 0;
+          case 'DIVISIBLE_BY': return true;  // 简化：缺第二输入，恒真
+          default: return false;
+        }
+      }
+      case 'strlen': return String(await this.evalExpr(e.v, ctx) ?? '').length;
+      case 'strempty': return String(await this.evalExpr(e.v, ctx) ?? '').length === 0;
+      case 'const': return { PI: Math.PI, E: Math.E, GOLDEN_RATIO: 1.618033988749895, SQRT2: Math.SQRT2, SQRT1_2: Math.SQRT1_2, INFINITY: Infinity }[e.name] || 0;
+      case 'unsupported':
+        console.warn('[积木] 表达式块未实现:', e.type);
+        return 0;
       case 'bin': {
         const a = Number(await this.evalExpr(e.a, ctx)), b = Number(await this.evalExpr(e.b, ctx));
         switch (e.op) {

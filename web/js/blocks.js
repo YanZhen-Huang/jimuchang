@@ -6,7 +6,7 @@
     return list.length ? list : [['（无场景）', '']];
   };
   const elementOptions = () => {
-    const list = [];
+    const list = [['本克隆体（克隆脚本用）', '@self']];
     (Project.data && Project.data.scenes || []).forEach(s => {
       s.elements.forEach(e => list.push([e.name, e.id]));
     });
@@ -420,7 +420,8 @@
 
   // ---- 元素扩充（气泡/万能设置/层级/复制删除）----
   const SET_PROPS = [
-    ['x', 'x'], ['y', 'y'], ['宽度', 'w'], ['高度', 'h'], ['旋转', 'rotation'], ['透明度', 'opacity']
+    ['x', 'x'], ['y', 'y'], ['宽度', 'w'], ['高度', 'h'], ['旋转', 'rotation'],
+    ['透明度', 'opacity'], ['颜色', 'color']
   ];
   defs['jimu_el_set'] = {
     init() {
@@ -481,6 +482,29 @@
         .appendField('说话');
       this.setPreviousStatement(true);
       this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_clone'] = {
+    init() {
+      this.appendDummyInput().appendField('克隆')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_on_clone'] = {
+    init() {
+      this.appendDummyInput().appendField('当克隆体启动');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_clone_delete'] = {
+    init() {
+      this.appendDummyInput().appendField('删除本克隆体');
+      this.setPreviousStatement(true);
       this.setStyle('jimu_element');
     }
   };
@@ -921,6 +945,8 @@
               { kind: 'block', type: 'jimu_say_secs', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '大家好' } } } } },
               { kind: 'block', type: 'jimu_say_stop' },
               { kind: 'block', type: 'jimu_el_clone' },
+              { kind: 'block', type: 'jimu_clone' },
+              { kind: 'block', type: 'jimu_clone_delete' },
               { kind: 'block', type: 'jimu_el_remove' }
             ]
           },
@@ -977,7 +1003,8 @@
             contents: [
               { kind: 'block', type: 'jimu_js' },
               { kind: 'block', type: 'jimu_webapp_send', inputs: { MSG: { shadow: { type: 'text', fields: { TEXT: 'hello' } } } } },
-              { kind: 'block', type: 'jimu_on_message' }
+              { kind: 'block', type: 'jimu_on_message' },
+              { kind: 'block', type: 'jimu_on_clone' }
             ]
           },
           {
@@ -1080,6 +1107,7 @@ const IRCompiler = {
       case 'jimu_on_key': return { kind: 'onKey', key: b.getFieldValue('KEY') };
       case 'jimu_on_click': return { kind: 'onElementClick', elId: b.getFieldValue('ELEMENT') };
       case 'jimu_on_message': return { kind: 'onWebappMessage', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_on_clone': return { kind: 'onCloneStart' };
       default: return null;
     }
   },
@@ -1156,6 +1184,8 @@ const IRCompiler = {
         seconds: Number(b.getFieldValue('SECS'))
       };
       case 'jimu_say_stop': return { op: 'el.say.stop', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_clone': return { op: 'el.clone.start', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_clone_delete': return { op: 'el.remove', elId: '@self' };
       case 'jimu_el_clone': return { op: 'el.clone', elId: b.getFieldValue('ELEMENT') };
       case 'jimu_el_remove': return { op: 'el.remove', elId: b.getFieldValue('ELEMENT') };
       case 'jimu_scene_replay': return { op: 'scene.replay' };
@@ -1290,9 +1320,27 @@ const IRCompiler = {
         for (let i = 0; i < n; i++) parts.push(this.exprOf(b.getInputTargetBlock('ADD' + i)));
         return { k: 'join', parts };
       }
+      case 'math_random_int': return {
+        k: 'randint', a: this.exprOf(b.getInputTargetBlock('FROM')), b: this.exprOf(b.getInputTargetBlock('TO'))
+      };
+      case 'math_random_float': return { k: 'randfloat' };
+      case 'math_round': return {
+        k: 'round', op: b.getFieldValue('OP'), v: this.exprOf(b.getInputTargetBlock('NUM'))
+      };
+      case 'math_modulo': return {
+        k: 'mod', a: this.exprOf(b.getInputTargetBlock('DIVIDEND')), b: this.exprOf(b.getInputTargetBlock('DIVISOR'))
+      };
+      case 'math_single': return {
+        k: 'single', op: b.getFieldValue('OP'), v: this.exprOf(b.getInputTargetBlock('NUM'))
+      };
+      case 'math_number_property': return {
+        k: 'numprop', op: b.getFieldValue('PROPERTY'), v: this.exprOf(b.getInputTargetBlock('NUMBER_TO_CHECK'))
+      };
+      case 'text_length': return { k: 'strlen', v: this.exprOf(b.getInputTargetBlock('VALUE')) };
+      case 'text_isEmpty': return { k: 'strempty', v: this.exprOf(b.getInputTargetBlock('VALUE')) };
+      case 'math_constant': return { k: 'const', name: b.getFieldValue('CONSTANT') };
       default:
-        console.warn('[积木警告] 表达式块未实现 IR 编译:', b.type);
-        return { k: 'num', v: 0 };
+        return { k: 'unsupported', type: b.type };
     }
   }
 };

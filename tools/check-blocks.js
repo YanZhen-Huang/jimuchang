@@ -15,24 +15,30 @@ eval(fs.readFileSync(path.join(root, 'web/js/blocks.js'), 'utf8') + '; globalThi
 const ws = new Blockly.Workspace();
 let ok = 0;
 const fails = [];
-const exprWarn = [];
-for (const type of Object.keys(Blockly.Blocks).filter(t => t.startsWith('jimu_'))) {
+// 收集工具箱里全部块类型（含 Blockly 内置块）
+const toolTypes = new Set(Object.keys(Blockly.Blocks).filter(t => t.startsWith('jimu_')));
+try {
+  const tb = JimuBlocks.toolbox();
+  const walk = items => (items || []).forEach(it => {
+    if (!it) return;
+    if (it.kind === 'block' && it.type) toolTypes.add(it.type);
+    if (it.contents) walk(it.contents);
+  });
+  walk(tb.contents);
+} catch (e) { fails.push('工具箱解析失败: ' + e.message); }
+for (const type of toolTypes) {
   try {
     const blk = ws.newBlock(type);
     ok++;
-    // 表达式块：验证 IR 编译不是"未实现"的默认值
+    // 表达式块：验证 IR 编译受支持
     if (blk.outputConnection) {
       const r = IRCompiler.exprOf(blk);
-      if (r && r.k === 'num' && r.v === 0) exprWarn.push(type);
+      if (r && r.k === 'unsupported') fails.push(`${type}: 表达式 IR 未实现 (${r.type})`);
     }
   } catch (e) {
     fails.push(`${type}: ${e.message}`);
   }
 }
-if (exprWarn.length) {
-  fails.push(`表达式块 IR 未实现: ${exprWarn.join(', ')}`);
-}
-
 console.log(`积木自检：${ok} 正常 / ${fails.length} 失败`);
 fails.forEach(f => console.log('  ❌', f));
 process.exit(fails.length ? 1 : 0);

@@ -591,6 +591,14 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   showPptDialog() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('jimuchang-ppt') || '{}');
+      if (saved.mode) {
+        const r = document.querySelector('input[name="ppt-mode"][value="' + saved.mode + '"]');
+        if (r) r.checked = true;
+      }
+      if (saved.anim !== undefined) document.getElementById('ppt-anim').checked = !!saved.anim;
+    } catch (e) { }
     document.getElementById('ppt-overlay').classList.remove('hidden');
   },
 
@@ -603,6 +611,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     btn.textContent = '生成中…';
     try {
       const anim = !!(document.getElementById('ppt-anim') || {}).checked;
+      try { localStorage.setItem('jimuchang-ppt', JSON.stringify({ mode, anim })); } catch (e) { }
       const b64 = await PptxExport.generate({ mode, anim });
       const name = (Project.data.name || '未命名演示') + '.pptx';
       const path = await this.host.exportPptx(b64, name);

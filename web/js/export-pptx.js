@@ -268,8 +268,21 @@ const PptxExport = {
         break;
       }
 
+      case 'video': {
+        const r = p.resourceId ? Project.getResource(p.resourceId) : null;
+        if (!r || !r.data) break;
+        try {
+          slide.addMedia({
+            type: 'video',
+            data: 'data:' + (r.mime || 'video/mp4') + ';base64,' + r.data,
+            x: base.x, y: base.y, w: base.w, h: base.h
+          });
+        } catch (e) { console.warn('视频嵌入失败:', e.message || e); }
+        break;
+      }
+
       default:
-        // video/audio/sprite/model3d/webapp → P-C 截图补位，暂时跳过
+        // audio/sprite/model3d/webapp → 高保真模式截图补位，可编辑模式跳过
         break;
     }
   },
