@@ -63,11 +63,11 @@ const History = {
     // 积木脚本不参与撤销（保留当前工作区内容）
     JimuBlocks.save();
     clone.globalBlocks = Project.data.globalBlocks;
-    const blocksById = new Map(Project.data.scenes.map(s => [s.id, s.blocks]));
-    clone.scenes.forEach(sc => { if (blocksById.has(sc.id)) sc.blocks = blocksById.get(sc.id); });
+    const blocksById = new Map(Project.data.chapters.map(s => [s.id, s.blocks]));
+    clone.chapters.forEach(sc => { if (blocksById.has(sc.id)) sc.blocks = blocksById.get(sc.id); });
 
     Project.data = clone;
-    const sc = Project.getScene(Stage.currentSceneId) || Project.data.scenes[0];
+    const sc = Project.getChapter(Stage.currentChapterId) || Project.data.chapters[0];
     JimuBlocks.current = null;
     JimuBlocks.ws.clear();
     Stage.render(sc);

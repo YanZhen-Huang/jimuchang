@@ -30,13 +30,13 @@ const Executor = {
       return r;
     };
     out.global = one(Project.data.globalBlocks);
-    for (const sc of Project.data.scenes) out.scenes[sc.id] = one(sc.blocks);
+    for (const sc of Project.data.chapters) out.scenes[sc.id] = one(sc.blocks);
     return out;
   },
 
   // ---------- 播放控制 ----------
   async start() {
-    if (!Project.data.scenes.length) return;
+    if (!Project.data.chapters.length) return;
     this.playing = true;
     this.vars = {};
     this.lastMessage = null;
@@ -47,7 +47,7 @@ const Executor = {
       this.scripts = this.compileAll();
       this.funcs = this.scripts.funcs || {};
     }
-    const first = Project.data.scenes[0].id;
+    const first = Project.data.chapters[0].id;
     await Stage.goScene(first, { duration: 0 });
     // 全局"当演示开始"脚本并发长跑
     this.scripts.global.filter(s => s.kind === 'onStart').forEach(s => {
@@ -138,8 +138,8 @@ const Executor = {
       }
       case 'scene.go': await this.sceneGo(instr.sceneId, ctx); break;
       case 'scene.next': {
-        const i = Project.sceneIndex(Stage.currentSceneId);
-        const next = Project.data.scenes[i + 1];
+        const i = Project.chapterIndex(Stage.currentChapterId);
+        const next = Project.data.chapters[i + 1];
         if (next) await this.sceneGo(next.id, ctx);
         break;
       }
@@ -234,7 +234,7 @@ const Executor = {
       case 'el.layer': {
         const fl = Project.findElementById(instr.elId);
         if (!fl) break;
-        const zs = fl.scene.elements.map(x => x.z || 0);
+        const zs = Project.data.elements.map(x => x.z || 0);
         fl.element.z = instr.where === 'front' ? Math.max(...zs) + 1 : Math.min(...zs) - 1;
         const dl = Stage.elDom(instr.elId);
         if (dl) dl.style.zIndex = fl.element.z;  // 不重建 DOM（避免清掉气泡/动画状态）
@@ -255,12 +255,9 @@ const Executor = {
         copy2.id = Project.uid('el');
         copy2.name = fcs.element.name + '·克隆';
         copy2._clone = true;
-        copy2.z = Math.max(...fcs.scene.elements.map(x => x.z || 0)) + 1;
-        fcs.scene.elements.push(copy2);
-        if (Stage.currentSceneId === fcs.scene.id) {
-          const layer = Stage.layerEl && Stage.layerEl.querySelector('.scene-els');
-          if (layer) layer.appendChild(Elements.render(copy2));
-        }
+        copy2.z = Math.max(...Project.data.elements.map(x => x.z || 0)) + 1;
+        Project.data.elements.push(copy2);
+        if (Stage.elsEl) Stage.elsEl.appendChild(Elements.render(copy2));
         this.triggerCloneStart(copy2.id);
         break;
       }
@@ -271,9 +268,9 @@ const Executor = {
         copy.id = Project.uid('el');
         copy.name = fc1.element.name + '·副本';
         copy.x += 24; copy.y += 24;
-        copy.z = Math.max(...fc1.scene.elements.map(x => x.z || 0)) + 1;
-        fc1.scene.elements.push(copy);
-        if (Stage.currentSceneId === fc1.scene.id) Stage.render(fc1.scene);
+        copy.z = Math.max(...Project.data.elements.map(x => x.z || 0)) + 1;
+        Project.data.elements.push(copy);
+        Stage.refreshAll();
         break;
       }
       case 'el.remove': {
@@ -281,31 +278,26 @@ const Executor = {
         if (!fr) break;
         const dr = Stage.elDom(instr.elId);
         if (dr) dr.remove();
-        Project.removeElement(fr.scene, instr.elId);
+        Project.removeElement(instr.elId);
         if (Editor.selectedId === instr.elId) Editor.select(null);
         break;
       }
       case 'scene.replay': {
-        const sr = Stage.currentScene();
+        const sr = Stage.currentChapter();
         if (sr) {
-          Stage.render(sr);
+          await Stage.goChapter(sr.id, { instant: true });
           await this.fireSceneEnter(sr.id);
         }
         break;
       }
       case 'scene.restart': {
-        const first = Project.data.scenes[0];
+        const first = Project.data.chapters[0];
         if (first) await this.sceneGo(first.id, ctx);
         break;
       }
       case 'scene.bg': {
-        const sb = Stage.currentScene();
-        if (!sb) break;
-        sb.background = { type: 'color', value: instr.color };
-        if (Stage.layerEl) {
-          const bgEl = Stage.layerEl.querySelector('.scene-bg');
-          if (bgEl) bgEl.style.background = instr.color;
-        }
+        Project.data.stage.background = { type: 'color', value: instr.color };
+        if (Stage.bgEl) Stage.applyBg(Stage.bgEl, Project.data.stage.background);
         break;
       }
       case 'ctrl.waituntil': {

@@ -2,15 +2,13 @@
 (() => {
   // ---------- 动态下拉数据 ----------
   const sceneOptions = () => {
-    const list = (Project.data && Project.data.scenes || []).map(s => [s.name, s.id]);
-    return list.length ? list : [['（无场景）', '']];
+    const list = (Project.data && Project.data.chapters || []).map(s => [s.name, s.id]);
+    return list.length ? list : [['（无章节）', '']];
   };
   const elementOptions = () => {
     const list = [['本克隆体（克隆脚本用）', '@self']];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => list.push([e.name, e.id]));
-    });
-    return list.length ? list : [['（无元素）', '']];
+    (Project.data && Project.data.elements || []).forEach(e => list.push([e.name, e.id]));
+    return list;
   };
   const audioOptions = () => {
     const list = (Project.data && Project.data.resources || [])
@@ -19,38 +17,23 @@
     return list.length ? list : [['（无音频素材）', '']];
   };
   const videoElementOptions = () => {
-    const list = [];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => { if (e.type === 'video') list.push([e.name, e.id]); });
-    });
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'video').map(e => [e.name, e.id]);
     return list.length ? list : [['（无视频元素）', '']];
   };
   const chartElementOptions = () => {
-    const list = [];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => { if (e.type === 'chart') list.push([e.name, e.id]); });
-    });
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'chart').map(e => [e.name, e.id]);
     return list.length ? list : [['（无图表元素）', '']];
   };
   const webappElementOptions = () => {
-    const list = [];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => { if (e.type === 'webapp') list.push([e.name, e.id]); });
-    });
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'webapp').map(e => [e.name, e.id]);
     return list.length ? list : [['（无小程序元素）', '']];
   };
   const modelElementOptions = () => {
-    const list = [];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => { if (e.type === 'model3d') list.push([e.name, e.id]); });
-    });
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'model3d').map(e => [e.name, e.id]);
     return list.length ? list : [['（无 3D 模型）', '']];
   };
   const spriteElementOptions = () => {
-    const list = [];
-    (Project.data && Project.data.scenes || []).forEach(s => {
-      s.elements.forEach(e => { if (e.type === 'sprite') list.push([e.name, e.id]); });
-    });
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'sprite').map(e => [e.name, e.id]);
     return list.length ? list : [['（无帧动画元素）', '']];
   };
 
@@ -119,7 +102,7 @@
   };
   defs['jimu_on_scene'] = {
     init() {
-      this.appendDummyInput().appendField('当进入场景')
+      this.appendDummyInput().appendField('当进入章节')
         .appendField(new Blockly.FieldDropdown(sceneOptions), 'SCENE');
       this.setStyle('jimu_hat');
       this.setNextStatement(true);
@@ -146,7 +129,7 @@
   // ---- 场景 ----
   defs['jimu_scene_go'] = {
     init() {
-      this.appendDummyInput().appendField('切换到场景')
+      this.appendDummyInput().appendField('跳到章节')
         .appendField(new Blockly.FieldDropdown(sceneOptions), 'SCENE');
       this.setPreviousStatement(true);
       this.setNextStatement(true);
@@ -155,7 +138,7 @@
   };
   defs['jimu_scene_next'] = {
     init() {
-      this.appendDummyInput().appendField('下一个场景');
+      this.appendDummyInput().appendField('下一个章节');
       this.setPreviousStatement(true);
       this.setNextStatement(true);
       this.setStyle('jimu_scene');
@@ -530,7 +513,7 @@
   // ---- 场景扩充 ----
   defs['jimu_scene_replay'] = {
     init() {
-      this.appendDummyInput().appendField('重播当前场景');
+      this.appendDummyInput().appendField('重播本章节');
       this.setPreviousStatement(true);
       this.setNextStatement(true);
       this.setStyle('jimu_scene');

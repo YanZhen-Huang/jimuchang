@@ -1,14 +1,27 @@
-// 舞台引擎：场景渲染、缩放适配、转场
+// 舞台引擎 v2：连续舞台（元素一次渲染、章节跳转不重建）
 const Stage = {
-  wrapEl: null, rootEl: null, layerEl: null,
-  scale: 1, currentSceneId: null, transitioning: false,
+  wrapEl: null, rootEl: null,
+  layerEl: null, bgEl: null, elsEl: null,
+  scale: 1, currentChapterId: null, transitioning: false,
 
   init(wrapEl) {
     this.wrapEl = wrapEl;
+    this._renderedOnce = false;
     wrapEl.innerHTML = '';
     this.rootEl = document.createElement('div');
     this.rootEl.id = 'stage-root';
-    this.layerEl = null;
+    this.rootEl.style.width = '1920px';
+    this.rootEl.style.height = '1080px';
+    // 单一连续层：背景 + 元素（+ 特效 canvas 由 Effects 插入两者之间）
+    this.layerEl = document.createElement('div');
+    this.layerEl.className = 'scene-layer';
+    this.bgEl = document.createElement('div');
+    this.bgEl.className = 'scene-bg';
+    this.elsEl = document.createElement('div');
+    this.elsEl.className = 'scene-els';
+    this.layerEl.appendChild(this.bgEl);
+    this.layerEl.appendChild(this.elsEl);
+    this.rootEl.appendChild(this.layerEl);
     wrapEl.appendChild(this.rootEl);
     new ResizeObserver(() => {
       if (this._fitRaf) return;
@@ -25,35 +38,6 @@ const Stage = {
     this.rootEl.style.transform = `scale(${this.scale})`;
   },
 
-  buildSceneLayer(scene) {
-    const L = document.createElement('div');
-    L.className = 'scene-layer';
-    if (scene) L.dataset.sceneId = scene.id;
-    const bg = document.createElement('div');
-    bg.className = 'scene-bg';
-    this.applyBg(bg, scene ? scene.background : null);
-    L.appendChild(bg);
-    const els = document.createElement('div');
-    els.className = 'scene-els';
-    if (scene) {
-      [...scene.elements].sort((a, b) => a.z - b.z).forEach(el => {
-        els.appendChild(Elements.render(el));
-      });
-    }
-    if (scene && scene.elements.length === 0) {
-      const hint = document.createElement('div');
-      hint.className = 'stage-empty';
-      hint.innerHTML = '从工具栏「＋」添加元素<br>左侧拖积木编排演示';
-      els.appendChild(hint);
-    }
-    L.appendChild(els);
-    // 场景背景特效（canvas/CSS），插到背景之上、元素之下
-    if (scene) {
-      try { Effects.applyScene(scene, L); } catch (e) { console.warn('场景特效失败', e); }
-    }
-    return L;
-  },
-
   applyBg(bgEl, bg) {
     bgEl.style.background = '';
     if (!bg || bg.type === 'color' || !bg.type) {
@@ -68,63 +52,31 @@ const Stage = {
     }
   },
 
-  render(scene) {
-    if (!scene) return;
-    this.currentSceneId = scene.id;
-    this.rootEl.innerHTML = '';
-    this.layerEl = this.buildSceneLayer(scene);
-    this.rootEl.appendChild(this.layerEl);
+  applyStageBg() {
+    this.applyBg(this.bgEl, Project.data.stage.background);
   },
 
-  async goScene(id, opts = {}) {
-    const scene = Project.getScene(id);
-    if (!scene) return null;
-    const prevScene = Project.getScene(this.currentSceneId);
-    const trans = (prevScene && prevScene.transition) || { type: 'fade', duration: 0.6 };
-    const type = opts.type || trans.type || 'fade';
-    const duration = opts.duration !== undefined ? opts.duration : (trans.duration !== undefined ? trans.duration : 0.6);
-    const instant = !this.currentSceneId || type === 'none' || duration <= 0 || this.transitioning;
-
-    const newLayer = this.buildSceneLayer(scene);
-    if (instant) {
-      this.rootEl.innerHTML = '';
-      this.rootEl.appendChild(newLayer);
-      this.layerEl = newLayer;
-    } else {
-      this.transitioning = true;
-      const oldLayer = this.layerEl;
-      newLayer.style.willChange = 'transform, opacity';
-      this.rootEl.appendChild(newLayer);
-      let frames;
-      switch (type) {
-        case 'slide-left': frames = [{ transform: 'translateX(1920px)' }, { transform: 'translateX(0)' }]; break;
-        case 'slide-right': frames = [{ transform: 'translateX(-1920px)' }, { transform: 'translateX(0)' }]; break;
-        case 'slide-up': frames = [{ transform: 'translateY(1080px)' }, { transform: 'translateY(0)' }]; break;
-        case 'slide-down': frames = [{ transform: 'translateY(-1080px)' }, { transform: 'translateY(0)' }]; break;
-        case 'zoom': frames = [{ transform: 'scale(0.82)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }]; break;
-        case 'wipe': frames = [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }]; break;
-        case 'iris': frames = [{ clipPath: 'circle(0% at 50% 50%)' }, { clipPath: 'circle(78% at 50% 50%)' }]; break;
-        default: frames = [{ opacity: 0 }, { opacity: 1 }];
-      }
-      try {
-        const anim = newLayer.animate(frames, {
-          duration: duration * 1000, easing: Easing.css('easeInOutCubic'), fill: 'backwards'
-        });
-        await anim.finished;
-        anim.cancel();
-      } catch (e) { /* 动画中断则直接完成 */ }
-      if (this.layerEl === oldLayer) {
-        if (oldLayer && oldLayer.parentElement) oldLayer.remove();
-        this.layerEl = newLayer;
-      }
-      this.transitioning = false;
-      newLayer.style.willChange = '';
-    }
-    this.currentSceneId = id;
-    return scene;
+  // ---------- 渲染（一次性全部元素；章节跳转不重建） ----------
+  renderAll() {
+    this.elsEl.innerHTML = '';
+    const els = [...Project.data.elements].sort((a, b) => (a.z || 0) - (b.z || 0));
+    els.forEach(el => {
+      const dom = Elements.render(el);
+      this.elsEl.appendChild(dom);
+    });
+    this.applyStageBg();
+    // 舞台背景特效（原场景特效，v2 挂舞台）
+    try { Effects.applyScene({ fx: Project.data.stage.fx }, this.layerEl); } catch (e) { }
+    this._renderedOnce = true;
   },
 
-  currentScene() { return Project.getScene(this.currentSceneId); },
+  // 兼容：v1 的 Stage.render(scene)；v2 = 全量渲染 + 记录当前章节
+  render(chapterOrNull) {
+    this.renderAll();
+    if (chapterOrNull && chapterOrNull.id) this.currentChapterId = chapterOrNull.id;
+  },
+
+  refreshAll() { this.renderAll(); },
 
   elDom(id) { return this.rootEl.querySelector(`.el[data-id="${id}"]`); },
 
@@ -136,9 +88,65 @@ const Stage = {
     Elements.refreshContent(found.element, dom);
   },
 
-  refreshAll() {
-    const scene = this.currentScene();
-    if (!scene) return;
-    this.render(scene);
-  }
+  // ---------- 章节跳转（背景过渡 + 显隐应用） ----------
+  async goChapter(chapterId, opts = {}) {
+    const ch = Project.getChapter(chapterId);
+    if (!ch) return null;
+    if (!this._renderedOnce) this.renderAll();
+    const instant = opts.instant || this.transitioning;
+    const targetBg = (ch.preset && ch.preset.background) || Project.data.stage.background;
+    const curBg = JSON.stringify(Project.data.stage.background);
+    const newBg = JSON.stringify(targetBg);
+    if (!instant && this.currentChapterId && curBg !== newBg) {
+      await this.transitionBackground(targetBg, opts.duration !== undefined ? opts.duration : 0.6);
+    } else if (curBg !== newBg) {
+      Project.data.stage.background = JSON.parse(JSON.stringify(targetBg));
+      this.applyStageBg();
+    }
+    // 显隐应用（元素 DOM 不重建）
+    const vis = (ch.preset && ch.preset.visibility) || null;
+    if (vis) {
+      Object.entries(vis).forEach(([elId, v]) => {
+        const el = Project.getElement(elId);
+        if (!el) return;
+        const dom = this.elDom(elId);
+        if (v && !el.visible) {
+          el.visible = true;
+          if (dom) { Anim.reset(el, dom); Elements.applyBox(el, dom); }
+        } else if (!v && el.visible) {
+          el.visible = false;
+          if (dom) Elements.applyBox(el, dom);
+        }
+      });
+    }
+    this.currentChapterId = chapterId;
+    return ch;
+  },
+
+  // 兼容别名
+  async goScene(id, opts) { return this.goChapter(id, opts); },
+
+  async transitionBackground(newBg, duration = 0.6) {
+    this.transitioning = true;
+    const clone = document.createElement('div');
+    clone.className = 'scene-bg';
+    clone.style.cssText = this.bgEl.style.cssText;
+    this.bgEl.parentElement.insertBefore(clone, this.bgEl.nextSibling);
+    Project.data.stage.background = JSON.parse(JSON.stringify(newBg));
+    this.applyStageBg();
+    try {
+      const a = clone.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: Math.max(0, duration) * 1000, easing: 'easeInOutCubic', fill: 'both'
+      });
+      await a.finished;
+      a.cancel();
+    } catch (e) { }
+    clone.remove();
+    this.transitioning = false;
+  },
+
+  currentChapter() { return Project.getChapter(this.currentChapterId); },
+
+  // 兼容：v1 的 currentScene
+  currentScene() { return this.currentChapter(); }
 };

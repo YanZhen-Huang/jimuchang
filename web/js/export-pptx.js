@@ -41,9 +41,9 @@ const PptxExport = {
     const out = {};
     let scripts = null;
     try { scripts = Executor.compileAll(); } catch (e) { scripts = { scenes: {} }; }
-    for (const scene of Project.data.scenes) {
+    for (const scene of Project.data.chapters) {
       const list = [];
-      for (const el of scene.elements) {
+      for (const el of Project.data.elements) {
         if (el.entrance && el.entrance.type && el.entrance.type !== 'none') {
           list.push({ elId: el.id, anim: el.entrance.type, duration: el.entrance.duration, delay: el.entrance.delay });
         }
@@ -76,8 +76,8 @@ const PptxExport = {
   async injectAnimations(pptxBase64, animMap) {
     const zip = await JSZip.loadAsync(pptxBase64, { base64: true });
     let injected = 0;
-    for (let i = 0; i < Project.data.scenes.length; i++) {
-      const scene = Project.data.scenes[i];
+    for (let i = 0; i < Project.data.chapters.length; i++) {
+      const scene = Project.data.chapters[i];
       const list = animMap[scene.id];
       if (!list || !list.length) continue;
       const path = 'ppt/slides/slide' + (i + 1) + '.xml';
@@ -151,20 +151,23 @@ const PptxExport = {
 
   // ---------- 可编辑模式 ----------
   buildEditable(pptx) {
-    for (const scene of Project.data.scenes) {
+    for (const scene of Project.data.chapters) {
       const slide = pptx.addSlide();
       this.applyBackground(slide, scene);
-      const els = [...scene.elements].sort((a, b) => (a.z || 0) - (b.z || 0));
+      const els = Project.data.elements
+        .filter(el => (scene.preset && scene.preset.visibility)
+          ? scene.preset.visibility[el.id] !== false
+          : el.visible !== false)
+        .sort((a, b) => (a.z || 0) - (b.z || 0));
       for (const el of els) {
-        if (el.visible === false) continue;
         try { this.addElement(slide, el); } catch (e) { console.warn('元素转换失败:', el.type, e.message || e); }
       }
-      slide.addNotes('场景：' + scene.name);
+      slide.addNotes('章节：' + scene.name);
     }
   },
 
-  applyBackground(slide, scene) {
-    const bg = scene.background || {};
+  applyBackground(slide, chapter) {
+    const bg = (chapter.preset && chapter.preset.background) || Project.data.stage.background || {};
     if (bg.type === 'color' && bg.value) {
       slide.background = { color: this.hex(bg.value) };
     } else if (bg.type === 'gradient' && bg.value && bg.value.stops && bg.value.stops.length) {
@@ -292,12 +295,11 @@ const PptxExport = {
     if (typeof App === 'undefined' || !App.host || !App.host.captureWindow) {
       throw new Error('高保真模式需要桌面程序环境');
     }
-    const scenes = Project.data.scenes;
-    const current = Stage.currentSceneId;
+    const chapters = Project.data.chapters;
     const sel = Editor.selectedId;
     Editor.select(null);
-    for (const scene of scenes) {
-      Stage.render(scene);
+    for (const chapter of chapters) {
+      await Stage.goChapter(chapter.id, { instant: true });
       if (App.host.raiseWindow) App.host.raiseWindow();
       await sleep(360);
       let fullB64 = await App.host.captureWindow();
@@ -310,10 +312,10 @@ const PptxExport = {
       if (!dataUrl) continue;
       const slide = pptx.addSlide();
       slide.addImage({ data: dataUrl, x: 0, y: 0, w: this.SLIDE_W, h: this.SLIDE_H });
-      slide.addNotes('场景：' + scene.name);
+      slide.addNotes('章节：' + chapter.name);
     }
-    const back = Project.getScene(current) || scenes[0];
-    if (back) Stage.render(back);
+    const back = Stage.currentChapter() || chapters[0];
+    if (back) await Stage.goChapter(back.id, { instant: true });
     if (sel) Editor.select(sel);
   },
 

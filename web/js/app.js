@@ -50,8 +50,9 @@ const App = {
     Executor.hooks.onSceneEnter = id => this.playEntrances(id);
 
     this.bindUI();
+    Stage.renderAll();
     this.renderTabs();
-    this.switchTab(Project.data.scenes[0].id);
+    this.switchTab(Project.data.chapters[0].id);
     let savedTheme = 'dark';
     try { savedTheme = localStorage.getItem('jimuchang-theme') || 'dark'; } catch (e) { }
     this.applyTheme(savedTheme);
@@ -73,8 +74,8 @@ const App = {
         const back = await this.host.readFileBase64(testSave);
         console.log(`P1TEST|read|${back ? back.length : 0}`);
         const data = await Project.unpack(back);
-        const txt = data.scenes[0].elements.find(e => e.type === 'text');
-        console.log(`P1TEST|unpack|${data.scenes.length}s ${data.resources.length}r text=${txt ? txt.props.text : 'none'}`);
+        const txt = data.elements.find(e => e.type === 'text');
+        console.log(`P1TEST|unpack|${data.chapters.length}s ${data.resources.length}r text=${txt ? txt.props.text : 'none'}`);
         const same = back && back.length === b64.length;
         console.log(same ? 'P1TEST|PASS' : 'P1TEST|FAIL');
       } catch (e) {
@@ -88,11 +89,12 @@ const App = {
         await Project.unpack(r.base64);
         JimuBlocks.ws.clear();
         JimuBlocks.current = null;
-        Stage.render(Project.data.scenes[0]);
+        Stage.renderAll();
+        Stage.goChapter(Project.data.chapters[0].id, { instant: true });
         this.activeTab = 'global';
         JimuBlocks.switchTo('global');
         this.renderTabs();
-        console.log(`P1TEST|open|${Project.data.scenes.length}s ${Project.data.resources.length}r`);
+        console.log(`P1TEST|open|${Project.data.chapters.length}s ${Project.data.resources.length}r`);
       } catch (e) {
         console.log('P1TEST|openerror|' + e.message);
       }
@@ -139,15 +141,14 @@ const App = {
     }
     if (params.get('testguides') === '1') {
       await sleep(500);
-      const scene = Stage.currentScene();
-      const txts = scene.elements.filter(e => e.type === 'text');
+      const txts = Project.data.elements.filter(e => e.type === 'text');
       if (txts.length >= 2) {
         const el = txts[0], other = txts[1];
         el.x = other.x + 4;
         el.y = other.y + 2;
-        const snap = Editor.computeSnap(el, scene);
+        const snap = Editor.computeSnap(el);
         console.log('P7TEST|snap|dx=' + snap.dx.toFixed(1) + ' dy=' + snap.dy.toFixed(1) + ' lineV=' + snap.lineV + ' lineH=' + snap.lineH);
-        Stage.render(scene);
+        Stage.refreshAll();
         Editor.select(el.id);
         Editor.drawGuides(snap.lineV, snap.lineH);
         console.log('P7TEST|guides|drawn');
@@ -158,8 +159,7 @@ const App = {
     if (params.get('testkf') === '1') {
       await sleep(500);
       try {
-        const scene = Stage.currentScene();
-        const el = scene.elements.find(e => e.type === 'text');
+        const el = Project.data.elements.find(e => e.type === 'text');
         if (!el) { console.log('KFTEST|no element'); return; }
         Editor.select(el.id);
         Keyframes.open();
@@ -278,79 +278,93 @@ const App = {
     if (r) r.disabled = !History.canRedo();
   },
 
-  // ---------- 标签页 ----------
+  // ---------- 章节书签栏 ----------
   renderTabs() {
     const box = document.getElementById('scene-tabs');
     const active = this.activeTab;
     let html = `<div class="tab${active === 'global' ? ' active' : ''}" data-key="global" title="全局脚本">全局</div>`;
-    Project.data.scenes.forEach(s => {
-      html += `<div class="tab${active === s.id ? ' active' : ''}" data-key="${s.id}">${esc(s.name)}</div>`;
+    Project.data.chapters.forEach(s => {
+      html += `<div class="tab${active === s.id ? ' active' : ''}" data-key="${s.id}" title="点击预览本章节（应用背景/显隐预设）">${esc(s.name)}</div>`;
     });
-    html += `<button id="btn-add-scene" title="新建场景">＋</button>`;
-    html += `<div class="spacer"></div><button id="btn-del-scene" class="tab-del" title="删除当前场景">删除场景</button>`;
+    html += `<button id="btn-add-scene" title="新建章节（记录当前舞台状态为预设）">＋</button>`;
+    html += `<div class="spacer"></div><button id="btn-del-scene" class="tab-del" title="删除当前章节">删除章节</button>`;
     box.innerHTML = html;
     box.querySelectorAll('.tab').forEach(t => {
       t.onclick = () => this.switchTab(t.dataset.key);
       t.oncontextmenu = (e) => {
         e.preventDefault();
         if (t.dataset.key === 'global') return;
-        const sc = Project.getScene(t.dataset.key);
-        if (!sc) return;
+        const ch = Project.getChapter(t.dataset.key);
+        if (!ch) return;
         ContextMenu.show(e.clientX, e.clientY, [
-          { label: '重命名…', action: () => { const n = prompt('场景名称', sc.name); if (n) { sc.name = n; this.renderTabs(); Panel.show(); this.markDirty(); } } },
-          { label: '复制场景', action: () => this.copyScene(sc.id) },
+          { label: '重命名…', action: () => { const nm = prompt('章节名称', ch.name); if (nm) { ch.name = nm; this.renderTabs(); Panel.show(); this.markDirty(); } } },
+          { label: '复制章节', action: () => this.copyChapter(ch.id) },
+          { label: '用当前舞台状态更新预设', action: () => this.updateChapterPreset(ch.id) },
           { type: 'sep' },
-          { label: '删除场景', danger: true, action: () => { this.activeTab = sc.id; this.deleteScene(); } }
+          { label: '删除章节', danger: true, action: () => { this.activeTab = ch.id; this.deleteChapter(); } }
         ]);
       };
     });
     box.querySelector('#btn-add-scene').onclick = () => {
       JimuBlocks.save();
-      const sc = Project.addScene();
+      const ch = Project.addChapter();
+      this.updateChapterPreset(ch.id, true);
       this.renderTabs();
-      this.switchTab(sc.id);
+      this.switchTab(ch.id);
       this.markDirty();
     };
     const del = box.querySelector('#btn-del-scene');
-    if (del) del.onclick = () => this.deleteScene();
+    if (del) del.onclick = () => this.deleteChapter();
+  },
+
+  // 记录当前舞台状态（背景+全部元素显隐）为章节预设
+  updateChapterPreset(chapterId, silent) {
+    const ch = Project.getChapter(chapterId);
+    if (!ch) return;
+    ch.preset.background = JSON.parse(JSON.stringify(Project.data.stage.background));
+    ch.preset.visibility = {};
+    Project.data.elements.forEach(el => { ch.preset.visibility[el.id] = el.visible !== false; });
+    if (!silent) { toast('已用当前舞台状态更新「' + ch.name + '」的预设'); this.markDirty(); }
   },
 
   switchTab(key) {
-    if (key !== 'global' && !Project.getScene(key)) return;
+    if (key !== 'global' && !Project.getChapter(key)) return;
     JimuBlocks.switchTo(key);
     this.activeTab = key;
     if (key !== 'global') {
-      const sc = Project.getScene(key);
-      if (sc) { Stage.render(sc); Editor.select(null); Panel.show(); }
+      const ch = Project.getChapter(key);
+      if (ch) {
+        Stage.goChapter(ch.id, { instant: true });   // 编辑态预览该书签
+        Editor.select(null);
+        Panel.show();
+      }
     }
     this.renderTabs();
   },
 
-  copyScene(id) {
-    const sc = Project.getScene(id);
-    if (!sc) return;
-    const copy = JSON.parse(JSON.stringify(sc));
-    copy.id = Project.uid('scene');
-    copy.name = sc.name + ' 副本';
-    copy.elements.forEach(el => { el.id = Project.uid('el'); });
-    copy.blocks = null;  // 脚本引用旧元素 id，不复制
-    const idx = Project.data.scenes.indexOf(sc);
-    Project.data.scenes.splice(idx + 1, 0, copy);
+  copyChapter(id) {
+    const ch = Project.getChapter(id);
+    if (!ch) return;
+    const copy = JSON.parse(JSON.stringify(ch));
+    copy.id = Project.uid('ch');
+    copy.name = ch.name + ' 副本';
+    copy.blocks = null;
+    const idx = Project.data.chapters.indexOf(ch);
+    Project.data.chapters.splice(idx + 1, 0, copy);
     this.renderTabs();
     this.switchTab(copy.id);
     this.markDirty();
-    toast('已复制场景（积木脚本未复制）');
+    toast('已复制章节（元素不重复；脚本未复制）');
   },
 
-  deleteScene() {
-    if (this.activeTab === 'global') { toast('先切换到一个场景再删除'); return; }
-    if (Project.data.scenes.length <= 1) { toast('至少保留一个场景'); return; }
-    const sc = Project.getScene(this.activeTab);
-    if (!sc || !confirm(`删除场景「${sc.name}」？`)) return;
+  deleteChapter() {
+    if (this.activeTab === 'global') { toast('先切换到一个章节再删除'); return; }
+    if (Project.data.chapters.length <= 1) { toast('至少保留一个章节'); return; }
+    const ch = Project.getChapter(this.activeTab);
+    if (!ch || !confirm(`删除章节「${ch.name}」？（元素与舞台内容保留）`)) return;
     JimuBlocks.switchTo('global');
-    Project.removeScene(sc.id);
+    Project.removeChapter(ch.id);
     this.activeTab = 'global';
-    Stage.render(Project.data.scenes[0]);
     this.renderTabs();
     JimuBlocks.switchTo('global');
     Panel.show();
@@ -365,8 +379,7 @@ const App = {
     if (!r || !r.base64) return;
     const mimeFallback = { image: 'image/png', video: 'video/mp4', audio: 'audio/mpeg', model: 'model/gltf-binary', webapp: 'text/html' }[kind] || 'application/octet-stream';
     const res = Project.addResource(r.name, r.mime || mimeFallback, r.base64);
-    const scene = Stage.currentScene();
-    const el = Project.createElement(scene, kind, { props: { resourceId: res.id } });
+    const el = Project.createElement(kind, { props: { resourceId: res.id } });
     Stage.refreshAll();
     Editor.select(el.id);
     this.markDirty();
@@ -391,7 +404,7 @@ const App = {
     JimuBlocks.save();
     const scripts = Executor.compileAll();
     const projectData = JSON.parse(JSON.stringify(Project.data));
-    const has3d = projectData.scenes.some(sc => sc.elements.some(e => e.type === 'model3d'));
+    const has3d = projectData.elements.some(e => e.type === 'model3d');
     const files = ['easing.js', 'project.js', 'audio.js', 'effects.js', 'sprites.js', 'three-scene.js',
       'elements.js', 'stage.js', 'animations.js', 'keyframes.js', 'executor.js',
       'jimu-api.js', 'player.js'];
@@ -413,8 +426,8 @@ const App = {
         loader: await this.host.readFileBase64(':/vendor/three/GLTFLoader.js')
       };
     }
-    const needBuiltin = projectData.scenes.some(sc => sc.elements.some(e =>
-      e.type === 'model3d' && (!e.props.resourceId || e.props.resourceId === 'builtin:robot')));
+    const needBuiltin = projectData.elements.some(e =>
+      e.type === 'model3d' && (!e.props.resourceId || e.props.resourceId === 'builtin:robot'));
     const builtinRobot = needBuiltin ? await this.host.readFileBase64(':/assets/models/RobotExpressive.glb') : null;
     const data = { project: projectData, scripts, three, builtinRobot };
     const title = (projectData.name || '积木剧场演示') + ' · 放映';
@@ -526,8 +539,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this._dataBackup = null;
     }
     if (this.host) this.host.setFullscreen(false);
-    const sc = Project.getScene(Stage.currentSceneId) || Project.data.scenes[0];
-    Stage.render(sc);
+    const sc = Stage.currentChapter() || Project.data.chapters[0];
+    Stage.renderAll();
+    if (sc) Stage.goChapter(sc.id, { instant: true });
     Editor.select(null);
     Panel.show();
     setTimeout(() => {
@@ -544,11 +558,11 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }, 2500);
   },
 
-  playEntrances(sceneId) {
-    const sc = Project.getScene(sceneId);
-    if (!sc) return;
+  playEntrances(chapterId) {
+    const ch = Project.getChapter(chapterId);
+    if (!ch) return;
     AudioMgr.stopLoopSfx();
-    sc.elements.forEach(el => {
+    Project.data.elements.forEach(el => {
       if (!el.visible) return;
       const dom = Stage.elDom(el.id);
       // 音频元素：进场景自动播放
@@ -570,9 +584,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   async nextScene() {
-    const i = Project.sceneIndex(Stage.currentSceneId);
-    const next = Project.data.scenes[i + 1];
-    if (next) await Stage.goScene(next.id);
+    const i = Project.chapterIndex(Stage.currentChapterId);
+    const next = Project.data.chapters[i + 1];
+    if (next) await Stage.goChapter(next.id);
   },
 
   // ---------- 存取 ----------
@@ -640,7 +654,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       Project.filePath = null;
       JimuBlocks.current = null;
       JimuBlocks.ws.clear();
-      Stage.render(Project.data.scenes[0]);
+      Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
       this.activeTab = 'global';
       JimuBlocks.switchTo('global');
       this.renderTabs();
@@ -685,7 +700,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       Project.filePath = path;
       JimuBlocks.current = null;
       JimuBlocks.ws.clear();
-      Stage.render(Project.data.scenes[0]);
+      Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
       this.activeTab = 'global';
       JimuBlocks.switchTo('global');
       this.renderTabs();
@@ -728,7 +744,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
     Project.filePath = r.path;
     JimuBlocks.ws.clear();
-    Stage.render(Project.data.scenes[0]);
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
     this.activeTab = 'global';
     JimuBlocks.current = null;
     JimuBlocks.switchTo('global');
@@ -745,7 +762,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.ws.clear();
     JimuBlocks.current = null;
     Project.newProject();
-    Stage.render(Project.data.scenes[0]);
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
     this.activeTab = 'global';
     JimuBlocks.switchTo('global');
     this.renderTabs();
@@ -760,8 +778,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.current = null;
     Project.newProject('积木剧场演示');
     this.buildDemo();
-    Stage.render(Project.data.scenes[0]);
     this.activeTab = 'global';
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
     JimuBlocks.switchTo('global');
     this.renderTabs();
     Panel.show();
@@ -770,103 +789,78 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     toast('示例已载入，点 ▶ 播放试试');
   },
 
-  // ---------- 示例项目 ----------
+  // ---------- 示例项目（v2 元素中心） ----------
   buildDemo() {
     const d = Project.data;
-    const s1 = Project.getScene(d.scenes[0].id);
-    s1.name = '封面';
-    s1.background = { type: 'gradient', value: { kind: 'linear', angle: 135, stops: [['#0F1523', '0'], ['#1A1030', '1']] } };
 
-    const title = Project.createElement(s1, 'text', {
-      name: '标题', x: 460, y: 400, w: 1000, h: 160,
-      props: { text: '积木剧场', size: 120, color: '#E6E9EF', bold: true, align: 'center' }
-    });
-    const sub = Project.createElement(s1, 'text', {
-      name: '副标题', x: 560, y: 580, w: 800, h: 80,
-      props: { text: '用积木编排你的演示', size: 40, color: '#8A93A6', align: 'center' }
-    });
-    const line = Project.createElement(s1, 'shape', {
-      name: '装饰线', x: 860, y: 560, w: 200, h: 4,
-      props: { shape: 'rect', fill: '#6C8CFF', stroke: '#6C8CFF', strokeWidth: 0, radius: 2 }
-    });
-
-    const s2 = Project.addScene('特性');
-    s2.background = { type: 'color', value: '#0F1115' };
-    s2.transition = { type: 'slide-left', duration: 0.6 };
-    const t2 = Project.createElement(s2, 'text', {
-      name: '标题2', x: 660, y: 140, w: 600, h: 100,
-      props: { text: '能做什么', size: 64, color: '#E6E9EF', bold: true, align: 'center' }
-    });
+    // ==== 元素（全局，第一公民） ====
+    const title = Project.createElement('text', { name: '标题', x: 460, y: 400, w: 1000, h: 160,
+      props: { text: '积木剧场', size: 120, color: '#E6E9EF', bold: true, align: 'center' } });
+    const sub = Project.createElement('text', { name: '副标题', x: 560, y: 580, w: 800, h: 80,
+      props: { text: '用积木编排你的演示', size: 40, color: '#8A93A6', align: 'center' } });
+    const line = Project.createElement('shape', { name: '装饰线', x: 860, y: 560, w: 200, h: 4,
+      props: { shape: 'rect', fill: '#6C8CFF', stroke: '#6C8CFF', strokeWidth: 0, radius: 2 } });
+    const t2 = Project.createElement('text', { name: '标题2', x: 660, y: 140, w: 600, h: 100,
+      props: { text: '能做什么', size: 64, color: '#E6E9EF', bold: true, align: 'center' } });
     const icons = [
       { char: '🧩', x: 420 }, { char: '🎬', x: 860 }, { char: '🚀', x: 1300 }
-    ].map((cfg, i) => Project.createElement(s2, 'icon', {
-      name: '图标' + (i + 1), x: cfg.x, y: 380, w: 200, h: 200,
-      props: { char: cfg.char, size: 140, color: '#6C8CFF' }
-    }));
-    const labels = ['积木编程', '动画放映', '3D 展示'].map((txt, i) => Project.createElement(s2, 'text', {
-      name: '标签' + (i + 1), x: 370 + i * 440, y: 620, w: 300, h: 70,
-      props: { text: txt, size: 44, color: '#C9D1E0', align: 'center' }
-    }));
+    ].map((cfg, i2) => Project.createElement('icon', { name: '图标' + (i2 + 1), x: cfg.x, y: 380, w: 200, h: 200,
+      props: { char: cfg.char, size: 140, color: '#6C8CFF' } }));
+    const labels = ['积木编程', '动画放映', '3D 展示'].map((txt, i2) => Project.createElement('text', { name: '标签' + (i2 + 1), x: 370 + i2 * 440, y: 620, w: 300, h: 70,
+      props: { text: txt, size: 44, color: '#C9D1E0', align: 'center' } }));
+    const endText = Project.createElement('text', { name: '结束语', x: 460, y: 460, w: 1000, h: 160,
+      props: { text: '开始创作吧！', size: 96, color: '#E6E9EF', bold: true, align: 'center' } });
+    const star = Project.createElement('icon', { name: '星星', x: 880, y: 650, w: 160, h: 160,
+      props: { char: '✨', size: 120, color: '#F5A623' } });
 
-    const s3 = Project.addScene('结尾');
-    s3.background = { type: 'gradient', value: { kind: 'linear', angle: 135, stops: [['#101A2A', '0'], ['#1A1030', '1']] } };
-    s3.transition = { type: 'zoom', duration: 0.7 };
-    const endText = Project.createElement(s3, 'text', {
-      name: '结束语', x: 460, y: 460, w: 1000, h: 160,
-      props: { text: '开始创作吧！', size: 96, color: '#E6E9EF', bold: true, align: 'center' }
-    });
-    const star = Project.createElement(s3, 'icon', {
-      name: '星星', x: 880, y: 650, w: 160, h: 160,
-      props: { char: '✨', size: 120, color: '#F5A623' }
-    });
+    // ==== 章节（书签：背景 + 显隐预设） ====
+    const s1 = Project.getChapter(d.chapters[0].id);
+    s1.name = '封面';
+    s1.preset.background = { type: 'gradient', value: { kind: 'linear', angle: 135, stops: [['#0F1523', '0'], ['#1A1030', '1']] } };
+    const s2 = Project.addChapter('特性');
+    s2.preset.background = { type: 'color', value: '#0F1115' };
+    const s3 = Project.addChapter('结尾');
+    s3.preset.background = { type: 'gradient', value: { kind: 'linear', angle: 135, stops: [['#101A2A', '0'], ['#1A1030', '1']] } };
+    const setVis = (ch, ids) => {
+      ch.preset.visibility = {};
+      d.elements.forEach(el => { ch.preset.visibility[el.id] = ids.indexOf(el.id) >= 0; });
+    };
+    setVis(s1, [title.id, sub.id, line.id]);
+    setVis(s2, [t2.id].concat(icons.map(e => e.id), labels.map(e => e.id)));
+    setVis(s3, [endText.id, star.id]);
+    d.stage.background = JSON.parse(JSON.stringify(s1.preset.background));
 
-    // ---- 脚本 ----
+    // ==== 章节脚本 ====
     const waitBlock = (sec) => blk('jimu_wait', null, null, { SEC: { shadow: { type: 'math_number', fields: { NUM: sec } } } });
     const link = (list) => {
-      for (let i = list.length - 1; i > 0; i--) {
-        list[i - 1].next = { block: list[i] };
-      }
+      for (let i2 = list.length - 1; i2 > 0; i2--) list[i2 - 1].next = { block: list[i2] };
       return list[0];
     };
-
-    // 场景1：标题淡入 → 装饰线 → 副标题飞入 → 等待 → 下一场景
     s1.blocks = {
-      blocks: {
-        languageVersion: 0,
-        blocks: [link([
-          blk('jimu_on_scene', { SCENE: s1.id }),
-          blk('jimu_anim', { ELEMENT: title.id, ANIM: 'fadeIn', DUR: 0.8, DELAY: 0, EASE: 'easeOutCubic' }),
-          blk('jimu_anim', { ELEMENT: line.id, ANIM: 'zoomIn', DUR: 0.5, DELAY: 0, EASE: 'easeOutBack' }),
-          blk('jimu_anim', { ELEMENT: sub.id, ANIM: 'flyInBottom', DUR: 0.6, DELAY: 0.2, EASE: 'easeOutCubic' }),
-          waitBlock(2),
-          blk('jimu_scene_next')
-        ])]
-      }
+      blocks: { languageVersion: 0, blocks: [link([
+        blk('jimu_on_scene', { SCENE: s1.id }),
+        blk('jimu_anim', { ELEMENT: title.id, ANIM: 'fadeIn', DUR: 0.8, DELAY: 0, EASE: 'easeOutCubic' }),
+        blk('jimu_anim', { ELEMENT: line.id, ANIM: 'zoomIn', DUR: 0.5, DELAY: 0, EASE: 'easeOutBack' }),
+        blk('jimu_anim', { ELEMENT: sub.id, ANIM: 'flyInBottom', DUR: 0.6, DELAY: 0.2, EASE: 'easeOutCubic' }),
+        waitBlock(2),
+        blk('jimu_scene_next')
+      ])] }
     };
-
-    // 场景2脚本：标题飞入 → 图标依次弹跳 → 标签淡入 → 等待 → 下一场景
     const chain2 = [blk('jimu_on_scene', { SCENE: s2.id }),
       blk('jimu_anim', { ELEMENT: t2.id, ANIM: 'flyInTop', DUR: 0.6, DELAY: 0, EASE: 'easeOutCubic' })];
-    icons.forEach((ic, i) => chain2.push(blk('jimu_anim', { ELEMENT: ic.id, ANIM: 'bounceIn', DUR: 0.7, DELAY: 0.15, EASE: 'easeOutBounce' })));
+    icons.forEach(ic => chain2.push(blk('jimu_anim', { ELEMENT: ic.id, ANIM: 'bounceIn', DUR: 0.7, DELAY: 0.15, EASE: 'easeOutBounce' })));
     labels.forEach(lb => chain2.push(blk('jimu_anim', { ELEMENT: lb.id, ANIM: 'fadeIn', DUR: 0.5, DELAY: 0, EASE: 'easeOutCubic' })));
     chain2.push(waitBlock(2), blk('jimu_scene_next'));
     s2.blocks = { blocks: { languageVersion: 0, blocks: [link(chain2)] } };
-
-    // 场景3脚本：打字机 → 星星光晕 → 等待 → 回到封面
     s3.blocks = {
-      blocks: {
-        languageVersion: 0,
-        blocks: [link([
-          blk('jimu_on_scene', { SCENE: s3.id }),
-          blk('jimu_anim', { ELEMENT: endText.id, ANIM: 'typewriter', DUR: 1.4, DELAY: 0, EASE: 'linear' }),
-          blk('jimu_anim', { ELEMENT: star.id, ANIM: 'glowPulse', DUR: 1.2, DELAY: 0, EASE: 'easeInOutCubic' }),
-          waitBlock(1.8),
-          blk('jimu_scene_go', { SCENE: s1.id })
-        ])]
-      }
+      blocks: { languageVersion: 0, blocks: [link([
+        blk('jimu_on_scene', { SCENE: s3.id }),
+        blk('jimu_anim', { ELEMENT: endText.id, ANIM: 'typewriter', DUR: 1.4, DELAY: 0, EASE: 'linear' }),
+        blk('jimu_anim', { ELEMENT: star.id, ANIM: 'glowPulse', DUR: 1.2, DELAY: 0, EASE: 'easeInOutCubic' }),
+        waitBlock(1.8),
+        blk('jimu_scene_go', { SCENE: s1.id })
+      ])] }
     };
-
-    // 全局脚本：当演示开始 → 无（场景脚本自带流程）
     d.globalBlocks = { blocks: { languageVersion: 0, blocks: [] } };
   },
 

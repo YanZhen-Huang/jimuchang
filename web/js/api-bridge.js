@@ -25,8 +25,9 @@ const ApiBridge = {
   ok(data) { return { __done: true, status: 200, body: { ok: true, data: data === undefined ? null : data } }; },
 
   refreshUI(opts = {}) {
-    const sc = Project.getScene(Stage.currentSceneId) || Project.data.scenes[0];
-    Stage.render(sc);
+    Stage.renderAll();
+    const sc = Stage.currentChapter() || Project.data.chapters[0];
+    if (sc) Stage.goChapter(sc.id, { instant: true });
     App.renderTabs();
     Panel.show();
     if (opts.blocks) {
@@ -97,11 +98,11 @@ const ApiBridge = {
       project: {
         name: Project.data.name,
         path: Project.filePath,
-        scenes: Project.data.scenes.length,
+        chapters: Project.data.chapters.length,
         resources: Project.data.resources.length,
         dirty: App.dirty
       },
-      currentScene: (() => { const s = Stage.currentScene(); return s ? { id: s.id, name: s.name } : null; })()
+      currentChapter: (() => { const s = Stage.currentChapter(); return s ? { id: s.id, name: s.name } : null; })()
     });
   },
 
@@ -153,7 +154,7 @@ const ApiBridge = {
     JimuBlocks.ws.clear();
     this.refreshUI({ blocks: true });
     History.reset();
-    return this.ok({ scenes: data.scenes.length, resources: data.resources.length });
+    return this.ok({ chapters: data.chapters.length, resources: data.resources.length });
   },
 
   projectNew(b) {
@@ -188,51 +189,53 @@ const ApiBridge = {
     JimuBlocks.ws.clear();
     this.refreshUI({ blocks: true });
     History.reset();
-    return this.ok({ path: b.path, scenes: Project.data.scenes.length, resources: Project.data.resources.length });
+    return this.ok({ path: b.path, chapters: Project.data.chapters.length, resources: Project.data.resources.length });
   },
 
   // ---------- 场景 ----------
   scenesList() {
-    return this.ok(Project.data.scenes.map(s => ({
-      id: s.id, name: s.name, elements: s.elements.length, fx: (s.fx && s.fx.type) || null
+    return this.ok(Project.data.chapters.map(s => ({
+      id: s.id, name: s.name,
+      elements: Project.data.elements.filter(el => !s.preset.visibility || s.preset.visibility[el.id] !== false).length,
+      background: (s.preset && s.preset.background) || null
     })));
   },
 
   sceneGet(id) {
-    const sc = Project.getScene(id);
-    if (!sc) return this.err(404, '场景不存在: ' + id);
+    const sc = Project.getChapter(id);
+    if (!sc) return this.err(404, '章节不存在: ' + id);
     return this.ok(sc);
   },
 
   sceneAdd(b) {
-    const sc = Project.addScene((b && b.name) || undefined);
+    const sc = Project.addChapter((b && b.name) || undefined);
     this.refreshUI();
     return this.ok({ id: sc.id, name: sc.name });
   },
 
   scenePatch(id, b) {
-    const sc = Project.getScene(id);
-    if (!sc) return this.err(404, '场景不存在: ' + id);
-    ['name', 'background', 'transition', 'fx'].forEach(k => {
-      if (b[k] !== undefined) sc[k] = b[k];
-    });
+    const sc = Project.getChapter(id);
+    if (!sc) return this.err(404, '章节不存在: ' + id);
+    if (b.name !== undefined) sc.name = b.name;
+    if (b.background !== undefined) sc.preset.background = b.background;
     this.refreshUI();
     return this.ok({ id, name: sc.name });
   },
 
   sceneDelete(id) {
-    if (Project.data.scenes.length <= 1) return this.err(400, '至少保留一个场景');
-    const ok = Project.removeScene(id);
-    if (!ok) return this.err(404, '场景不存在: ' + id);
-    if (Stage.currentSceneId === id) Stage.currentSceneId = Project.data.scenes[0].id;
+    if (Project.data.chapters.length <= 1) return this.err(400, '至少保留一个章节');
+    const ok = Project.removeChapter(id);
+    if (!ok) return this.err(404, '章节不存在: ' + id);
+    if (Stage.currentChapterId === id) Stage.currentChapterId = Project.data.chapters[0].id;
     this.refreshUI({ blocks: true });
     return this.ok({ deleted: id });
   },
 
   sceneElements(id) {
-    const sc = Project.getScene(id);
-    if (!sc) return this.err(404, '场景不存在: ' + id);
-    return this.ok(sc.elements.map(e => ({
+    const sc = Project.getChapter(id);
+    if (!sc) return this.err(404, '章节不存在: ' + id);
+    const list = Project.data.elements.filter(el => !sc.preset.visibility || sc.preset.visibility[el.id] !== false);
+    return this.ok(list.map(e => ({
       id: e.id, type: e.type, name: e.name, x: e.x, y: e.y, w: e.w, h: e.h,
       visible: e.visible, props: e.props
     })));
@@ -240,10 +243,8 @@ const ApiBridge = {
 
   // ---------- 元素 ----------
   elementAdd(b) {
-    const sc = Project.getScene(b.sceneId || Stage.currentSceneId);
-    if (!sc) return this.err(400, '缺少 sceneId 或场景不存在');
     if (!b.type) return this.err(400, '缺少 type');
-    const el = Project.createElement(sc, b.type, {
+    const el = Project.createElement(b.type, {
       name: b.name, x: b.x, y: b.y, w: b.w, h: b.h, props: b.props
     });
     if (b.entrance) el.entrance = b.entrance;

@@ -102,7 +102,7 @@ const Editor = {
 
   computeSnap(el, scene) {
     const TH = 8;
-    const others = scene.elements.filter(o => o.id !== el.id && o.visible !== false);
+    const others = Project.data.elements.filter(o => o.id !== el.id && o.visible !== false);
     const xs = [960], ys = [540];
     others.forEach(o => {
       xs.push(o.x, o.x + o.w / 2, o.x + o.w);
@@ -174,7 +174,7 @@ const Editor = {
     if (this.drag.mode === 'move') {
       el.x = Math.round(this.drag.ox + dx);
       el.y = Math.round(this.drag.oy + dy);
-      const snap = this.computeSnap(el, f.scene);
+      const snap = this.computeSnap(el);
       if (snap.dx) el.x += Math.round(snap.dx);
       if (snap.dy) el.y += Math.round(snap.dy);
       this.drawGuides(snap.lineV, snap.lineH);
@@ -238,9 +238,7 @@ const Editor = {
 
   // 添加元素
   addElement(type) {
-    const scene = Stage.currentScene();
-    if (!scene) return;
-    const el = Project.createElement(scene, type);
+    const el = Project.createElement(type);
     Stage.refreshAll();
     this.select(el.id);
     App.markDirty();
@@ -250,7 +248,7 @@ const Editor = {
   deleteSelected() {
     const sel = this.selected();
     if (!sel) return;
-    Project.removeElement(sel.scene, sel.element.id);
+    Project.removeElement(sel.element.id);
     this.select(null);
     Stage.refreshAll();
     App.markDirty();
@@ -262,9 +260,9 @@ const Editor = {
     const copy = JSON.parse(JSON.stringify(sel.element));
     copy.id = Project.uid('el');
     copy.x += 40; copy.y += 40;
-    copy.z = sel.scene.elements.reduce((m, e) => Math.max(m, e.z || 0), 0) + 1;
+    copy.z = Project.data.elements.reduce((m, e) => Math.max(m, e.z || 0), 0) + 1;
     copy.name = sel.element.name + ' 副本';
-    sel.scene.elements.push(copy);
+    Project.data.elements.push(copy);
     Stage.refreshAll();
     this.select(copy.id);
     App.markDirty();
@@ -299,7 +297,7 @@ const Panel = {
 
   show() {
     const sel = Editor.selected();
-    if (sel) this.renderElement(sel.scene, sel.element);
+    if (sel) this.renderElement(null, sel.element);
     else this.renderScene();
   },
 
@@ -319,7 +317,7 @@ const Panel = {
       : (bg.value && bg.value.stops && bg.value.stops[0] ? bg.value.stops[0][0] : '#0F1115');
     const tr = sc.transition || { type: 'fade', duration: 0.6 };
     this.el.innerHTML = `
-      <div class="p-title">场景属性</div>
+      <div class="p-title">舞台与章节</div>
       ${this.row('名称', `<input data-prop="name" value="${esc(sc.name)}">`)}
       ${this.row('背景色', `<input type="color" data-prop="background.value" value="${bgColor}">`)}
       ${this.row('转场', `<select data-prop="transition.type">${this.options(JimuConst.TRANSITIONS, tr.type)}</select>`)}

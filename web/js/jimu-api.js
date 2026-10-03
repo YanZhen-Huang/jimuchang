@@ -1,12 +1,8 @@
 // jimu JS API：供"执行代码"积木使用（代码块内的全局对象）
 const JimuAPI = (() => {
-  const findScene = ref => (Project.data.scenes || []).find(s => s.id === ref || s.name === ref);
+  const findScene = ref => (Project.data.chapters || []).find(s => s.id === ref || s.name === ref);
   const findEl = ref => {
-    for (const s of Project.data.scenes) {
-      const el = s.elements.find(e => e.id === ref || e.name === ref);
-      if (el) return el;
-    }
-    return null;
+    return (Project.data.elements || []).find(e => e.id === ref || e.name === ref) || null;
   };
   const domOf = ref => {
     const el = findEl(ref);
@@ -23,8 +19,8 @@ const JimuAPI = (() => {
         await Executor.fireSceneEnter(sc.id);
       },
       next() {
-        const i = Project.sceneIndex(Stage.currentSceneId);
-        const nx = Project.data.scenes[i + 1];
+        const i = Project.chapterIndex(Stage.currentChapterId);
+        const nx = Project.data.chapters[i + 1];
         if (nx) api.scene.go(nx.id);
       },
       current() {
@@ -177,9 +173,9 @@ const JimuAPI = (() => {
   window.addEventListener('message', e => {
     const d = e.data;
     if (!d || d.source !== 'webapp') return;
-    const scene = Stage.currentScene();
+    const scene = Stage.currentChapter();
     if (!scene) return;
-    for (const el of scene.elements) {
+    for (const el of (Project.data.elements || [])) {
       if (el.type !== 'webapp') continue;
       const dom = Stage.elDom(el.id);
       const iframe = dom && dom.querySelector('iframe');

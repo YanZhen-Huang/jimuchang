@@ -71,11 +71,11 @@ const Player = {
     return { three: moduleUrl, loader: loaderUrl };
   },
 
-  playEntrances(sceneId) {
-    const sc = Project.getScene(sceneId);
+  playEntrances(chapterId) {
+    const sc = Project.getChapter(chapterId);
     if (!sc) return;
     AudioMgr.stopLoopSfx();
-    sc.elements.forEach(el => {
+    Project.data.elements.forEach(el => {
       if (!el.visible) return;
       const dom = Stage.elDom(el.id);
       if (el.type === 'audio' && el.props.autoplay && el.props.resourceId) {
@@ -104,9 +104,9 @@ const Player = {
   },
 
   async nextScene() {
-    const i = Project.sceneIndex(Stage.currentSceneId);
-    const next = Project.data.scenes[i + 1];
-    if (next) await Stage.goScene(next.id);
+    const i = Project.chapterIndex(Stage.currentChapterId);
+    const next = Project.data.chapters[i + 1];
+    if (next) await Stage.goChapter(next.id);
   },
 
   toggleFullscreen() {
