@@ -16,6 +16,12 @@ const blk = (type, fields, next, inputs) => {
   return o;
 };
 
+// 元素类型图标（脚本切换栏 / 元素列表条）
+const ELEMENT_ICONS = {
+  text: '🅣', image: '🖼', shape: '🔷', icon: '⭐', video: '🎬',
+  audio: '🎵', chart: '📊', sprite: '🎞', model3d: '🧊', webapp: '🧩'
+};
+
 const App = {
   host: null,
   hostReady: null,
@@ -191,6 +197,10 @@ const App = {
       console.log('P1TEST|play|start');
       this.play();
     }
+    if (params.get('testr2') === '1') {
+      await sleep(700);
+      this.testR2();
+    }
   },
 
   bindUI() {
@@ -278,6 +288,71 @@ const App = {
     if (r) r.disabled = !History.canRedo();
   },
 
+  // ---------- 脚本切换栏（全局 / 元素脚本） ----------
+  renderScriptTabs() {
+    const box = document.getElementById('script-tabs');
+    if (!box) return;
+    const active = this.activeTab || 'global';
+    let html = `<div class="tab${active === 'global' ? ' active' : ''}" data-key="global" title="全局脚本（当演示开始 / 按下键 / 收到消息）">全局</div>`;
+    Project.data.elements.forEach(el => {
+      const key = 'el:' + el.id;
+      html += `<div class="tab${active === key ? ' active' : ''}" data-key="${key}" title="编辑「${esc(el.name)}」的脚本">`
+        + `<span class="el-ico">${ELEMENT_ICONS[el.type] || '◻'}</span>${esc(el.name)}</div>`;
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('.tab').forEach(t => {
+      t.onclick = () => this.switchTab(t.dataset.key);
+    });
+  },
+
+  // ---------- 元素列表条 ----------
+  renderElementBar() {
+    const box = document.getElementById('element-bar');
+    if (!box) return;
+    const sel = Editor.selectedId;
+    if (!Project.data.elements.length) {
+      box.innerHTML = '<span class="el-bar-note">暂无元素：用工具栏「＋」添加，或从下方属性面板编辑舞台</span>';
+      return;
+    }
+    let html = '';
+    Project.data.elements.forEach(el => {
+      html += `<div class="el-chip${sel === el.id ? ' active' : ''}" data-id="${el.id}" title="点击选中并编辑其脚本">`
+        + `<span class="el-ico">${ELEMENT_ICONS[el.type] || '◻'}</span>${esc(el.name)}${el.locked ? ' 🔒' : ''}</div>`;
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('.el-chip').forEach(c => {
+      const id = c.dataset.id;
+      c.onclick = () => this.selectElement(id, true);
+      c.oncontextmenu = e => {
+        e.preventDefault();
+        this.elementMenu(e.clientX, e.clientY, id);
+      };
+    });
+  },
+
+  // 选中元素（switchScript=true 时同步把积木区切到该元素的脚本）
+  selectElement(id, switchScript) {
+    Editor.select(id);
+    if (switchScript) this.switchTab('el:' + id);
+    else { this.renderScriptTabs(); this.renderElementBar(); }
+  },
+
+  elementMenu(x, y, id) {
+    const f = Project.findElementById(id);
+    if (!f) return;
+    const el = f.element;
+    ContextMenu.show(x, y, [
+      { label: '编辑脚本', action: () => this.selectElement(id, true) },
+      { label: '重命名…', action: () => { const nm = prompt('元素名称', el.name); if (nm) { el.name = nm; this.renderScriptTabs(); this.renderElementBar(); Panel.show(); this.markDirty(); } } },
+      { label: '复制元素', action: () => { Editor.select(id); Editor.duplicateSelected(); this.renderElementBar(); } },
+      { label: el.locked ? '解锁' : '锁定', action: () => { el.locked = !el.locked; this.renderElementBar(); this.markDirty(); } },
+      { label: '置于最前', action: () => { el.z = Math.max(0, ...Project.data.elements.map(e => e.z || 0)) + 1; Stage.renderAll(); this.markDirty(); } },
+      { label: '置于最后', action: () => { el.z = Math.min(0, ...Project.data.elements.map(e => e.z || 0)) - 1; Stage.renderAll(); this.markDirty(); } },
+      { type: 'sep' },
+      { label: '删除元素', danger: true, action: () => { Editor.select(id); Editor.deleteSelected(); this.renderScriptTabs(); this.renderElementBar(); } }
+    ]);
+  },
+
   // ---------- 章节书签栏 ----------
   renderTabs() {
     const box = document.getElementById('scene-tabs');
@@ -328,10 +403,14 @@ const App = {
   },
 
   switchTab(key) {
-    if (key !== 'global' && !Project.getChapter(key)) return;
+    const isEl = key.indexOf('el:') === 0;
+    if (key !== 'global' && !isEl && !Project.getChapter(key)) return;
     JimuBlocks.switchTo(key);
     this.activeTab = key;
-    if (key !== 'global') {
+    if (isEl) {
+      const el = Project.getElement(key.slice(3));
+      if (el) { Editor.select(el.id); Panel.show(); }
+    } else if (key !== 'global') {
       const ch = Project.getChapter(key);
       if (ch) {
         Stage.goChapter(ch.id, { instant: true });   // 编辑态预览该书签
@@ -340,6 +419,8 @@ const App = {
       }
     }
     this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
   },
 
   copyChapter(id) {
@@ -358,7 +439,7 @@ const App = {
   },
 
   deleteChapter() {
-    if (this.activeTab === 'global') { toast('先切换到一个章节再删除'); return; }
+    if (this.activeTab === 'global' || this.activeTab.indexOf('el:') === 0) { toast('先切换到一个章节再删除'); return; }
     if (Project.data.chapters.length <= 1) { toast('至少保留一个章节'); return; }
     const ch = Project.getChapter(this.activeTab);
     if (!ch || !confirm(`删除章节「${ch.name}」？（元素与舞台内容保留）`)) return;
@@ -366,6 +447,7 @@ const App = {
     Project.removeChapter(ch.id);
     this.activeTab = 'global';
     this.renderTabs();
+    this.renderScriptTabs();
     JimuBlocks.switchTo('global');
     Panel.show();
     this.markDirty();
@@ -524,6 +606,49 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     return clone;
   },
 
+  // R2 自动化测试：三个元素各写独立脚本，播放时各自表演互不干扰
+  async testR2() {
+    try {
+      Project.newProject('R2 测试');
+      if (!Project.data.chapters.length) Project.addChapter('章节 1');
+      const S = blocks => ({ blocks: { languageVersion: 0, blocks } });
+      const num = v => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
+      const A = Project.createElement('shape', { name: '甲', x: 200, y: 300, w: 160, h: 160, props: { fill: '#F5645C' } });
+      const B = Project.createElement('shape', { name: '乙', x: 200, y: 400, w: 160, h: 160, props: { fill: '#4C8DF0' } });
+      const C = Project.createElement('shape', { name: '丙', x: 300, y: 500, w: 160, h: 160, props: { fill: '#4CC38A' } });
+      A.blocks = S([
+        { type: 'jimu_self_on_start', next: { block: { type: 'jimu_self_change', fields: { PROP: 'x' }, inputs: { DELTA: num(300) } } } },
+        { type: 'jimu_self_on_click', next: { block: { type: 'jimu_self_change', fields: { PROP: 'y' }, inputs: { DELTA: num(50) } } } }
+      ]);
+      B.blocks = S([
+        { type: 'jimu_self_on_start', next: { block: { type: 'jimu_self_face', inputs: { ANGLE: num(90) }, next: { block: { type: 'jimu_self_change', fields: { PROP: 'y' }, inputs: { DELTA: num(200) } } } } } }
+      ]);
+      C.blocks = S([
+        { type: 'jimu_self_on_start', next: { block: { type: 'jimu_self_glide', fields: { EASE: 'easeOutQuad' }, inputs: { DUR: num(0.4), X: num(1000), Y: num(700) }, next: { block: { type: 'jimu_self_el_color', fields: { COLOR: '#FF0000' } } } } } }
+      ]);
+      Stage.renderAll();
+      await this.play();
+      await sleep(1600);
+      const g = id => (Project.findElementById(id) || {}).element || {};
+      const a = g(A.id), b = g(B.id), c = g(C.id);
+      console.log(`R2TEST|A|x=${a.x} y=${a.y}`);
+      console.log(`R2TEST|B|rot=${b.rotation} y=${b.y}`);
+      console.log(`R2TEST|C|x=${Math.round(c.x)} y=${Math.round(c.y)} fill=${c.props && c.props.fill}`);
+      const okA = a.x === 500 && a.y === 300;
+      const okB = b.rotation === 90 && b.y === 600 && b.x === 200;
+      const okC = Math.abs(c.x - 1000) < 3 && Math.abs(c.y - 700) < 3 && String(c.props && c.props.fill).toLowerCase() === '#ff0000';
+      await Executor.trigger('onElementClick', A.id);
+      await sleep(150);
+      const a2 = g(A.id);
+      console.log(`R2TEST|click|A.y=${a2.y}`);
+      const okClick = a2.y === 350;
+      console.log((okA && okB && okC && okClick) ? 'R2TEST|PASS' : `R2TEST|FAIL|A=${okA} B=${okB} C=${okC} click=${okClick}`);
+      this.stop();
+    } catch (e) {
+      console.log('R2TEST|error|' + (e.message || e));
+    }
+  },
+
   stop() {
     if (!this.playing) return;
     this.playing = false;
@@ -549,6 +674,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       try { Blockly.svgResize(JimuBlocks.ws); } catch (e) { }
     }, 120);
     this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
   },
 
   armCursorHide() {
@@ -659,6 +786,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.activeTab = 'global';
       JimuBlocks.switchTo('global');
       this.renderTabs();
+      this.renderScriptTabs();
+      this.renderElementBar();
       Panel.show();
       this.markDirty(true);
       History.reset();
@@ -705,6 +834,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.activeTab = 'global';
       JimuBlocks.switchTo('global');
       this.renderTabs();
+      this.renderScriptTabs();
+      this.renderElementBar();
       Panel.show();
       this.clearDirty();
       History.reset();
@@ -750,6 +881,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.current = null;
     JimuBlocks.switchTo('global');
     this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
     Panel.show();
     this.clearDirty();
     History.reset();
@@ -767,6 +900,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.activeTab = 'global';
     JimuBlocks.switchTo('global');
     this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
     Panel.show();
     this.clearDirty();
     History.reset();
@@ -783,6 +918,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     Stage.goChapter(Project.data.chapters[0].id, { instant: true });
     JimuBlocks.switchTo('global');
     this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
     Panel.show();
     this.clearDirty();
     History.reset();

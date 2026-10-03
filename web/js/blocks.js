@@ -818,6 +818,409 @@
     }
   };
 
+  // ================================================================
+  // 自我版积木（元素脚本专用）：无元素下拉，天然作用于"自己"
+  // 命名规则：jimu_self_ + 原块名（去 jimu_）= 编译层自动归一映射
+  // ================================================================
+
+  // ---- 自我版：事件（元素脚本域帽子）----
+  defs['jimu_self_on_start'] = {
+    init() {
+      this.appendDummyInput().appendField('当我开始');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_click'] = {
+    init() {
+      this.appendDummyInput().appendField('当点击我');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_message'] = {
+    init() {
+      this.appendDummyInput().appendField('当收到消息');
+      this.appendDummyInput().appendField(new Blockly.FieldTextInput('消息1'), 'MSG');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_clone'] = {
+    init() {
+      this.appendDummyInput().appendField('当克隆体启动时');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+
+  // ---- 自我版：运动 ----
+  defs['jimu_self_steps'] = {
+    init() {
+      this.appendDummyInput().appendField('沿朝向移动');
+      this.appendValueInput('STEPS');
+      this.appendDummyInput().appendField('步');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_self_glide'] = {
+    init() {
+      this.appendDummyInput().appendField('在');
+      this.appendValueInput('DUR');
+      this.appendDummyInput().appendField('秒内滑行到');
+      this.appendValueInput('X');
+      this.appendDummyInput().appendField('y:');
+      this.appendValueInput('Y');
+      this.appendDummyInput().appendField('缓动')
+        .appendField(new Blockly.FieldDropdown(EASINGS), 'EASE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_self_face'] = {
+    init() {
+      this.appendDummyInput().appendField('面向');
+      this.appendValueInput('ANGLE');
+      this.appendDummyInput().appendField('度');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_self_change'] = {
+    init() {
+      this.appendDummyInput().appendField('将')
+        .appendField(new Blockly.FieldDropdown(CHANGE_PROPS), 'PROP')
+        .appendField('增加');
+      this.appendValueInput('DELTA');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_self_el_move'] = {
+    init() {
+      this.appendDummyInput().appendField('移到 x:');
+      this.appendValueInput('X');
+      this.appendDummyInput().appendField('y:');
+      this.appendValueInput('Y');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+  defs['jimu_self_frame'] = {
+    init() {
+      this.appendDummyInput().appendField('帧动画')
+        .appendField(new Blockly.FieldDropdown([
+          ['下一个造型', 'next'], ['切换到第', 'set']
+        ]), 'ACTION');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_motion');
+    }
+  };
+
+  // ---- 自我版：外观 ----
+  defs['jimu_self_el_show'] = {
+    init() {
+      this.appendDummyInput().appendField('显示');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_hide'] = {
+    init() {
+      this.appendDummyInput().appendField('隐藏');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_text'] = {
+    init() {
+      this.appendDummyInput().appendField('把文字设为');
+      this.appendValueInput('TEXT');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_size'] = {
+    init() {
+      this.appendDummyInput().appendField('大小设为 宽:');
+      this.appendValueInput('W');
+      this.appendDummyInput().appendField('高:');
+      this.appendValueInput('H');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_color'] = {
+    init() {
+      this.appendDummyInput().appendField('颜色设为')
+        .appendField(new FieldHex('#6C8CFF'), 'COLOR');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_set'] = {
+    init() {
+      this.appendDummyInput().appendField('把')
+        .appendField(new Blockly.FieldDropdown(SET_PROPS), 'PROP')
+        .appendField('设为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_el_layer'] = {
+    init() {
+      this.appendDummyInput().appendField('置于')
+        .appendField(new Blockly.FieldDropdown([['最前', 'front'], ['最后', 'back']]), 'WHERE');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_say'] = {
+    init() {
+      this.appendDummyInput().appendField('说');
+      this.appendValueInput('TEXT');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_say_secs'] = {
+    init() {
+      this.appendDummyInput().appendField('说');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('持续')
+        .appendField(new Blockly.FieldNumber(3, 0.1, 60, 0.5), 'SECS')
+        .appendField('秒');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_self_say_stop'] = {
+    init() {
+      this.appendDummyInput().appendField('停止说话');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+
+  // ---- 自我版：动画 ----
+  defs['jimu_self_anim'] = {
+    init() {
+      this.appendDummyInput().appendField('播放动画')
+        .appendField(new Blockly.FieldDropdown(ANIM_TYPES), 'ANIM');
+      this.appendDummyInput().appendField('时长')
+        .appendField(new Blockly.FieldNumber(0.6, 0, 60, 0.1), 'DUR')
+        .appendField('秒 延迟')
+        .appendField(new Blockly.FieldNumber(0, 0, 60, 0.1), 'DELAY')
+        .appendField('秒');
+      this.appendDummyInput().appendField('缓动')
+        .appendField(new Blockly.FieldDropdown(EASINGS), 'EASE');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_anim');
+    }
+  };
+  defs['jimu_self_keyframes'] = {
+    init() {
+      this.appendDummyInput().appendField('播放关键帧动画');
+      this.appendDummyInput().appendField('循环')
+        .appendField(new Blockly.FieldCheckbox('FALSE'), 'LOOP');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_anim');
+    }
+  };
+
+  // ---- 自我版：克隆 ----
+  defs['jimu_self_clone'] = {
+    init() {
+      this.appendDummyInput().appendField('克隆自己');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+
+  // ---- 自我版：媒体 ----
+  defs['jimu_self_video_ctrl'] = {
+    init() {
+      this.appendDummyInput().appendField('视频')
+        .appendField(new Blockly.FieldDropdown([
+          ['播放', 'play'], ['暂停', 'pause'], ['停止', 'stop'],
+          ['静音', 'mute'], ['取消静音', 'unmute']
+        ]), 'ACTION');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_sprite_ctrl'] = {
+    init() {
+      this.appendDummyInput().appendField('帧动画')
+        .appendField(new Blockly.FieldDropdown([
+          ['播放', 'play'], ['暂停', 'pause'], ['停止', 'stop']
+        ]), 'ACTION');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_sprite_speed'] = {
+    init() {
+      this.appendDummyInput().appendField('帧动画速度设为')
+        .appendField(new Blockly.FieldNumber(1, 0.1, 5, 0.1), 'SPEED');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_chart_refresh'] = {
+    init() {
+      this.appendDummyInput().appendField('刷新图表');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+
+  // ---- 自我版：感知（表达式）----
+  defs['jimu_self_get_prop'] = {
+    init() {
+      this.appendDummyInput().appendField('我的')
+        .appendField(new Blockly.FieldDropdown(ELEMENT_PROPS), 'PROP');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+
+  // ---- 自我版：特效 ----
+  defs['jimu_self_fx_burst'] = {
+    init() {
+      this.appendDummyInput().appendField('播放粒子')
+        .appendField(new Blockly.FieldDropdown([
+          ['星尘', 'stardust'], ['彩带', 'confetti'], ['爱心', 'heart'], ['花瓣', 'petal']
+        ]), 'FX');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_fx');
+    }
+  };
+
+  // ---- 自我版：3D ----
+  defs['jimu_self_3d_view'] = {
+    init() {
+      this.appendDummyInput().appendField('镜头到')
+        .appendField(new Blockly.FieldDropdown(VIEW_PRESETS), 'PRESET');
+      this.appendDummyInput().appendField('时长')
+        .appendField(new Blockly.FieldNumber(1, 0, 60, 0.5), 'DUR')
+        .appendField('秒');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_orbit'] = {
+    init() {
+      this.appendDummyInput().appendField('环绕一圈');
+      this.appendDummyInput().appendField('时长')
+        .appendField(new Blockly.FieldNumber(5, 0.5, 60, 0.5), 'DUR')
+        .appendField('秒');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_zoom'] = {
+    init() {
+      this.appendDummyInput().appendField('推进/拉远 比例')
+        .appendField(new Blockly.FieldNumber(0.7, 0.1, 5, 0.1), 'FACTOR');
+      this.appendDummyInput().appendField('时长')
+        .appendField(new Blockly.FieldNumber(1, 0, 60, 0.5), 'DUR')
+        .appendField('秒');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_anim'] = {
+    init() {
+      this.appendDummyInput().appendField('播放模型动画');
+      this.appendDummyInput().appendField('名称')
+        .appendField(new Blockly.FieldTextInput('Dance'), 'NAME')
+        .appendField('循环').appendField(new Blockly.FieldCheckbox('TRUE'), 'LOOP')
+        .appendField('速度').appendField(new Blockly.FieldNumber(1, 0.1, 5, 0.1), 'SPEED');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_lights'] = {
+    init() {
+      this.appendDummyInput().appendField('灯光')
+        .appendField(new Blockly.FieldDropdown(LIGHT_PRESETS), 'PRESET');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_autorotate'] = {
+    init() {
+      this.appendDummyInput().appendField('自动旋转')
+        .appendField(new Blockly.FieldDropdown([['开启', 'on'], ['关闭', 'off']]), 'VAL');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_scale'] = {
+    init() {
+      this.appendDummyInput().appendField('模型缩放');
+      this.appendValueInput('SCALE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+  defs['jimu_self_3d_pause'] = {
+    init() {
+      this.appendDummyInput().appendField('模型动画')
+        .appendField(new Blockly.FieldDropdown([['暂停', 'pause'], ['继续', 'resume']]), 'ACTION');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_3d');
+    }
+  };
+
   // 注册
   for (const [type, def] of Object.entries(defs)) {
     Blockly.Blocks[type] = def;
@@ -1031,24 +1434,181 @@
       };
     },
 
+    // 元素脚本专用工具箱（自我版积木，无元素下拉）
+    selfToolbox() {
+      return {
+        kind: 'categoryToolbox',
+        contents: [
+          {
+            kind: 'category', name: '事件', colour: C.event,
+            contents: [
+              { kind: 'block', type: 'jimu_self_on_start' },
+              { kind: 'block', type: 'jimu_self_on_click' },
+              { kind: 'block', type: 'jimu_self_on_message' },
+              { kind: 'block', type: 'jimu_self_on_clone' }
+            ]
+          },
+          {
+            kind: 'category', name: '章节', colour: C.scene,
+            contents: [
+              { kind: 'block', type: 'jimu_scene_go' },
+              { kind: 'block', type: 'jimu_scene_next' },
+              { kind: 'block', type: 'jimu_scene_replay' },
+              { kind: 'block', type: 'jimu_scene_restart' },
+              { kind: 'block', type: 'jimu_scene_bg' },
+              { kind: 'block', type: 'jimu_scene_transition' },
+              { kind: 'block', type: 'jimu_wait', inputs: { SEC: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } }
+            ]
+          },
+          {
+            kind: 'category', name: '运动', colour: '#4C8DF0',
+            contents: [
+              { kind: 'block', type: 'jimu_self_steps', inputs: { STEPS: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_self_glide', inputs: { DUR: { shadow: { type: 'math_number', fields: { NUM: 0.5 } } }, X: { shadow: { type: 'math_number', fields: { NUM: 100 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_self_face', inputs: { ANGLE: { shadow: { type: 'math_number', fields: { NUM: 0 } } } } },
+              { kind: 'block', type: 'jimu_self_change', inputs: { DELTA: { shadow: { type: 'math_number', fields: { NUM: 10 } } } } },
+              { kind: 'block', type: 'jimu_self_el_move', inputs: { X: { shadow: { type: 'math_number', fields: { NUM: 100 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_self_frame', inputs: { VALUE: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } }
+            ]
+          },
+          {
+            kind: 'category', name: '外观', colour: C.element,
+            contents: [
+              { kind: 'block', type: 'jimu_self_el_show' },
+              { kind: 'block', type: 'jimu_self_el_hide' },
+              { kind: 'block', type: 'jimu_self_el_text', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你好' } } } } },
+              { kind: 'block', type: 'jimu_self_el_size', inputs: { W: { shadow: { type: 'math_number', fields: { NUM: 400 } } }, H: { shadow: { type: 'math_number', fields: { NUM: 200 } } } } },
+              { kind: 'block', type: 'jimu_self_el_color' },
+              { kind: 'block', type: 'jimu_self_el_set', inputs: { VALUE: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_self_el_layer' },
+              { kind: 'block', type: 'jimu_self_say', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你好！' } } } } },
+              { kind: 'block', type: 'jimu_self_say_secs', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '大家好' } } } } },
+              { kind: 'block', type: 'jimu_self_say_stop' }
+            ]
+          },
+          {
+            kind: 'category', name: '动画', colour: C.anim,
+            contents: [
+              { kind: 'block', type: 'jimu_self_anim' },
+              { kind: 'block', type: 'jimu_self_keyframes' }
+            ]
+          },
+          {
+            kind: 'category', name: '克隆', colour: C.element,
+            contents: [
+              { kind: 'block', type: 'jimu_self_clone' },
+              { kind: 'block', type: 'jimu_clone_delete' }
+            ]
+          },
+          {
+            kind: 'category', name: '媒体', colour: C.media,
+            contents: [
+              { kind: 'block', type: 'jimu_sfx' },
+              { kind: 'block', type: 'jimu_self_video_ctrl' },
+              { kind: 'block', type: 'jimu_self_sprite_ctrl' },
+              { kind: 'block', type: 'jimu_self_sprite_speed' },
+              { kind: 'block', type: 'jimu_self_chart_refresh' },
+              { kind: 'block', type: 'jimu_music_play' },
+              { kind: 'block', type: 'jimu_music_stop' },
+              { kind: 'block', type: 'jimu_volume' },
+              { kind: 'block', type: 'jimu_stop_all_sound' }
+            ]
+          },
+          {
+            kind: 'category', name: '感知', colour: '#7C6CF0',
+            contents: [
+              { kind: 'block', type: 'jimu_self_get_prop' },
+              { kind: 'block', type: 'jimu_timer' },
+              { kind: 'block', type: 'jimu_timer_reset' },
+              { kind: 'block', type: 'jimu_scene_name' },
+              { kind: 'block', type: 'jimu_rand_color' }
+            ]
+          },
+          {
+            kind: 'category', name: '特效', colour: C.fx,
+            contents: [
+              { kind: 'block', type: 'jimu_self_fx_burst' }
+            ]
+          },
+          {
+            kind: 'category', name: '高级', colour: '#4CC2C0',
+            contents: [
+              { kind: 'block', type: 'jimu_js' }
+            ]
+          },
+          {
+            kind: 'category', name: '3D', colour: C.three,
+            contents: [
+              { kind: 'block', type: 'jimu_self_3d_view' },
+              { kind: 'block', type: 'jimu_self_3d_orbit' },
+              { kind: 'block', type: 'jimu_self_3d_zoom' },
+              { kind: 'block', type: 'jimu_self_3d_anim' },
+              { kind: 'block', type: 'jimu_self_3d_lights' },
+              { kind: 'block', type: 'jimu_self_3d_autorotate' },
+              { kind: 'block', type: 'jimu_self_3d_scale', inputs: { SCALE: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_self_3d_pause' }
+            ]
+          },
+          {
+            kind: 'category', name: '逻辑', colour: '#8A93A6',
+            contents: [
+              { kind: 'block', type: 'controls_if' },
+              { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: { shadow: { type: 'math_number', fields: { NUM: 3 } } } } },
+              { kind: 'block', type: 'jimu_wait_until' },
+              { kind: 'block', type: 'jimu_repeat_until' },
+              { kind: 'block', type: 'jimu_stop_script' },
+              { kind: 'block', type: 'logic_compare' },
+              { kind: 'block', type: 'logic_operation' },
+              { kind: 'block', type: 'logic_negate' },
+              { kind: 'block', type: 'logic_boolean' },
+              { kind: 'block', type: 'math_number' },
+              { kind: 'block', type: 'math_arithmetic' },
+              { kind: 'block', type: 'text' },
+              { kind: 'block', type: 'text_join' }
+            ]
+          },
+          {
+            kind: 'category', name: '变量', colour: '#A06CD5', custom: 'VARIABLE'
+          },
+          {
+            kind: 'category', name: '函数', colour: '#A06CD5', custom: 'PROCEDURE'
+          }
+        ]
+      };
+    },
+
     // ---------- 工作区切换 ----------
+    // key：'global' | 章节 id | 'el:<元素id>'（元素脚本）
     switchTo(key) {
       this.save();
       this.current = key;
-      const state = key === 'global'
-        ? Project.data.globalBlocks
-        : (Project.getScene(key) || {}).blocks;
+      let state = null;
+      let selfMode = false;
+      if (key === 'global') {
+        state = Project.data.globalBlocks;
+      } else if (key.indexOf('el:') === 0) {
+        const el = Project.getElement(key.slice(3));
+        state = el ? el.blocks : null;
+        selfMode = true;
+      } else {
+        state = (Project.getScene(key) || {}).blocks;
+      }
       this.ws.clear();
       if (state) {
         try { Blockly.serialization.workspaces.load(state, this.ws); } catch (e) { console.warn('积木加载失败', e); }
       }
+      try { this.ws.updateToolbox(selfMode ? this.selfToolbox() : this.toolbox()); } catch (e) { console.warn('工具箱切换失败', e); }
     },
 
     save() {
       if (!this.ws || !this.current || !Project.data) return;
       const state = Blockly.serialization.workspaces.save(this.ws);
+      const empty = !(state.blocks && state.blocks.blocks && state.blocks.blocks.length);
       if (this.current === 'global') Project.data.globalBlocks = state;
-      else {
+      else if (this.current.indexOf('el:') === 0) {
+        const el = Project.getElement(this.current.slice(3));
+        if (el) el.blocks = empty ? null : state;
+      } else {
         const sc = Project.getScene(this.current);
         if (sc) sc.blocks = state;
       }
@@ -1060,7 +1620,9 @@
 const IRCompiler = {
   lastOrphanCount: 0,
 
-  compileWorkspace(workspace) {
+  compileWorkspace(workspace, opts) {
+    const prevSelf = this._selfMode;
+    this._selfMode = !!(opts && opts.selfMode);
     const scripts = [];
     const funcs = [];
     let orphans = 0;
@@ -1080,16 +1642,29 @@ const IRCompiler = {
     });
     this.lastOrphanCount = orphans;
     this.lastFuncs = funcs;
+    this._selfMode = prevSelf;
     return scripts;
   },
 
+  // 元素引用：元素脚本模式（selfMode）下一律为"自己"
+  EL(b) {
+    return this._selfMode ? '@self' : b.getFieldValue('ELEMENT');
+  },
+
   hatOf(b) {
+    // 自我版帽子（元素脚本域）
+    switch (b.type) {
+      case 'jimu_self_on_start': return { kind: 'onStart' };
+      case 'jimu_self_on_click': return { kind: 'onElementClick', elId: '@self' };
+      case 'jimu_self_on_message': return { kind: 'onMessage', message: String(b.getFieldValue('MSG') || '') };
+      case 'jimu_self_on_clone': return { kind: 'onCloneStart' };
+    }
     switch (b.type) {
       case 'jimu_on_start': return { kind: 'onStart' };
       case 'jimu_on_scene': return { kind: 'onSceneEnter', sceneId: b.getFieldValue('SCENE') };
       case 'jimu_on_key': return { kind: 'onKey', key: b.getFieldValue('KEY') };
-      case 'jimu_on_click': return { kind: 'onElementClick', elId: b.getFieldValue('ELEMENT') };
-      case 'jimu_on_message': return { kind: 'onWebappMessage', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_on_click': return { kind: 'onElementClick', elId: this.EL(b) };
+      case 'jimu_on_message': return { kind: 'onWebappMessage', elId: this.EL(b) };
       case 'jimu_on_clone': return { kind: 'onCloneStart' };
       default: return null;
     }
@@ -1110,23 +1685,24 @@ const IRCompiler = {
   },
 
   compile(b) {
-    switch (b.type) {
+    const t = b.type.indexOf('jimu_self_') === 0 ? 'jimu_' + b.type.slice(10) : b.type;
+    switch (t) {
       case 'jimu_scene_go': return { op: 'scene.go', sceneId: b.getFieldValue('SCENE') };
       case 'jimu_scene_next': return { op: 'scene.next' };
       case 'jimu_scene_transition': return { op: 'scene.transition', type: b.getFieldValue('TYPE'), duration: Number(b.getFieldValue('DUR')) };
-      case 'jimu_el_show': return { op: 'el.show', elId: b.getFieldValue('ELEMENT') };
-      case 'jimu_el_hide': return { op: 'el.hide', elId: b.getFieldValue('ELEMENT') };
-      case 'jimu_el_text': return { op: 'el.text', elId: b.getFieldValue('ELEMENT'), text: this.expr(b, 'TEXT') };
-      case 'jimu_el_move': return { op: 'el.move', elId: b.getFieldValue('ELEMENT'), x: this.expr(b, 'X'), y: this.expr(b, 'Y') };
-      case 'jimu_el_size': return { op: 'el.size', elId: b.getFieldValue('ELEMENT'), w: this.expr(b, 'W'), h: this.expr(b, 'H') };
-      case 'jimu_el_color': return { op: 'el.color', elId: b.getFieldValue('ELEMENT'), color: b.getFieldValue('COLOR') };
+      case 'jimu_el_show': return { op: 'el.show', elId: this.EL(b) };
+      case 'jimu_el_hide': return { op: 'el.hide', elId: this.EL(b) };
+      case 'jimu_el_text': return { op: 'el.text', elId: this.EL(b), text: this.expr(b, 'TEXT') };
+      case 'jimu_el_move': return { op: 'el.move', elId: this.EL(b), x: this.expr(b, 'X'), y: this.expr(b, 'Y') };
+      case 'jimu_el_size': return { op: 'el.size', elId: this.EL(b), w: this.expr(b, 'W'), h: this.expr(b, 'H') };
+      case 'jimu_el_color': return { op: 'el.color', elId: this.EL(b), color: b.getFieldValue('COLOR') };
       case 'jimu_anim': return {
-        op: 'el.anim', elId: b.getFieldValue('ELEMENT'), anim: b.getFieldValue('ANIM'),
+        op: 'el.anim', elId: this.EL(b), anim: b.getFieldValue('ANIM'),
         duration: Number(b.getFieldValue('DUR')), delay: Number(b.getFieldValue('DELAY')),
         easing: b.getFieldValue('EASE')
       };
       case 'jimu_keyframes': return {
-        op: 'el.keyframes', elId: b.getFieldValue('ELEMENT'),
+        op: 'el.keyframes', elId: this.EL(b),
         loop: b.getFieldValue('LOOP') === 'TRUE'
       };
       case 'jimu_wait': return { op: 'wait', sec: this.expr(b, 'SEC') };
@@ -1141,7 +1717,7 @@ const IRCompiler = {
       };
       case 'jimu_music_stop': return { op: 'media.music.stop', fadeOut: Number(b.getFieldValue('FADE')) };
       case 'jimu_video_ctrl': return {
-        op: 'media.video', elId: b.getFieldValue('ELEMENT'),
+        op: 'media.video', elId: this.EL(b),
         action: b.getFieldValue('ACTION')
       };
       case 'jimu_js': return {
@@ -1149,28 +1725,28 @@ const IRCompiler = {
         code: String(b.getFieldValue('CODE') || '').replace(/\\n/g, '\n')
       };
       case 'jimu_webapp_send': return {
-        op: 'webapp.send', elId: b.getFieldValue('ELEMENT'), msg: this.expr(b, 'MSG')
+        op: 'webapp.send', elId: this.EL(b), msg: this.expr(b, 'MSG')
       };
       case 'jimu_timer_reset': return { op: 'timer.reset' };
       case 'jimu_el_set': return {
-        op: 'el.set', elId: b.getFieldValue('ELEMENT'), prop: b.getFieldValue('PROP'),
+        op: 'el.set', elId: this.EL(b), prop: b.getFieldValue('PROP'),
         value: this.expr(b, 'VALUE')
       };
       case 'jimu_el_layer': return {
-        op: 'el.layer', elId: b.getFieldValue('ELEMENT'), where: b.getFieldValue('WHERE')
+        op: 'el.layer', elId: this.EL(b), where: b.getFieldValue('WHERE')
       };
       case 'jimu_say': return {
-        op: 'el.say', elId: b.getFieldValue('ELEMENT'), text: this.expr(b, 'TEXT'), seconds: 0
+        op: 'el.say', elId: this.EL(b), text: this.expr(b, 'TEXT'), seconds: 0
       };
       case 'jimu_say_secs': return {
-        op: 'el.say', elId: b.getFieldValue('ELEMENT'), text: this.expr(b, 'TEXT'),
+        op: 'el.say', elId: this.EL(b), text: this.expr(b, 'TEXT'),
         seconds: Number(b.getFieldValue('SECS'))
       };
-      case 'jimu_say_stop': return { op: 'el.say.stop', elId: b.getFieldValue('ELEMENT') };
-      case 'jimu_clone': return { op: 'el.clone.start', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_say_stop': return { op: 'el.say.stop', elId: this.EL(b) };
+      case 'jimu_clone': return { op: 'el.clone.start', elId: this.EL(b) };
       case 'jimu_clone_delete': return { op: 'el.remove', elId: '@self' };
-      case 'jimu_el_clone': return { op: 'el.clone', elId: b.getFieldValue('ELEMENT') };
-      case 'jimu_el_remove': return { op: 'el.remove', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_el_clone': return { op: 'el.clone', elId: this.EL(b) };
+      case 'jimu_el_remove': return { op: 'el.remove', elId: this.EL(b) };
       case 'jimu_scene_replay': return { op: 'scene.replay' };
       case 'jimu_scene_restart': return { op: 'scene.restart' };
       case 'jimu_scene_bg': return { op: 'scene.bg', color: b.getFieldValue('COLOR') };
@@ -1183,60 +1759,60 @@ const IRCompiler = {
       case 'jimu_volume': return { op: 'media.volume', value: Number(b.getFieldValue('VOL')) };
       case 'jimu_stop_all_sound': return { op: 'media.stopall' };
       case 'jimu_3d_scale': return {
-        op: '3d.scale', elId: b.getFieldValue('ELEMENT'), value: this.expr(b, 'SCALE')
+        op: '3d.scale', elId: this.EL(b), value: this.expr(b, 'SCALE')
       };
       case 'jimu_3d_pause': return {
-        op: '3d.animctl', elId: b.getFieldValue('ELEMENT'), action: b.getFieldValue('ACTION')
+        op: '3d.animctl', elId: this.EL(b), action: b.getFieldValue('ACTION')
       };
       case 'jimu_glide': return {
-        op: 'el.glide', elId: b.getFieldValue('ELEMENT'),
+        op: 'el.glide', elId: this.EL(b),
         duration: this.expr(b, 'DUR'), x: this.expr(b, 'X'), y: this.expr(b, 'Y'),
         easing: b.getFieldValue('EASE')
       };
       case 'jimu_steps': return {
-        op: 'el.steps', elId: b.getFieldValue('ELEMENT'), steps: this.expr(b, 'STEPS')
+        op: 'el.steps', elId: this.EL(b), steps: this.expr(b, 'STEPS')
       };
       case 'jimu_face': return {
-        op: 'el.face', elId: b.getFieldValue('ELEMENT'), angle: this.expr(b, 'ANGLE')
+        op: 'el.face', elId: this.EL(b), angle: this.expr(b, 'ANGLE')
       };
       case 'jimu_change': return {
-        op: 'el.change', elId: b.getFieldValue('ELEMENT'),
+        op: 'el.change', elId: this.EL(b),
         prop: b.getFieldValue('PROP'), delta: this.expr(b, 'DELTA')
       };
       case 'jimu_frame': return {
-        op: 'el.frame', elId: b.getFieldValue('ELEMENT'),
+        op: 'el.frame', elId: this.EL(b),
         action: b.getFieldValue('ACTION'), value: this.expr(b, 'VALUE')
       };
       case 'jimu_3d_view': return {
-        op: '3d.view', elId: b.getFieldValue('ELEMENT'), preset: b.getFieldValue('PRESET'),
+        op: '3d.view', elId: this.EL(b), preset: b.getFieldValue('PRESET'),
         duration: Number(b.getFieldValue('DUR'))
       };
       case 'jimu_3d_orbit': return {
-        op: '3d.orbit', elId: b.getFieldValue('ELEMENT'), duration: Number(b.getFieldValue('DUR'))
+        op: '3d.orbit', elId: this.EL(b), duration: Number(b.getFieldValue('DUR'))
       };
       case 'jimu_3d_zoom': return {
-        op: '3d.zoom', elId: b.getFieldValue('ELEMENT'),
+        op: '3d.zoom', elId: this.EL(b),
         factor: Number(b.getFieldValue('FACTOR')), duration: Number(b.getFieldValue('DUR'))
       };
       case 'jimu_3d_anim': return {
-        op: '3d.anim', elId: b.getFieldValue('ELEMENT'), name: b.getFieldValue('NAME'),
+        op: '3d.anim', elId: this.EL(b), name: b.getFieldValue('NAME'),
         loop: b.getFieldValue('LOOP') === 'TRUE', speed: Number(b.getFieldValue('SPEED'))
       };
       case 'jimu_3d_lights': return {
-        op: '3d.lights', elId: b.getFieldValue('ELEMENT'), preset: b.getFieldValue('PRESET')
+        op: '3d.lights', elId: this.EL(b), preset: b.getFieldValue('PRESET')
       };
       case 'jimu_3d_autorotate': return {
-        op: '3d.autorotate', elId: b.getFieldValue('ELEMENT'), value: b.getFieldValue('VAL') === 'on'
+        op: '3d.autorotate', elId: this.EL(b), value: b.getFieldValue('VAL') === 'on'
       };
       case 'jimu_fx_burst': return {
-        op: 'fx.burst', elId: b.getFieldValue('ELEMENT'), fxType: b.getFieldValue('FX')
+        op: 'fx.burst', elId: this.EL(b), fxType: b.getFieldValue('FX')
       };
-      case 'jimu_chart_refresh': return { op: 'chart.refresh', elId: b.getFieldValue('ELEMENT') };
+      case 'jimu_chart_refresh': return { op: 'chart.refresh', elId: this.EL(b) };
       case 'jimu_sprite_ctrl': return {
-        op: 'sprite.ctrl', elId: b.getFieldValue('ELEMENT'), action: b.getFieldValue('ACTION')
+        op: 'sprite.ctrl', elId: this.EL(b), action: b.getFieldValue('ACTION')
       };
       case 'jimu_sprite_speed': return {
-        op: 'sprite.speed', elId: b.getFieldValue('ELEMENT'), value: Number(b.getFieldValue('SPEED'))
+        op: 'sprite.speed', elId: this.EL(b), value: Number(b.getFieldValue('SPEED'))
       };
       case 'procedures_callnoreturn': return {
         op: 'func.call',
@@ -1269,7 +1845,8 @@ const IRCompiler = {
 
   exprOf(b) {
     if (!b) return { k: 'num', v: 0 };
-    switch (b.type) {
+    const t = b.type.indexOf('jimu_self_') === 0 ? 'jimu_' + b.type.slice(10) : b.type;
+    switch (t) {
       case 'math_number': return { k: 'num', v: Number(b.getFieldValue('NUM')) || 0 };
       case 'text': return { k: 'str', v: b.getFieldValue('TEXT') };
       case 'logic_boolean': return { k: 'bool', v: b.getFieldValue('BOOL') === 'TRUE' };
@@ -1292,7 +1869,7 @@ const IRCompiler = {
         name: b.getFieldValue('NAME') || (b.extraState && b.extraState.name)
       };
       case 'jimu_get_prop': return {
-        k: 'prop', el: b.getFieldValue('ELEMENT'), prop: b.getFieldValue('PROP')
+        k: 'prop', el: this.EL(b), prop: b.getFieldValue('PROP')
       };
       case 'jimu_scene_name': return { k: 'scenename' };
       case 'jimu_timer': return { k: 'timer' };

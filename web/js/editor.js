@@ -69,6 +69,13 @@ const Editor = {
     this.selectedId = id;
     this.refresh();
     Panel.show();
+    this.notifyBars();
+  },
+
+  // 通知外壳刷新脚本切换栏 / 元素列表条（避免耦合：typeof 检查）
+  notifyBars() {
+    if (typeof App === 'undefined' || !App.renderElementBar) return;
+    try { App.renderScriptTabs(); App.renderElementBar(); } catch (e) { }
   },
 
   refresh() {

@@ -93,7 +93,36 @@ body {
 
 /* ---------------- 布局 ---------------- */
 #layout { flex: 1; display: flex; min-height: 0; }
+#left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 #blocklyDiv { flex: 1; min-width: 0; }
+
+/* 脚本切换栏（全局 / 元素脚本） */
+#script-tabs {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+  flex: none; overflow-x: auto; scrollbar-width: none;
+}
+#script-tabs::-webkit-scrollbar { display: none; }
+#script-tabs .tab { font-size: 12px; }
+#script-tabs .tab .el-ico { margin-right: 3px; }
+
+/* 元素列表条 */
+#element-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-top: 1px solid var(--line);
+  flex: none; overflow-x: auto; scrollbar-width: none; min-height: 34px;
+}
+#element-bar::-webkit-scrollbar { display: none; }
+.el-chip {
+  padding: 3px 10px; border-radius: 7px; background: var(--panel);
+  border: 1px solid var(--line); cursor: pointer;
+  white-space: nowrap; font-size: 11px; color: var(--dim);
+  transition: all .15s;
+}
+.el-chip:hover { background: var(--hover); color: var(--text); }
+.el-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(108, 140, 255, .1); }
+.el-chip .el-ico { margin-right: 3px; }
+.el-bar-note { color: var(--dim); font-size: 11px; }
 
 #right {
   width: 46%; min-width: 430px; max-width: 860px;
@@ -277,8 +306,9 @@ body.playing .el[data-type="audio"] { display: none !important; }
 
 /* ---------------- 播放模式 ---------------- */
 body.playing #toolbar,
-body.playing #blocklyDiv,
+body.playing #left,
 body.playing #scene-tabs,
+body.playing #element-bar,
 body.playing #props { display: none; }
 body.playing #layout { display: block; }
 body.playing #right { width: 100%; max-width: none; border: none; height: 100%; }

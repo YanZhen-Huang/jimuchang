@@ -9,12 +9,12 @@ const Executor = {
   // ---------- 编译 ----------
   compileAll() {
     JimuBlocks.save();
-    const compileState = (state) => {
+    const compileState = (state, selfMode) => {
       if (!state) return [];
       const ws = new Blockly.Workspace();
       try {
         Blockly.serialization.workspaces.load(state, ws);
-        return IRCompiler.compileWorkspace(ws);
+        return IRCompiler.compileWorkspace(ws, { selfMode: !!selfMode });
       } catch (e) {
         console.warn('脚本编译失败', e);
         return [];
@@ -22,15 +22,21 @@ const Executor = {
         ws.dispose();
       }
     };
-    const out = { global: [], scenes: {}, orphans: 0, funcs: {} };
-    const one = (state) => {
-      const r = compileState(state);
+    const out = { global: [], scenes: {}, elements: {}, orphans: 0, funcs: {} };
+    const one = (state, selfMode) => {
+      const r = compileState(state, selfMode);
       out.orphans += IRCompiler.lastOrphanCount || 0;
       (IRCompiler.lastFuncs || []).forEach(f => { out.funcs[f.name] = { body: f.body, retExpr: f.retExpr || null }; });
       return r;
     };
-    out.global = one(Project.data.globalBlocks);
-    for (const sc of Project.data.chapters) out.scenes[sc.id] = one(sc.blocks);
+    out.global = one(Project.data.globalBlocks, false);
+    for (const sc of Project.data.chapters) out.scenes[sc.id] = one(sc.blocks, false);
+    // v2：元素脚本（自我版积木，self=该元素）
+    for (const el of Project.data.elements) {
+      if (!el.blocks) continue;
+      const list = one(el.blocks, true);
+      if (list.length) out.elements[el.id] = list;
+    }
     return out;
   },
 
@@ -52,6 +58,14 @@ const Executor = {
     // 全局"当演示开始"脚本并发长跑
     this.scripts.global.filter(s => s.kind === 'onStart').forEach(s => {
       this.run(s.body, this.newCtx());
+    });
+    // v2 元素"当我开始"脚本（每个母体元素各跑一次，self=自己；克隆体不跑）
+    Object.entries(this.scripts.elements || {}).forEach(([elId, list]) => {
+      list.filter(s => s.kind === 'onStart').forEach(s => {
+        const c = this.newCtx();
+        c.selfElId = elId;
+        this.run(s.body, c);
+      });
     });
     await this.fireSceneEnter(first);
   },
@@ -84,7 +98,7 @@ const Executor = {
     }
   },
 
-  triggerCloneStart(cloneId) {
+  triggerCloneStart(cloneId, templateElId) {
     const list = [];
     (this.scripts.global || []).forEach(s => { if (s.kind === 'onCloneStart') list.push(s); });
     (this.scripts.scenes[Stage.currentSceneId] || []).forEach(s => { if (s.kind === 'onCloneStart') list.push(s); });
@@ -93,7 +107,14 @@ const Executor = {
       c.selfElId = cloneId;
       this.run(s.body, c);
     });
-    return list.length;
+    // v2：模板元素的"当克隆体启动"脚本（self=克隆体）
+    const elList = templateElId ? ((this.scripts.elements || {})[templateElId] || []).filter(s => s.kind === 'onCloneStart') : [];
+    elList.forEach(s => {
+      const c = this.newCtx();
+      c.selfElId = cloneId;
+      this.run(s.body, c);
+    });
+    return list.length + elList.length;
   },
 
   async trigger(kind, value, payload) {
@@ -108,8 +129,19 @@ const Executor = {
     };
     this.scripts.global.forEach(s => { if (s.kind === kind && match(s)) list.push(s); });
     (this.scripts.scenes[Stage.currentSceneId] || []).forEach(s => { if (s.kind === kind && match(s)) list.push(s); });
+    let count = list.length;
     list.forEach(s => this.run(s.body, this.newCtx()));
-    return list.length;
+    // v2：元素脚本的"当点击我 / 当收到本元素的小程序消息"（self=该元素）
+    if ((kind === 'onElementClick' || kind === 'onWebappMessage') && value) {
+      const elList = ((this.scripts.elements || {})[value] || []).filter(s => s.kind === kind);
+      elList.forEach(s => {
+        const c = this.newCtx();
+        c.selfElId = value;
+        this.run(s.body, c);
+      });
+      count += elList.length;
+    }
+    return count;
   },
 
   // ---------- 解释执行 ----------
@@ -258,7 +290,7 @@ const Executor = {
         copy2.z = Math.max(...Project.data.elements.map(x => x.z || 0)) + 1;
         Project.data.elements.push(copy2);
         if (Stage.elsEl) Stage.elsEl.appendChild(Elements.render(copy2));
-        this.triggerCloneStart(copy2.id);
+        this.triggerCloneStart(copy2.id, fcs.element.id);
         break;
       }
       case 'el.clone': {
