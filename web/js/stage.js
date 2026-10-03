@@ -88,7 +88,7 @@ const Stage = {
     Elements.refreshContent(found.element, dom);
   },
 
-  // ---------- 章节跳转（背景过渡 + 显隐应用） ----------
+  // ---------- 章节跳转（背景过渡 + 显隐过渡，元素 DOM 不重建） ----------
   async goChapter(chapterId, opts = {}) {
     const ch = Project.getChapter(chapterId);
     if (!ch) return null;
@@ -97,14 +97,19 @@ const Stage = {
     const targetBg = (ch.preset && ch.preset.background) || Project.data.stage.background;
     const curBg = JSON.stringify(Project.data.stage.background);
     const newBg = JSON.stringify(targetBg);
-    if (!instant && this.currentChapterId && curBg !== newBg) {
-      await this.transitionBackground(targetBg, opts.duration !== undefined ? opts.duration : 0.6);
-    } else if (curBg !== newBg) {
-      Project.data.stage.background = JSON.parse(JSON.stringify(targetBg));
-      this.applyStageBg();
+    // 背景过渡（与显隐并行，不等它挡住显隐启动）
+    let bgPromise = null;
+    if (curBg !== newBg) {
+      if (!instant && this.currentChapterId) {
+        bgPromise = this.transitionBackground(targetBg, opts.duration !== undefined ? opts.duration : 0.6);
+      } else {
+        Project.data.stage.background = JSON.parse(JSON.stringify(targetBg));
+        this.applyStageBg();
+      }
     }
-    // 显隐应用（元素 DOM 不重建）
+    // 显隐应用（元素 DOM 不重建；非瞬时跳转时淡入/淡出）
     const vis = (ch.preset && ch.preset.visibility) || null;
+    const fadeIns = [], fadeOuts = [];
     if (vis) {
       Object.entries(vis).forEach(([elId, v]) => {
         const el = Project.getElement(elId);
@@ -112,14 +117,34 @@ const Stage = {
         const dom = this.elDom(elId);
         if (v && !el.visible) {
           el.visible = true;
-          if (dom) { Anim.reset(el, dom); Elements.applyBox(el, dom); }
+          if (dom) { Anim.reset(el, dom); Elements.applyBox(el, dom); fadeIns.push(dom); }
         } else if (!v && el.visible) {
           el.visible = false;
-          if (dom) Elements.applyBox(el, dom);
+          if (dom) {
+            if (instant) Elements.applyBox(el, dom);
+            else fadeOuts.push(dom);
+          }
         }
       });
     }
+    fadeOuts.forEach(dom => {
+      try {
+        const a = dom.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: 'easeIn', fill: 'forwards' });
+        a.finished.then(() => {
+          a.cancel();
+          const f = Project.findElementById(dom.dataset.id);
+          if (f) Elements.applyBox(f.element, dom);
+        }).catch(() => { });
+      } catch (e) {
+        const f = Project.findElementById(dom.dataset.id);
+        if (f) Elements.applyBox(f.element, dom);
+      }
+    });
+    fadeIns.forEach(dom => {
+      try { dom.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'easeOut' }); } catch (e) { }
+    });
     this.currentChapterId = chapterId;
+    if (bgPromise) await bgPromise;
     return ch;
   },
 
