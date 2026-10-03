@@ -583,10 +583,17 @@ const ContextMenu = {
     this.el.className = 'ctx-menu hidden';
     document.body.appendChild(this.el);
     // 捕获阶段监听：Blockly 等组件会 stopPropagation 吞掉冒泡事件，冒泡收不到
-    window.addEventListener('mousedown', e => {
+    const closeIfOutside = e => {
       if (this.el.classList.contains('hidden')) return;
-      if (!this.el.contains(e.target)) this.hide();
-    }, true);
+      if (this.el.contains(e.target)) return;
+      const r = this.el.getBoundingClientRect();
+      if (e.clientX >= r.left - 2 && e.clientX <= r.right + 2
+        && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) return;
+      this.hide();
+    };
+    window.addEventListener('mousedown', closeIfOutside, true);
+    window.addEventListener('pointerdown', closeIfOutside, true);
+    window.addEventListener('click', closeIfOutside, true);
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !this.el.classList.contains('hidden')) this.hide();
     }, true);
