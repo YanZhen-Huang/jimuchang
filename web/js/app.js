@@ -545,7 +545,7 @@ html, body { height: 100%; overflow: hidden; }
 </head>
 <body class="playing">
 <div id="stage-wrap"></div>
-<div id="play-hint">空格 推进 · ← → 切场景 · 双击全屏 · Esc 退出全屏</div>
+<div id="play-hint">空格 推进 · ← → 切章节 · 双击全屏 · Esc 退出全屏</div>
 <script>
 ${runtime}
 <\/script>

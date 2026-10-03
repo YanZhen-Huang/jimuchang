@@ -373,7 +373,7 @@
   };
   defs['jimu_scene_name'] = {
     init() {
-      this.appendDummyInput().appendField('当前场景名');
+      this.appendDummyInput().appendField('当前章节名');
       this.setOutput(true);
       this.setStyle('jimu_sense');
     }
@@ -1306,7 +1306,7 @@
             ]
           },
           {
-            kind: 'category', name: '场景', colour: C.scene,
+            kind: 'category', name: '章节', colour: C.scene,
             contents: [
               { kind: 'block', type: 'jimu_scene_go' },
               { kind: 'block', type: 'jimu_scene_next' },

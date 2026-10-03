@@ -318,7 +318,7 @@ const Panel = {
 
   renderScene() {
     const sc = Stage.currentScene();
-    if (!sc) { this.el.innerHTML = '<div class="p-empty">没有场景</div>'; return; }
+    if (!sc) { this.el.innerHTML = '<div class="p-empty">没有章节</div>'; return; }
     const bg = sc.background || { type: 'color', value: '#0F1115' };
     const bgColor = typeof bg.value === 'string' ? bg.value
       : (bg.value && bg.value.stops && bg.value.stops[0] ? bg.value.stops[0][0] : '#0F1115');
@@ -376,7 +376,7 @@ const Panel = {
         ${this.row('', `<button data-action="pick-video" class="p-btn">更换视频…</button>`)}
         ${this.row('选项', `<label class="p-chk"><input type="checkbox" data-prop="props.loop" ${p.loop ? 'checked' : ''}>循环</label>
           <label class="p-chk"><input type="checkbox" data-prop="props.muted" ${p.muted ? 'checked' : ''}>静音</label>
-          <label class="p-chk"><input type="checkbox" data-prop="props.autoplay" ${p.autoplay ? 'checked' : ''}>进场景自动播放</label>`)}
+          <label class="p-chk"><input type="checkbox" data-prop="props.autoplay" ${p.autoplay ? 'checked' : ''}>进章节自动播放</label>`)}
       `;
     } else if (el.type === 'audio') {
       const res = p.resourceId ? Project.getResource(p.resourceId) : null;
@@ -385,7 +385,7 @@ const Panel = {
         ${this.row('', `<button data-action="pick-audio" class="p-btn">更换音频…</button>`)}
         ${this.row('音量', `<input type="number" step="0.1" min="0" max="1" data-prop="props.volume" value="${p.volume !== undefined ? p.volume : 1}">`)}
         ${this.row('选项', `<label class="p-chk"><input type="checkbox" data-prop="props.loop" ${p.loop ? 'checked' : ''}>循环</label>
-          <label class="p-chk"><input type="checkbox" data-prop="props.autoplay" ${p.autoplay ? 'checked' : ''}>进场景自动播放</label>`)}
+          <label class="p-chk"><input type="checkbox" data-prop="props.autoplay" ${p.autoplay ? 'checked' : ''}>进章节自动播放</label>`)}
         <div class="p-hint">音频元素在放映时不显示，仅用于发声。也可以用"媒体"分类的积木直接控制。</div>
       `;
     } else if (el.type === 'chart') {

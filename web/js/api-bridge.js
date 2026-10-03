@@ -279,7 +279,7 @@ const ApiBridge = {
     const f = Project.findElementById(id);
     if (!f) return this.err(404, '元素不存在: ' + id);
     const dom = Stage.elDom(id);
-    if (!dom) return this.err(409, '元素不在当前场景中，请先切换场景');
+    if (!dom) return this.err(409, '元素不在当前章节（显隐预设）中，请先切到显示它的章节');
     if (!b || !b.type) return this.err(400, '缺少 type（动画类型）');
     Anim.play(f.element, dom, b.type, { duration: b.duration, delay: b.delay, easing: b.easing });
     return this.ok({ playing: b.type });
@@ -304,7 +304,7 @@ const ApiBridge = {
       Project.data.globalBlocks = blocks;
     } else {
       const sc = Project.getScene(sceneId);
-      if (!sc) return this.err(404, '场景不存在: ' + sceneId);
+      if (!sc) return this.err(404, '章节不存在: ' + sceneId);
       sc.blocks = blocks;
     }
     JimuBlocks.current = null;
