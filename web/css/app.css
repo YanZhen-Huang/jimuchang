@@ -96,7 +96,17 @@ body {
 /* ---------------- 布局 ---------------- */
 #layout { flex: 1; display: flex; min-height: 0; }
 #left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#blocklyDiv { flex: 1; min-width: 0; }
+#blocklyDiv { position: relative; flex: 1; min-width: 0; }
+
+/* 积木区空状态提示 */
+#blockly-empty {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 0 60px;
+  color: var(--dim); font-size: 13px; line-height: 2.1;
+  pointer-events: none;
+}
+#blockly-empty.hidden { display: none; }
 
 /* 脚本切换栏（全局 / 元素脚本） */
 #script-tabs {

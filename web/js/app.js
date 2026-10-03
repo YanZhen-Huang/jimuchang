@@ -47,6 +47,10 @@ const App = {
     Panel.init(document.getElementById('props'));
     Keyframes.initPanel();
     await JimuBlocks.init('blocklyDiv');
+    // 积木区空状态提示层
+    this.emptyHint = document.createElement('div');
+    this.emptyHint.id = 'blockly-empty';
+    document.getElementById('blocklyDiv').appendChild(this.emptyHint);
 
     Editor.rootEl.addEventListener('click', e => {
       if (!this.playing) return;
@@ -204,6 +208,10 @@ const App = {
     if (params.get('testreveal') === '1') {
       await sleep(900);
       this.testReveal();
+    }
+    if (params.get('testelblocks') === '1') {
+      await sleep(800);
+      this.testElblocks();
     }
   },
 
@@ -673,6 +681,33 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     return clone;
   },
 
+  // ELBLK 测试：元素脚本的保存/切回恢复链路
+  async testElblocks() {
+    try {
+      const el = Project.data.elements.find(e => e.name === '标题');
+      if (!el) { console.log('ELBLK|no-el'); return; }
+      this.selectElement(el.id, true);
+      await sleep(400);
+      const ws = JimuBlocks.ws;
+      const b = ws.newBlock('jimu_self_on_start');
+      if (b.initSvg) b.initSvg();
+      b.render();
+      b.moveBy(60, 60);
+      await sleep(200);
+      this.switchTab('global');
+      await sleep(300);
+      const f = Project.getElement(el.id);
+      const saved = !!(f && f.blocks);
+      this.selectElement(el.id, true);
+      await sleep(400);
+      const n = ws.getTopBlocks(true).length;
+      console.log(`ELBLK|saved=${saved} back=${n}`);
+      console.log((saved && n === 1) ? 'ELBLK|PASS' : 'ELBLK|FAIL');
+    } catch (e) {
+      console.log('ELBLK|error|' + (e.message || e));
+    }
+  },
+
   // REVEAL 测试：点元素脚本应把舞台切到"看得见它"的章节
   async testReveal() {
     try {
@@ -801,6 +836,26 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       if (!el.entrance || el.entrance.type === 'none') return;
       if (dom) Anim.play(el, dom, el.entrance.type, el.entrance);
     });
+  },
+
+  // 积木工作区空状态提示（切到没脚本的上下文时给引导）
+  updateBlocklyEmpty() {
+    if (!this.emptyHint || !JimuBlocks.ws) return;
+    const empty = JimuBlocks.ws.getTopBlocks(true).length === 0;
+    if (!empty) { this.emptyHint.classList.add('hidden'); return; }
+    const key = this.activeTab || 'global';
+    let text = '';
+    if (key === 'global') {
+      text = '全局脚本是空的<br>「当演示开始 / 当按下键 / 当收到消息」的积木放这里';
+    } else if (key.indexOf('el:') === 0) {
+      const el = Project.getElement(key.slice(3));
+      text = `「${el ? esc(el.name) : ''}」还没有脚本<br>从左侧工具箱拖入「当我开始 / 当点击我」，给它写一段自己的表演吧`;
+    } else {
+      const ch = Project.getChapter(key);
+      text = `章节「${ch ? esc(ch.name) : ''}」的脚本是空的<br>跳到这个章节时想执行什么？从左侧拖入积木`;
+    }
+    this.emptyHint.innerHTML = text;
+    this.emptyHint.classList.remove('hidden');
   },
 
   // 手动切章节 = 完整切换（中止当前章节脚本 + 应用预设 + 执行新章节脚本）

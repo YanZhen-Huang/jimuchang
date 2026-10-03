@@ -1289,6 +1289,12 @@
       Blockly.ContextMenuRegistry.registry.unregister?.('blockDelete');
       this.ws = ws;
       this.current = null;
+      ws.addChangeListener(e => {
+        if (!e) return;
+        if (e.type === 'create' || e.type === 'delete') {
+          if (typeof App !== 'undefined' && App.updateBlocklyEmpty) App.updateBlocklyEmpty();
+        }
+      });
       return ws;
     },
 
@@ -1598,6 +1604,7 @@
         try { Blockly.serialization.workspaces.load(state, this.ws); } catch (e) { console.warn('积木加载失败', e); }
       }
       try { this.ws.updateToolbox(selfMode ? this.selfToolbox() : this.toolbox()); } catch (e) { console.warn('工具箱切换失败', e); }
+      if (typeof App !== 'undefined' && App.updateBlocklyEmpty) App.updateBlocklyEmpty();
     },
 
     save() {
