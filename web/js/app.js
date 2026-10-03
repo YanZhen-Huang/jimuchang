@@ -369,22 +369,36 @@ const App = {
     ]);
   },
 
-  // ---------- 章节书签栏 ----------
+  // ---------- 章节书签栏（默认收起为一个小书签按钮；章节只是辅助书签） ----------
+  chapterBarOpen() {
+    try { return localStorage.getItem('jimuchang-chapter-bar') === 'open'; } catch (e) { return false; }
+  },
+  setChapterBarOpen(open) {
+    try { localStorage.setItem('jimuchang-chapter-bar', open ? 'open' : 'closed'); } catch (e) { }
+  },
+
   renderTabs() {
     const box = document.getElementById('scene-tabs');
+    if (!box) return;
     const active = this.activeTab;
-    let html = `<div class="tab${active === 'global' ? ' active' : ''}" data-key="global" title="全局脚本">全局</div>`;
+    const open = this.chapterBarOpen();
+    if (!open) {
+      box.innerHTML = `<div class="tab tab-bookmark" id="btn-bookmarks" title="展开章节书签（章节=舞台状态书签：背景+显隐预设+章节脚本，不参与构建）">🔖 书签 ${Project.data.chapters.length}</div>`;
+      box.querySelector('#btn-bookmarks').onclick = () => { this.setChapterBarOpen(true); this.renderTabs(); };
+      return;
+    }
+    let html = `<div class="tab tab-bookmark" id="btn-bookmarks" title="收起章节书签">🔖</div>`;
     Project.data.chapters.forEach(s => {
       html += `<div class="tab${active === s.id ? ' active' : ''}" data-key="${s.id}" title="点击预览本章节（应用背景/显隐预设）">${esc(s.name)}</div>`;
     });
     html += `<button id="btn-add-scene" title="新建章节（记录当前舞台状态为预设）">＋</button>`;
     html += `<div class="spacer"></div><button id="btn-del-scene" class="tab-del" title="删除当前章节">删除章节</button>`;
     box.innerHTML = html;
-    box.querySelectorAll('.tab').forEach(t => {
+    box.querySelector('#btn-bookmarks').onclick = () => { this.setChapterBarOpen(false); this.renderTabs(); };
+    box.querySelectorAll('.tab[data-key]').forEach(t => {
       t.onclick = () => this.switchTab(t.dataset.key);
       t.oncontextmenu = (e) => {
         e.preventDefault();
-        if (t.dataset.key === 'global') return;
         const ch = Project.getChapter(t.dataset.key);
         if (!ch) return;
         ContextMenu.show(e.clientX, e.clientY, [

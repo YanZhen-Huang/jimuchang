@@ -103,7 +103,7 @@ body {
   flex: none; overflow-x: auto; scrollbar-width: none;
 }
 #script-tabs::-webkit-scrollbar { display: none; }
-#script-tabs .tab { font-size: 12px; }
+#script-tabs .tab { font-size: 12px; flex: none; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 #script-tabs .tab .el-ico { margin-right: 3px; }
 /* "全局"固定在左侧，元素再多也点得到 */
 #script-tabs .tab:first-child {
@@ -112,6 +112,10 @@ body {
   box-shadow: 3px 0 6px rgba(0, 0, 0, .22);
 }
 #script-tabs .tab:first-child.active { background: var(--accent); }
+
+/* 章节书签（辅助，默认收起为一个小书签） */
+.tab-bookmark { opacity: .65; font-size: 11px; border-style: dashed; }
+.tab-bookmark:hover { opacity: 1; }
 
 /* 元素列表条 */
 #element-bar {
