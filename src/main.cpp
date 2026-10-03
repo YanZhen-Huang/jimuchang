@@ -421,6 +421,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testfunc"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-search"))) {
+            q.addQueryItem(QStringLiteral("testsearch"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);

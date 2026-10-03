@@ -282,6 +282,10 @@ const App = {
       await sleep(900);
       this.testFunc();
     }
+    if (params.get('testsearch') === '1') {
+      await sleep(900);
+      this.testSearch();
+    }
   },
 
   bindUI() {
@@ -969,6 +973,25 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
   },
 
+  // SEARCH 测试：积木搜索（打开/匹配/渲染/定位）
+  async testSearch() {
+    try {
+      this.openBlockSearch();
+      await sleep(250);
+      this.renderBlockSearch('动画');
+      await sleep(250);
+      const n = (this._searchResults || []).length;
+      const items = document.querySelectorAll('#search-results .search-item').length;
+      let centered = true;
+      try { this.gotoSearchResult(0); } catch (e) { centered = false; }
+      await sleep(250);
+      console.log(`SEARCH|hits=${n} items=${items} centered=${centered}`);
+      console.log((n > 0 && items > 0 && centered) ? 'SEARCH|PASS' : 'SEARCH|FAIL');
+    } catch (e) {
+      console.log('SEARCH|error|' + (e.message || e));
+    }
+  },
+
   // REVEAL 测试：点元素脚本应把舞台切到"看得见它"的章节
   async testReveal() {
     try {
@@ -1118,6 +1141,77 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
     this.emptyHint.innerHTML = text;
     this.emptyHint.classList.remove('hidden');
+  },
+
+  // ---------- 积木搜索（Ctrl+F） ----------
+  blockLabel(b) {
+    const parts = [];
+    try {
+      b.inputList.forEach(inp => {
+        (inp.fieldRow || []).forEach(f => {
+          if (f.getText) { const t = f.getText(); if (t) parts.push(t); }
+          if (f.isEditable && f.isEditable()) {
+            const v = f.getValue();
+            if (v !== undefined && v !== null && String(v)) parts.push(String(v));
+          }
+        });
+      });
+    } catch (e) { }
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  },
+
+  openBlockSearch() {
+    const ov = document.getElementById('search-overlay');
+    if (!ov) return;
+    ov.classList.remove('hidden');
+    const inp = document.getElementById('search-input');
+    inp.value = '';
+    this.renderBlockSearch('');
+    inp.oninput = () => this.renderBlockSearch(inp.value);
+    inp.onkeydown = e => {
+      if (e.key === 'Escape') { this.closeBlockSearch(); e.preventDefault(); }
+      if (e.key === 'Enter' && this._searchResults && this._searchResults.length) this.gotoSearchResult(0);
+    };
+    setTimeout(() => { try { inp.focus(); } catch (e) { } }, 60);
+  },
+
+  closeBlockSearch() {
+    const ov = document.getElementById('search-overlay');
+    if (ov) ov.classList.add('hidden');
+  },
+
+  renderBlockSearch(q) {
+    const box = document.getElementById('search-results');
+    if (!box || !JimuBlocks.ws) return;
+    q = String(q || '').trim().toLowerCase();
+    const hits = [];
+    for (const b of JimuBlocks.ws.getAllBlocks(false)) {
+      if (b.isInFlyout) continue;
+      const label = this.blockLabel(b);
+      if (!q || label.toLowerCase().includes(q)) hits.push({ b, label });
+      if (hits.length >= 60) break;
+    }
+    this._searchResults = hits;
+    if (!hits.length) {
+      box.innerHTML = '<div class="search-empty">没有匹配的积木</div>';
+      return;
+    }
+    box.innerHTML = hits.map((h, i) =>
+      `<div class="search-item${i === 0 ? ' active' : ''}" data-i="${i}">🧩 ${esc(h.label || h.b.type)}</div>`
+    ).join('');
+    box.querySelectorAll('.search-item').forEach(it => {
+      it.onclick = () => this.gotoSearchResult(Number(it.dataset.i));
+    });
+  },
+
+  gotoSearchResult(i) {
+    const h = this._searchResults && this._searchResults[i];
+    if (!h) return;
+    try {
+      JimuBlocks.ws.centerOnBlock(h.b.id);
+      if (JimuBlocks.ws.highlightBlock) JimuBlocks.ws.highlightBlock(h.b.id);
+    } catch (e) { }
+    this.closeBlockSearch();
   },
 
   // ---------- 设置面板 ----------
@@ -1544,6 +1638,12 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'select' || tag === 'textarea' || e.target.isContentEditable) return;
+    // Ctrl+F：积木搜索
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      this.openBlockSearch();
+      return;
+    }
     // Blockly 有键盘焦点时（正在操作积木），不响应元素编辑快捷键，避免误删舞台元素
     try {
       const fm = window.Blockly && Blockly.getFocusManager ? Blockly.getFocusManager() : null;
