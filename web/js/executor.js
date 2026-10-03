@@ -7,6 +7,7 @@ const Executor = {
   hooks: {},   // onSceneEnter(sceneId)
   mouse: { x: 0, y: 0, down: false },   // 舞台坐标（S2 侦测）
   lastAnswer: '',                        // 询问回答
+  lists: {},                             // 数据列表（S2）
   _ctxs: [],                             // 运行中脚本上下文（停止全部用）
 
   // ---------- 编译 ----------
@@ -53,6 +54,7 @@ const Executor = {
     this.cloneCount = 0;
     this._ctxs = [];
     this.lastAnswer = '';
+    this.lists = {};
     // 放映机模式：脚本已由导出时预编译注入，跳过 Blockly 编译
     if (!this.presetScripts) {
       this.scripts = this.compileAll();
@@ -227,6 +229,7 @@ const Executor = {
           f.element.y = Number(await this.evalExpr(instr.y, ctx)) || 0;
           const dom = Stage.elDom(instr.elId);
           if (dom) Elements.applyBox(f.element, dom);
+          if (typeof Pen !== 'undefined') Pen.connect(instr.elId);
         }
         break;
       }
@@ -376,6 +379,78 @@ const Executor = {
         this.lastAnswer = await this.promptAsk(q, ctx);
         break;
       }
+      case 'list.add': {
+        this.listOf(instr.name).push(await this.evalExpr(instr.value, ctx));
+        break;
+      }
+      case 'list.delete': {
+        const ld = this.listOf(instr.name);
+        const li = Math.trunc(Number(await this.evalExpr(instr.n, ctx)) || 0) - 1;
+        if (li >= 0 && li < ld.length) ld.splice(li, 1);
+        break;
+      }
+      case 'list.insert': {
+        const lins = this.listOf(instr.name);
+        const li2 = Math.trunc(Number(await this.evalExpr(instr.n, ctx)) || 0) - 1;
+        const lv = await this.evalExpr(instr.value, ctx);
+        lins.splice(Math.max(0, Math.min(li2, lins.length)), 0, lv);
+        break;
+      }
+      case 'list.replace': {
+        const lr = this.listOf(instr.name);
+        const li3 = Math.trunc(Number(await this.evalExpr(instr.n, ctx)) || 0) - 1;
+        if (li3 >= 0 && li3 < lr.length) lr[li3] = await this.evalExpr(instr.value, ctx);
+        break;
+      }
+      case 'list.clear': {
+        this.lists[instr.name] = [];
+        break;
+      }
+      case 'list.split': {
+        const lsText = String(await this.evalExpr(instr.text, ctx) ?? '');
+        const lsSep = String(await this.evalExpr(instr.sep, ctx) ?? '');
+        this.lists[instr.name] = lsSep === '' ? lsText.split('') : lsText.split(lsSep);
+        break;
+      }
+      case 'music.note': {
+        const mn = Number(await this.evalExpr(instr.note, ctx)) || 60;
+        const md = Number(await this.evalExpr(instr.dur, ctx)) || 0.5;
+        AudioMgr.note(mn, md);
+        break;
+      }
+      case 'el.drag': {
+        const fd = Project.findElementById(instr.elId);
+        if (fd) fd.element.draggable = !!instr.on;
+        break;
+      }
+      case 'pen.state': {
+        if (typeof Pen !== 'undefined') Pen.setDown(instr.down);
+        break;
+      }
+      case 'pen.clear': {
+        if (typeof Pen !== 'undefined') Pen.clear();
+        break;
+      }
+      case 'pen.size': {
+        if (typeof Pen !== 'undefined') Pen.setSize(instr.n);
+        break;
+      }
+      case 'pen.color': {
+        if (typeof Pen !== 'undefined') Pen.setColor(instr.color);
+        break;
+      }
+      case 'pen.line': {
+        if (typeof Pen === 'undefined') break;
+        const fp2 = Project.findElementById(instr.elId);
+        if (!fp2) break;
+        const px = Number(await this.evalExpr(instr.x, ctx)) || 0;
+        const py = Number(await this.evalExpr(instr.y, ctx)) || 0;
+        if (!Pen.last[instr.elId]) {
+          Pen.last[instr.elId] = { x: fp2.element.x + fp2.element.w / 2, y: fp2.element.y + fp2.element.h / 2 };
+        }
+        Pen.lineTo(instr.elId, px, py);
+        break;
+      }
       case 'media.volume':
         if (AudioMgr.bgm) {
           try { AudioMgr.bgm.volume = Math.max(0, Math.min(1, Number(instr.value) / 100)); } catch (e) { }
@@ -403,6 +478,7 @@ const Executor = {
         if (!dom || dur <= 0) {
           fg.element.x = tx; fg.element.y = ty;
           if (dom) Elements.applyBox(fg.element, dom);
+          if (typeof Pen !== 'undefined') Pen.connect(instr.elId);
           break;
         }
         const animEl = dom.querySelector('.el-anim');
@@ -419,6 +495,7 @@ const Executor = {
           Elements.applyBox(fg.element, dom);
           if (anim) { try { anim.cancel(); } catch (e) { } }
         }
+        if (typeof Pen !== 'undefined') Pen.connect(instr.elId);
         break;
       }
       case 'el.steps': {
@@ -430,6 +507,7 @@ const Executor = {
         fs2.element.y += Math.round(Math.sin(rad) * steps);
         const dom2 = Stage.elDom(instr.elId);
         if (dom2) Elements.applyBox(fs2.element, dom2);
+        if (typeof Pen !== 'undefined') Pen.connect(instr.elId);
         break;
       }
       case 'el.face': {
@@ -460,6 +538,7 @@ const Executor = {
           if (instr.prop === 'size') Stage.refresh(instr.elId);
           else Elements.applyBox(el, dom4);
         }
+        if (typeof Pen !== 'undefined') Pen.connect(instr.elId);
         break;
       }
       case 'el.frame': {
@@ -643,6 +722,12 @@ const Executor = {
     return !(A.x + A.w < B.x || B.x + B.w < A.x || A.y + A.h < B.y || B.y + B.h < A.y);
   },
 
+  listOf(name) {
+    if (!this.lists) this.lists = {};
+    if (!Array.isArray(this.lists[name])) this.lists[name] = [];
+    return this.lists[name];
+  },
+
   boxOf(id) {
     const dom = Stage.elDom(id);
     if (!dom) return null;
@@ -804,6 +889,40 @@ const Executor = {
         return this.checkTouch(aId, e.b);
       }
       case 'answer': return this.lastAnswer || '';
+      case 'datetime': {
+        const d = new Date();
+        const p2 = n => String(n).padStart(2, '0');
+        switch (e.what) {
+          case 'time': return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+          case 'date': return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+          case 'weekday': return '星期' + '日一二三四五六'[d.getDay()];
+          case 'year': return d.getFullYear();
+          case 'month': return d.getMonth() + 1;
+          case 'day': return d.getDate();
+          case 'hour': return d.getHours();
+          case 'minute': return d.getMinutes();
+          case 'second': return d.getSeconds();
+          default: return '';
+        }
+      }
+      case 'list.item': {
+        const l = this.listOf(e.name);
+        const i = Math.trunc(Number(await this.evalExpr(e.n, ctx)) || 0) - 1;
+        return (i >= 0 && i < l.length) ? l[i] : '';
+      }
+      case 'list.len': return this.listOf(e.name).length;
+      case 'list.contains': {
+        const lv = await this.evalExpr(e.value, ctx);
+        return this.listOf(e.name).some(x => String(x) === String(lv));
+      }
+      case 'list.indexOf': {
+        const iv = await this.evalExpr(e.value, ctx);
+        return this.listOf(e.name).findIndex(x => String(x) === String(iv)) + 1;
+      }
+      case 'list.join': {
+        const sep = String(await this.evalExpr(e.sep, ctx) ?? '');
+        return this.listOf(e.name).map(x => String(x)).join(sep);
+      }
       case 'unsupported':
         console.warn('[积木] 表达式块未实现:', e.type);
         return 0;

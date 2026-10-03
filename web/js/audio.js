@@ -77,5 +77,30 @@ const AudioMgr = {
     this.stopMusic();
     this.stopLoopSfx();
     this.sfxPool.forEach(a => { try { a.pause(); } catch (e) { } });
+  },
+
+  // 弹奏音符（Web Audio 合成，无需素材；midi：60=中央 C）
+  note(midi, dur) {
+    try {
+      this._ac = this._ac || new (window.AudioContext || window.webkitAudioContext)();
+      const ac = this._ac;
+      if (ac.state === 'suspended') { try { ac.resume(); } catch (e) { } }
+      const n = Number(midi);
+      const midiN = isFinite(n) ? Math.max(12, Math.min(120, n)) : 60;
+      const freq = 440 * Math.pow(2, (midiN - 69) / 12);
+      const d = Math.max(0.05, Math.min(10, Number(dur) || 0.5));
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const t = ac.currentTime;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start(t);
+      osc.stop(t + d + 0.05);
+    } catch (e) { }
   }
 };

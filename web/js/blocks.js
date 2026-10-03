@@ -79,6 +79,8 @@
     jimu_sense: { colourPrimary: '#7C6CF0' },
     jimu_ctrl: { colourPrimary: '#8A93A6' },
     jimu_math: { colourPrimary: '#4E9A6B' },
+    jimu_data: { colourPrimary: '#D08A3C' },
+    jimu_pen: { colourPrimary: '#B36BC9' },
     jimu_text: { colourPrimary: '#5B9BD5' }
   };
 
@@ -1380,6 +1382,239 @@
     }
   };
 
+  // ---- 数据/列表 ----
+  const listNameField = () => new Blockly.FieldTextInput('列表1');
+  defs['jimu_list_add'] = {
+    init() {
+      this.appendDummyInput().appendField('把');
+      this.appendValueInput('VALUE');
+      this.appendDummyInput().appendField('加入列表').appendField(listNameField(), 'NAME');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_delete'] = {
+    init() {
+      this.appendDummyInput().appendField('删除列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('的第');
+      this.appendValueInput('N');
+      this.appendDummyInput().appendField('项');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_insert'] = {
+    init() {
+      this.appendDummyInput().appendField('在列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('的第');
+      this.appendValueInput('N');
+      this.appendDummyInput().appendField('项前插入');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_replace'] = {
+    init() {
+      this.appendDummyInput().appendField('把列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('的第');
+      this.appendValueInput('N');
+      this.appendDummyInput().appendField('项替换为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_clear'] = {
+    init() {
+      this.appendDummyInput().appendField('清空列表').appendField(listNameField(), 'NAME');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_split'] = {
+    init() {
+      this.appendDummyInput().appendField('把文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('按');
+      this.appendValueInput('SEP');
+      this.appendDummyInput().appendField('分割到列表').appendField(listNameField(), 'NAME');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_item'] = {
+    init() {
+      this.appendDummyInput().appendField('列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('的第');
+      this.appendValueInput('N');
+      this.appendDummyInput().appendField('项');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_length'] = {
+    init() {
+      this.appendDummyInput().appendField('列表').appendField(listNameField(), 'NAME')
+        .appendField('的项目数');
+      this.setOutput(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_contains'] = {
+    init() {
+      this.appendDummyInput().appendField('列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('包含');
+      this.appendValueInput('VALUE');
+      this.appendDummyInput().appendField('？');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_index_of'] = {
+    init() {
+      this.appendDummyInput().appendField('列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('中');
+      this.appendValueInput('VALUE');
+      this.appendDummyInput().appendField('的编号');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_data');
+    }
+  };
+  defs['jimu_list_join'] = {
+    init() {
+      this.appendDummyInput().appendField('把列表').appendField(listNameField(), 'NAME');
+      this.appendDummyInput().appendField('用');
+      this.appendValueInput('SEP');
+      this.appendDummyInput().appendField('连接成文字');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_data');
+    }
+  };
+
+  // ---- 小众包：日期时间 / 音乐 / 拖拽 / 画笔 ----
+  defs['jimu_datetime'] = {
+    init() {
+      this.appendDummyInput().appendField('当前')
+        .appendField(new Blockly.FieldDropdown([
+          ['时间（时:分:秒）', 'time'], ['日期（年-月-日）', 'date'], ['星期', 'weekday'],
+          ['年', 'year'], ['月', 'month'], ['日', 'day'],
+          ['小时', 'hour'], ['分钟', 'minute'], ['秒', 'second']
+        ]), 'WHAT');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_play_note'] = {
+    init() {
+      this.appendDummyInput().appendField('弹奏音高（60=中央C）');
+      this.appendValueInput('NOTE');
+      this.appendDummyInput().appendField('时长');
+      this.appendValueInput('DUR');
+      this.appendDummyInput().appendField('秒');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_draggable'] = {
+    init() {
+      this.appendDummyInput().appendField('把我设为')
+        .appendField(new Blockly.FieldDropdown([['可拖动', 'on'], ['不可拖动', 'off']]), 'VAL');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_draggable'] = {
+    init() {
+      this.appendDummyInput().appendField('把')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('设为')
+        .appendField(new Blockly.FieldDropdown([['可拖动', 'on'], ['不可拖动', 'off']]), 'VAL');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_element');
+    }
+  };
+  defs['jimu_pen_state'] = {
+    init() {
+      this.appendDummyInput().appendField('画笔')
+        .appendField(new Blockly.FieldDropdown([['落笔', 'down'], ['抬笔', 'up']]), 'VAL');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+  defs['jimu_pen_clear'] = {
+    init() {
+      this.appendDummyInput().appendField('清空画笔');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+  defs['jimu_pen_size'] = {
+    init() {
+      this.appendDummyInput().appendField('画笔粗细设为')
+        .appendField(new Blockly.FieldNumber(6, 1, 60, 1), 'N');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+  defs['jimu_pen_color'] = {
+    init() {
+      this.appendDummyInput().appendField('画笔颜色设为')
+        .appendField(new FieldHex('#FFFFFF'), 'COLOR');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+  defs['jimu_self_pen_line'] = {
+    init() {
+      this.appendDummyInput().appendField('画线到 x:');
+      this.appendValueInput('X');
+      this.appendDummyInput().appendField('y:');
+      this.appendValueInput('Y');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+  defs['jimu_pen_line'] = {
+    init() {
+      this.appendDummyInput().appendField('让')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT')
+        .appendField('画线到 x:');
+      this.appendValueInput('X');
+      this.appendDummyInput().appendField('y:');
+      this.appendValueInput('Y');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_pen');
+    }
+  };
+
   // 注册
   for (const [type, def] of Object.entries(defs)) {
     Blockly.Blocks[type] = def;
@@ -1499,7 +1734,8 @@
               { kind: 'block', type: 'jimu_el_clone' },
               { kind: 'block', type: 'jimu_clone' },
               { kind: 'block', type: 'jimu_clone_delete' },
-              { kind: 'block', type: 'jimu_el_remove' }
+              { kind: 'block', type: 'jimu_el_remove' },
+              { kind: 'block', type: 'jimu_draggable' }
             ]
           },
           {
@@ -1531,7 +1767,8 @@
               { kind: 'block', type: 'jimu_stop_all_sound' },
               { kind: 'block', type: 'jimu_sprite_ctrl' },
               { kind: 'block', type: 'jimu_sprite_speed' },
-              { kind: 'block', type: 'jimu_chart_refresh' }
+              { kind: 'block', type: 'jimu_chart_refresh' },
+              { kind: 'block', type: 'jimu_play_note', inputs: { NOTE: { shadow: { type: 'math_number', fields: { NUM: 60 } } }, DUR: { shadow: { type: 'math_number', fields: { NUM: 0.5 } } } } }
             ]
           },
           {
@@ -1546,7 +1783,8 @@
               { kind: 'block', type: 'jimu_mouse_down' },
               { kind: 'block', type: 'jimu_touch' },
               { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
-              { kind: 'block', type: 'jimu_answer' }
+              { kind: 'block', type: 'jimu_answer' },
+              { kind: 'block', type: 'jimu_datetime' }
             ]
           },
           {
@@ -1623,29 +1861,29 @@
             ]
           },
           {
-            kind: 'category', name: '数学', colour: '#4E9A6B',
+            kind: 'category', name: '数据', colour: '#D08A3C',
             contents: [
-              { kind: 'block', type: 'math_round' },
-              { kind: 'block', type: 'math_number_property' },
-              { kind: 'block', type: 'math_constant' },
-              { kind: 'block', type: 'math_single' },
-              { kind: 'block', type: 'math_trig' },
-              { kind: 'block', type: 'jimu_bitwise' },
-              { kind: 'block', type: 'jimu_shift' }
+              { kind: 'block', type: 'jimu_list_add', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '项目' } } } } },
+              { kind: 'block', type: 'jimu_list_delete', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_insert', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_replace', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_clear' },
+              { kind: 'block', type: 'jimu_list_split', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'a,b,c' } } }, SEP: { shadow: { type: 'text', fields: { TEXT: ',' } } } } },
+              { kind: 'block', type: 'jimu_list_item', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_length' },
+              { kind: 'block', type: 'jimu_list_contains' },
+              { kind: 'block', type: 'jimu_list_index_of' },
+              { kind: 'block', type: 'jimu_list_join', inputs: { SEP: { shadow: { type: 'text', fields: { TEXT: '，' } } } } }
             ]
           },
           {
-            kind: 'category', name: '文本', colour: '#5B9BD5',
+            kind: 'category', name: '画笔', colour: '#B36BC9',
             contents: [
-              { kind: 'block', type: 'text' },
-              { kind: 'block', type: 'text_join' },
-              { kind: 'block', type: 'text_length' },
-              { kind: 'block', type: 'text_isEmpty' },
-              { kind: 'block', type: 'jimu_text_letter' },
-              { kind: 'block', type: 'jimu_text_contains' },
-              { kind: 'block', type: 'jimu_text_replace' },
-              { kind: 'block', type: 'jimu_text_case' },
-              { kind: 'block', type: 'jimu_text_trim' }
+              { kind: 'block', type: 'jimu_pen_state' },
+              { kind: 'block', type: 'jimu_pen_clear' },
+              { kind: 'block', type: 'jimu_pen_size' },
+              { kind: 'block', type: 'jimu_pen_color' },
+              { kind: 'block', type: 'jimu_pen_line', inputs: { X: { shadow: { type: 'math_number', fields: { NUM: 400 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 300 } } } } }
             ]
           },
           {
@@ -1707,7 +1945,8 @@
               { kind: 'block', type: 'jimu_self_el_layer' },
               { kind: 'block', type: 'jimu_self_say', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你好！' } } } } },
               { kind: 'block', type: 'jimu_self_say_secs', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '大家好' } } } } },
-              { kind: 'block', type: 'jimu_self_say_stop' }
+              { kind: 'block', type: 'jimu_self_say_stop' },
+              { kind: 'block', type: 'jimu_self_draggable' }
             ]
           },
           {
@@ -1735,7 +1974,8 @@
               { kind: 'block', type: 'jimu_music_play' },
               { kind: 'block', type: 'jimu_music_stop' },
               { kind: 'block', type: 'jimu_volume' },
-              { kind: 'block', type: 'jimu_stop_all_sound' }
+              { kind: 'block', type: 'jimu_stop_all_sound' },
+              { kind: 'block', type: 'jimu_play_note', inputs: { NOTE: { shadow: { type: 'math_number', fields: { NUM: 60 } } }, DUR: { shadow: { type: 'math_number', fields: { NUM: 0.5 } } } } }
             ]
           },
           {
@@ -1750,7 +1990,8 @@
               { kind: 'block', type: 'jimu_mouse_down' },
               { kind: 'block', type: 'jimu_self_touch' },
               { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
-              { kind: 'block', type: 'jimu_answer' }
+              { kind: 'block', type: 'jimu_answer' },
+              { kind: 'block', type: 'jimu_datetime' }
             ]
           },
           {
@@ -1795,6 +2036,58 @@
               { kind: 'block', type: 'math_arithmetic' },
               { kind: 'block', type: 'text' },
               { kind: 'block', type: 'text_join' }
+            ]
+          },
+          {
+            kind: 'category', name: '数学', colour: '#4E9A6B',
+            contents: [
+              { kind: 'block', type: 'math_round' },
+              { kind: 'block', type: 'math_number_property' },
+              { kind: 'block', type: 'math_constant' },
+              { kind: 'block', type: 'math_single' },
+              { kind: 'block', type: 'math_trig' },
+              { kind: 'block', type: 'jimu_bitwise' },
+              { kind: 'block', type: 'jimu_shift' }
+            ]
+          },
+          {
+            kind: 'category', name: '文本', colour: '#5B9BD5',
+            contents: [
+              { kind: 'block', type: 'text' },
+              { kind: 'block', type: 'text_join' },
+              { kind: 'block', type: 'text_length' },
+              { kind: 'block', type: 'text_isEmpty' },
+              { kind: 'block', type: 'jimu_text_letter' },
+              { kind: 'block', type: 'jimu_text_contains' },
+              { kind: 'block', type: 'jimu_text_replace' },
+              { kind: 'block', type: 'jimu_text_case' },
+              { kind: 'block', type: 'jimu_text_trim' }
+            ]
+          },
+          {
+            kind: 'category', name: '数据', colour: '#D08A3C',
+            contents: [
+              { kind: 'block', type: 'jimu_list_add', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '项目' } } } } },
+              { kind: 'block', type: 'jimu_list_delete', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_insert', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_replace', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_clear' },
+              { kind: 'block', type: 'jimu_list_split', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'a,b,c' } } }, SEP: { shadow: { type: 'text', fields: { TEXT: ',' } } } } },
+              { kind: 'block', type: 'jimu_list_item', inputs: { N: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_list_length' },
+              { kind: 'block', type: 'jimu_list_contains' },
+              { kind: 'block', type: 'jimu_list_index_of' },
+              { kind: 'block', type: 'jimu_list_join', inputs: { SEP: { shadow: { type: 'text', fields: { TEXT: '，' } } } } }
+            ]
+          },
+          {
+            kind: 'category', name: '画笔', colour: '#B36BC9',
+            contents: [
+              { kind: 'block', type: 'jimu_pen_state' },
+              { kind: 'block', type: 'jimu_pen_clear' },
+              { kind: 'block', type: 'jimu_pen_size' },
+              { kind: 'block', type: 'jimu_pen_color' },
+              { kind: 'block', type: 'jimu_self_pen_line', inputs: { X: { shadow: { type: 'math_number', fields: { NUM: 400 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 300 } } } } }
             ]
           },
           {
@@ -2003,6 +2296,33 @@ const IRCompiler = {
       case 'jimu_stop_script': return { op: 'ctrl.stopscript' };
       case 'jimu_stop_all': return { op: 'ctrl.stopall' };
       case 'jimu_ask': return { op: 'ask', text: this.expr(b, 'TEXT') };
+      case 'jimu_list_add': return {
+        op: 'list.add', name: b.getFieldValue('NAME'), value: this.expr(b, 'VALUE')
+      };
+      case 'jimu_list_delete': return {
+        op: 'list.delete', name: b.getFieldValue('NAME'), n: this.expr(b, 'N')
+      };
+      case 'jimu_list_insert': return {
+        op: 'list.insert', name: b.getFieldValue('NAME'), n: this.expr(b, 'N'), value: this.expr(b, 'VALUE')
+      };
+      case 'jimu_list_replace': return {
+        op: 'list.replace', name: b.getFieldValue('NAME'), n: this.expr(b, 'N'), value: this.expr(b, 'VALUE')
+      };
+      case 'jimu_list_clear': return { op: 'list.clear', name: b.getFieldValue('NAME') };
+      case 'jimu_list_split': return {
+        op: 'list.split', name: b.getFieldValue('NAME'), text: this.expr(b, 'TEXT'), sep: this.expr(b, 'SEP')
+      };
+      case 'jimu_play_note': return {
+        op: 'music.note', note: this.expr(b, 'NOTE'), dur: this.expr(b, 'DUR')
+      };
+      case 'jimu_draggable': return { op: 'el.drag', elId: this.EL(b), on: b.getFieldValue('VAL') === 'on' };
+      case 'jimu_pen_state': return { op: 'pen.state', down: b.getFieldValue('VAL') === 'down' };
+      case 'jimu_pen_clear': return { op: 'pen.clear' };
+      case 'jimu_pen_size': return { op: 'pen.size', n: Number(b.getFieldValue('N')) };
+      case 'jimu_pen_color': return { op: 'pen.color', color: b.getFieldValue('COLOR') };
+      case 'jimu_pen_line': return {
+        op: 'pen.line', elId: this.EL(b), x: this.expr(b, 'X'), y: this.expr(b, 'Y')
+      };
       case 'jimu_volume': return { op: 'media.volume', value: Number(b.getFieldValue('VOL')) };
       case 'jimu_stop_all_sound': return { op: 'media.stopall' };
       case 'jimu_3d_scale': return {
@@ -2175,6 +2495,20 @@ const IRCompiler = {
       case 'jimu_mouse_down': return { k: 'mousedown' };
       case 'jimu_touch': return { k: 'touch', a: this.EL(b), b: b.getFieldValue('TARGET') };
       case 'jimu_answer': return { k: 'answer' };
+      case 'jimu_datetime': return { k: 'datetime', what: b.getFieldValue('WHAT') };
+      case 'jimu_list_item': return {
+        k: 'list.item', name: b.getFieldValue('NAME'), n: this.exprOf(b.getInputTargetBlock('N'))
+      };
+      case 'jimu_list_length': return { k: 'list.len', name: b.getFieldValue('NAME') };
+      case 'jimu_list_contains': return {
+        k: 'list.contains', name: b.getFieldValue('NAME'), value: this.exprOf(b.getInputTargetBlock('VALUE'))
+      };
+      case 'jimu_list_index_of': return {
+        k: 'list.indexOf', name: b.getFieldValue('NAME'), value: this.exprOf(b.getInputTargetBlock('VALUE'))
+      };
+      case 'jimu_list_join': return {
+        k: 'list.join', name: b.getFieldValue('NAME'), sep: this.exprOf(b.getInputTargetBlock('SEP'))
+      };
       default:
         return { k: 'unsupported', type: b.type };
     }

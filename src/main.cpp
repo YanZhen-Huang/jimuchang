@@ -409,6 +409,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testblocks2"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-blocks3"))) {
+            q.addQueryItem(QStringLiteral("testblocks3"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);

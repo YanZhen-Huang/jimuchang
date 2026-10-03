@@ -633,3 +633,10 @@ body.light #ppt-overlay { background: rgba(240, 242, 245, .8); }
   border-radius: 8px; padding: 8px 10px; font-size: 14px; outline: none;
 }
 .ask-box input:focus { border-color: var(--accent); }
+
+/* 画笔层 */
+.pen-layer {
+  position: absolute; left: 0; top: 0;
+  width: 1920px; height: 1080px;
+  pointer-events: none;
+}

@@ -46,6 +46,32 @@ const Stage = {
       window.addEventListener('mouseup', () => {
         if (typeof Executor !== 'undefined') Executor.mouse.down = false;
       });
+      // 播放态拖拽：元素被"设为可拖动"后，观众可以拖着它走
+      Stage.rootEl.addEventListener('mousedown', e => {
+        if (typeof App === 'undefined' || !App.playing) return;
+        const elDom = e.target.closest('.el');
+        if (!elDom) return;
+        const id = elDom.dataset.id;
+        const f = Project.findElementById(id);
+        if (!f || !f.element.draggable) return;
+        e.preventDefault();
+        const startX = e.clientX, startY = e.clientY;
+        const ox = f.element.x, oy = f.element.y;
+        const r = Stage.rootEl.getBoundingClientRect();
+        const k = r.width ? 1920 / r.width : 1;
+        const move = ev => {
+          f.element.x = Math.round(ox + (ev.clientX - startX) * k);
+          f.element.y = Math.round(oy + (ev.clientY - startY) * k);
+          const dom = Stage.elDom(id);
+          if (dom) Elements.applyBox(f.element, dom);
+        };
+        const up = () => {
+          window.removeEventListener('mousemove', move);
+          window.removeEventListener('mouseup', up);
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+      });
     }
     this.fit();
   },

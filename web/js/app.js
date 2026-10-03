@@ -270,6 +270,10 @@ const App = {
       await sleep(900);
       this.testBlocks2();
     }
+    if (params.get('testblocks3') === '1') {
+      await sleep(900);
+      this.testBlocks3();
+    }
   },
 
   bindUI() {
@@ -628,7 +632,7 @@ const App = {
     const projectData = JSON.parse(JSON.stringify(Project.data));
     const has3d = projectData.elements.some(e => e.type === 'model3d');
     const files = ['easing.js', 'project.js', 'audio.js', 'effects.js', 'sprites.js', 'three-scene.js',
-      'elements.js', 'stage.js', 'animations.js', 'keyframes.js', 'executor.js',
+      'elements.js', 'stage.js', 'pen.js', 'animations.js', 'keyframes.js', 'executor.js',
       'jimu-api.js', 'player.js'];
     const readSrc = async qrcPath => {
       const b64 = await this.host.readFileBase64(qrcPath);
@@ -817,6 +821,73 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       console.log(r.every(x => x[1]) ? 'BLK2|PASS' : 'BLK2|FAIL');
     } catch (e) {
       console.log('BLK2|error|' + (e.message || e));
+    }
+  },
+
+  // BLK3 测试：S2 批2（列表/日期时间/拖拽/画笔/音乐）
+  async testBlocks3() {
+    try {
+      const E = Executor;
+      const num = v => ({ k: 'num', v });
+      const str = v => ({ k: 'str', v });
+      const c = E.newCtx();
+      const ev = async expr => await E.evalExpr(expr, E.newCtx());
+      const r = [];
+      // 列表
+      await E.exec({ op: 'list.add', name: '测', value: num(1) }, c);
+      await E.exec({ op: 'list.add', name: '测', value: str('x') }, c);
+      r.push(['list_len', (await ev({ k: 'list.len', name: '测' })) === 2]);
+      r.push(['list_item', (await ev({ k: 'list.item', name: '测', n: num(1) })) === 1]);
+      r.push(['list_contains', (await ev({ k: 'list.contains', name: '测', value: str('x') })) === true]);
+      r.push(['list_index', (await ev({ k: 'list.indexOf', name: '测', value: str('x') })) === 2]);
+      r.push(['list_join', (await ev({ k: 'list.join', name: '测', sep: str('-') })) === '1-x']);
+      await E.exec({ op: 'list.delete', name: '测', n: num(1) }, c);
+      r.push(['list_del', (await ev({ k: 'list.item', name: '测', n: num(1) })) === 'x']);
+      await E.exec({ op: 'list.insert', name: '测', n: num(1), value: str('y') }, c);
+      r.push(['list_ins', (await ev({ k: 'list.item', name: '测', n: num(1) })) === 'y']);
+      await E.exec({ op: 'list.replace', name: '测', n: num(1), value: str('z') }, c);
+      r.push(['list_rep', (await ev({ k: 'list.item', name: '测', n: num(1) })) === 'z']);
+      await E.exec({ op: 'list.clear', name: '测' }, c);
+      r.push(['list_clr', (await ev({ k: 'list.len', name: '测' })) === 0]);
+      await E.exec({ op: 'list.split', name: '测2', text: str('a,b,c'), sep: str(',') }, c);
+      r.push(['list_split', (await ev({ k: 'list.len', name: '测2' })) === 3]);
+      // 日期时间
+      r.push(['datetime_time', /^\d{2}:\d{2}:\d{2}$/.test(await ev({ k: 'datetime', what: 'time' }))]);
+      r.push(['datetime_year', (await ev({ k: 'datetime', what: 'year' })) >= 2025]);
+      // 拖拽
+      const el = Project.data.elements[0];
+      await E.exec({ op: 'el.drag', elId: el.id, on: true }, c);
+      r.push(['drag_on', el.draggable === true]);
+      await E.exec({ op: 'el.drag', elId: el.id, on: false }, c);
+      r.push(['drag_off', el.draggable === false]);
+      // 画笔
+      Pen.clear();
+      Pen.ensure();
+      Pen.setDown(true); Pen.setSize(12); Pen.setColor('#FF0000');
+      Pen.lineTo('t1', 100, 100);
+      Pen.lineTo('t1', 220, 220);
+      r.push(['pen_canvas', !!Pen.canvas && Pen.canvas.isConnected]);
+      r.push(['pen_last', !!(Pen.last['t1'] && Pen.last['t1'].x === 220)]);
+      let hasRed = false;
+      try {
+        const px = Pen.ctx.getImageData(155, 155, 6, 6).data;
+        for (let i = 0; i < px.length; i += 4) { if (px[i] > 180 && px[i + 3] > 0) { hasRed = true; break; } }
+      } catch (e) { }
+      r.push(['pen_pixel', hasRed]);
+      // Pen.connect 挂钩（el.move 后）
+      Pen.last = {};
+      await E.exec({ op: 'el.move', elId: el.id, x: num(500), y: num(300) }, c);
+      r.push(['pen_hook_move', !!Pen.last[el.id]]);
+      Pen.setDown(false); Pen.clear();
+      E.lists = {};
+      // 音乐（合成调用不崩）
+      let musicOk = true;
+      try { AudioMgr.note(60, 0.15); } catch (e) { musicOk = false; }
+      r.push(['music_note', musicOk]);
+      r.forEach(x => console.log('BLK3|' + x[0] + '|' + (x[1] ? 'ok' : 'FAIL')));
+      console.log(r.every(x => x[1]) ? 'BLK3|PASS' : 'BLK3|FAIL');
+    } catch (e) {
+      console.log('BLK3|error|' + (e.message || e));
     }
   },
 
