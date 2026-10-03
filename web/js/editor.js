@@ -582,9 +582,14 @@ const ContextMenu = {
     this.el.id = 'ctx-menu';
     this.el.className = 'ctx-menu hidden';
     document.body.appendChild(this.el);
+    // 捕获阶段监听：Blockly 等组件会 stopPropagation 吞掉冒泡事件，冒泡收不到
     window.addEventListener('mousedown', e => {
+      if (this.el.classList.contains('hidden')) return;
       if (!this.el.contains(e.target)) this.hide();
-    });
+    }, true);
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !this.el.classList.contains('hidden')) this.hide();
+    }, true);
     window.addEventListener('blur', () => this.hide());
   },
   show(x, y, items) {
@@ -608,5 +613,5 @@ const ContextMenu = {
     this.el.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px';
     this.el.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px';
   },
-  hide() { this.el.classList.add('hidden'); }
+  hide() { this.el.classList.add('hidden'); this._hiddenAt = Date.now(); }
 };

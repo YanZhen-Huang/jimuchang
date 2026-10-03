@@ -308,6 +308,8 @@ const App = {
   },
 
   elementDropMenu(e) {
+    // 点击按钮时捕获阶段已把它关掉（刚关闭 <250ms）→ 不再重开，实现 toggle
+    if (ContextMenu._hiddenAt && Date.now() - ContextMenu._hiddenAt < 250) return;
     const items = Project.data.elements.map(el => ({
       label: `${ELEMENT_ICONS[el.type] || '◻'} ${el.name}`,
       active: this.activeTab === 'el:' + el.id,
