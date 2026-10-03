@@ -100,13 +100,25 @@ const Player = {
       Executor.trigger('onKey', 'Space').then(n => { if (!n) this.nextScene(); });
       return;
     }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const isNext = e.key === 'ArrowRight';
+      Executor.trigger('onKey', e.key).then(n => { if (!n) { isNext ? this.nextScene() : this.prevScene(); } });
+      return;
+    }
     Executor.trigger('onKey', e.code);
   },
 
   async nextScene() {
     const i = Project.chapterIndex(Stage.currentChapterId);
     const next = Project.data.chapters[i + 1];
-    if (next) await Stage.goChapter(next.id);
+    if (next) await Executor.sceneGo(next.id);
+  },
+
+  async prevScene() {
+    const i = Project.chapterIndex(Stage.currentChapterId);
+    const prev = Project.data.chapters[i - 1];
+    if (prev) await Executor.sceneGo(prev.id);
   },
 
   toggleFullscreen() {
