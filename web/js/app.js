@@ -301,8 +301,14 @@ const App = {
     });
     box.innerHTML = html;
     box.querySelectorAll('.tab').forEach(t => {
-      t.onclick = () => this.switchTab(t.dataset.key);
+      t.onclick = () => {
+        const k = t.dataset.key;
+        if (k.indexOf('el:') === 0) this.selectElement(k.slice(3), true);
+        else this.switchTab(k);
+      };
     });
+    const act = box.querySelector('.tab.active');
+    if (act && act.scrollIntoView) { try { act.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) { } }
   },
 
   // ---------- 元素列表条 ----------
@@ -332,9 +338,19 @@ const App = {
 
   // 选中元素（switchScript=true 时同步把积木区切到该元素的脚本）
   selectElement(id, switchScript) {
+    const f = Project.findElementById(id);
+    if (f) this.ensureElementVisible(f.element);
     Editor.select(id);
     if (switchScript) this.switchTab('el:' + id);
     else { this.renderScriptTabs(); this.renderElementBar(); }
+  },
+
+  // 编辑态：被当前章节预览藏起来的元素，一旦要编辑它就点亮（否则看不见、点不到）
+  ensureElementVisible(el) {
+    if (!el || el.visible) return;
+    el.visible = true;
+    const dom = Stage.elDom(el.id);
+    if (dom) { Anim.reset(el, dom); Elements.applyBox(el, dom); }
   },
 
   elementMenu(x, y, id) {
@@ -409,7 +425,11 @@ const App = {
     this.activeTab = key;
     if (isEl) {
       const el = Project.getElement(key.slice(3));
-      if (el) { Editor.select(el.id); Panel.show(); }
+      if (el) {
+        this.ensureElementVisible(el);
+        Editor.select(el.id);
+        Panel.show();
+      }
     } else if (key !== 'global') {
       const ch = Project.getChapter(key);
       if (ch) {
@@ -642,8 +662,19 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const a2 = g(A.id);
       console.log(`R2TEST|click|A.y=${a2.y}`);
       const okClick = a2.y === 350;
-      console.log((okA && okB && okC && okClick) ? 'R2TEST|PASS' : `R2TEST|FAIL|A=${okA} B=${okB} C=${okC} click=${okClick}`);
       this.stop();
+      await sleep(300);
+      // 隐藏元素点亮：乙被章节预设隐藏 → 选中编辑应自动可见（否则"看不见点不到"）
+      const ch0 = Project.data.chapters[0];
+      ch0.preset.visibility = {};
+      Project.data.elements.forEach(e => { ch0.preset.visibility[e.id] = e.id !== B.id; });
+      await Stage.goChapter(ch0.id, { instant: true });
+      const hiddenB = g(B.id).visible === false;
+      this.selectElement(B.id, true);
+      const litB = g(B.id).visible === true;
+      console.log(`R2TEST|lit|hidden=${hiddenB} lit=${litB}`);
+      const okLit = hiddenB && litB;
+      console.log((okA && okB && okC && okClick && okLit) ? 'R2TEST|PASS' : `R2TEST|FAIL|A=${okA} B=${okB} C=${okC} click=${okClick} lit=${okLit}`);
     } catch (e) {
       console.log('R2TEST|error|' + (e.message || e));
     }

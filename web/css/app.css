@@ -105,6 +105,13 @@ body {
 #script-tabs::-webkit-scrollbar { display: none; }
 #script-tabs .tab { font-size: 12px; }
 #script-tabs .tab .el-ico { margin-right: 3px; }
+/* "全局"固定在左侧，元素再多也点得到 */
+#script-tabs .tab:first-child {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--panel);
+  box-shadow: 3px 0 6px rgba(0, 0, 0, .22);
+}
+#script-tabs .tab:first-child.active { background: var(--accent); }
 
 /* 元素列表条 */
 #element-bar {
