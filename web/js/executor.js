@@ -30,7 +30,7 @@ const Executor = {
     const one = (state, selfMode) => {
       const r = compileState(state, selfMode);
       out.orphans += IRCompiler.lastOrphanCount || 0;
-      (IRCompiler.lastFuncs || []).forEach(f => { out.funcs[f.name] = { body: f.body, retExpr: f.retExpr || null }; });
+      (IRCompiler.lastFuncs || []).forEach(f => { out.funcs[f.name] = { body: f.body, retExpr: f.retExpr || null, params: f.params || null }; });
       return r;
     };
     out.global = one(Project.data.globalBlocks, false);
@@ -112,6 +112,26 @@ const Executor = {
       if (ctx.aborted) return;
       await this.run(s.body, ctx);
     }
+  },
+
+  // 广播消息：全局脚本 + 所有元素的「当收到消息」脚本（元素脚本 self=该元素），即发即忘
+  broadcast(message) {
+    if (!message) return 0;
+    const list = [];
+    (this.scripts.global || []).forEach(s => {
+      if (s.kind === 'onMessage' && s.message === message) list.push({ s, self: null });
+    });
+    Object.entries(this.scripts.elements || {}).forEach(([elId, arr]) => {
+      (arr || []).forEach(s => {
+        if (s.kind === 'onMessage' && s.message === message) list.push({ s, self: elId });
+      });
+    });
+    list.forEach(({ s, self }) => {
+      const c = this.newCtx();
+      if (self) c.selfElId = self;
+      this.run(s.body, c);
+    });
+    return list.length;
   },
 
   triggerCloneStart(cloneId, templateElId) {
@@ -406,6 +426,11 @@ const Executor = {
         this.lists[instr.name] = [];
         break;
       }
+      case 'broadcast': {
+        const bm = String(await this.evalExpr(instr.msg, ctx));
+        this.broadcast(bm);
+        break;
+      }
       case 'list.split': {
         const lsText = String(await this.evalExpr(instr.text, ctx) ?? '');
         const lsSep = String(await this.evalExpr(instr.sep, ctx) ?? '');
@@ -663,9 +688,11 @@ const Executor = {
         }
         break;
       }
-      case 'func.call':
-        await this.execFunc(instr.name, ctx);
+      case 'func.call': {
+        const argObj = await this.buildArgs(instr, ctx);
+        await this.execFunc(instr.name, ctx, argObj);
         break;
+      }
       default:
         break;
     }
@@ -746,7 +773,7 @@ const Executor = {
     }
   },
 
-  async execFunc(name, ctx) {
+  async execFunc(name, ctx, args) {
     const def = this.funcs && this.funcs[name];
     if (!def) { console.warn('函数未定义：' + name); return undefined; }
     const body = Array.isArray(def) ? def : def.body;
@@ -757,10 +784,27 @@ const Executor = {
       console.warn('函数调用层级过深（>40）');
       return undefined;
     }
-    await this.run(body || [], ctx);
-    ctx._depth--;
-    if (retExpr) return await this.evalExpr(retExpr, ctx);
+    const outerArgs = ctx.args;
+    ctx.args = args || null;
+    try {
+      await this.run(body || [], ctx);
+      if (retExpr) return await this.evalExpr(retExpr, ctx);
+    } finally {
+      ctx.args = outerArgs;
+      ctx._depth--;
+    }
     return undefined;
+  },
+
+  // 求值调用实参并按函数定义绑定参数名（供带参函数用）
+  async buildArgs(instr, ctx) {
+    const fn = this.funcs && this.funcs[instr.name];
+    if (!fn || !fn.params || !fn.params.length) return null;
+    const vals = [];
+    for (const a of (instr.args || [])) vals.push(await this.evalExpr(a, ctx));
+    const obj = {};
+    fn.params.forEach((p, i) => { obj[p] = vals[i] !== undefined ? vals[i] : 0; });
+    return obj;
   },
 
   async evalExpr(e, ctx) {
@@ -770,7 +814,10 @@ const Executor = {
       case 'str': return e.v;
       case 'bool': return e.v;
       case 'var': return ctx.vars[e.name] !== undefined ? ctx.vars[e.name] : 0;
-      case 'call': return await this.execFunc(e.name, ctx);
+      case 'call': {
+        const argObj = await this.buildArgs(e, ctx);
+        return await this.execFunc(e.name, ctx, argObj);
+      }
       case 'prop': {
         const fp = Project.findElementById(e.el);
         if (!fp) return 0;
@@ -889,6 +936,7 @@ const Executor = {
         return this.checkTouch(aId, e.b);
       }
       case 'answer': return this.lastAnswer || '';
+      case 'argv': return (ctx.args && ctx.args[e.name] !== undefined) ? ctx.args[e.name] : 0;
       case 'datetime': {
         const d = new Date();
         const p2 = n => String(n).padStart(2, '0');

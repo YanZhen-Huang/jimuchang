@@ -413,6 +413,14 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testblocks3"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-broadcast"))) {
+            q.addQueryItem(QStringLiteral("testbroadcast"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-func"))) {
+            q.addQueryItem(QStringLiteral("testfunc"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);

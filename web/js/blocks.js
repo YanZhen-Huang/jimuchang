@@ -81,6 +81,7 @@
     jimu_math: { colourPrimary: '#4E9A6B' },
     jimu_data: { colourPrimary: '#D08A3C' },
     jimu_pen: { colourPrimary: '#B36BC9' },
+    jimu_func: { colourPrimary: '#A06CD5' },
     jimu_text: { colourPrimary: '#5B9BD5' }
   };
 
@@ -1615,6 +1616,61 @@
     }
   };
 
+  // ---- 广播（S3）----
+  defs['jimu_broadcast'] = {
+    init() {
+      this.appendDummyInput().appendField('广播消息');
+      this.appendDummyInput().appendField(new Blockly.FieldTextInput('消息1'), 'MSG');
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_hat');
+    }
+  };
+  defs['jimu_on_broadcast'] = {
+    init() {
+      this.appendDummyInput().appendField('当收到消息');
+      this.appendDummyInput().appendField(new Blockly.FieldTextInput('消息1'), 'MSG');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+
+  // ---- 带参函数（S3）----
+  defs['jimu_func_def'] = {
+    init() {
+      this.appendDummyInput().appendField('定义函数')
+        .appendField(new Blockly.FieldTextInput('函数1'), 'NAME')
+        .appendField('参数（逗号分隔）')
+        .appendField(new Blockly.FieldTextInput('x'), 'PARAMS');
+      this.setStyle('jimu_func');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_func_call'] = {
+    init() {
+      this.appendDummyInput().appendField('调用函数')
+        .appendField(new Blockly.FieldTextInput('函数1'), 'NAME');
+      this.appendDummyInput().appendField('①');
+      this.appendValueInput('ARG0');
+      this.appendDummyInput().appendField('②');
+      this.appendValueInput('ARG1');
+      this.appendDummyInput().appendField('③');
+      this.appendValueInput('ARG2');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_func');
+    }
+  };
+  defs['jimu_func_args'] = {
+    init() {
+      this.appendDummyInput().appendField('函数参数')
+        .appendField(new Blockly.FieldTextInput('x'), 'NAME');
+      this.setOutput(true);
+      this.setStyle('jimu_func');
+    }
+  };
+
   // 注册
   for (const [type, def] of Object.entries(defs)) {
     Blockly.Blocks[type] = def;
@@ -1703,7 +1759,8 @@
               { kind: 'block', type: 'jimu_on_start' },
               { kind: 'block', type: 'jimu_on_scene' },
               { kind: 'block', type: 'jimu_on_key' },
-              { kind: 'block', type: 'jimu_on_click' }
+              { kind: 'block', type: 'jimu_on_click' },
+              { kind: 'block', type: 'jimu_on_broadcast' }
             ]
           },
           {
@@ -1796,6 +1853,7 @@
           {
             kind: 'category', name: '高级', colour: '#4CC2C0',
             contents: [
+              { kind: 'block', type: 'jimu_broadcast' },
               { kind: 'block', type: 'jimu_js' },
               { kind: 'block', type: 'jimu_webapp_send', inputs: { MSG: { shadow: { type: 'text', fields: { TEXT: 'hello' } } } } },
               { kind: 'block', type: 'jimu_on_message' },
@@ -1888,6 +1946,14 @@
           },
           {
             kind: 'category', name: '变量', colour: '#A06CD5', custom: 'VARIABLE'
+          },
+          {
+            kind: 'category', name: '带参函数', colour: '#A06CD5',
+            contents: [
+              { kind: 'block', type: 'jimu_func_def' },
+              { kind: 'block', type: 'jimu_func_call', inputs: { ARG0: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_func_args' }
+            ]
           },
           {
             kind: 'category', name: '函数', colour: '#A06CD5', custom: 'PROCEDURE'
@@ -2003,6 +2069,7 @@
           {
             kind: 'category', name: '高级', colour: '#4CC2C0',
             contents: [
+              { kind: 'block', type: 'jimu_broadcast' },
               { kind: 'block', type: 'jimu_js' }
             ]
           },
@@ -2094,6 +2161,14 @@
             kind: 'category', name: '变量', colour: '#A06CD5', custom: 'VARIABLE'
           },
           {
+            kind: 'category', name: '带参函数', colour: '#A06CD5',
+            contents: [
+              { kind: 'block', type: 'jimu_func_def' },
+              { kind: 'block', type: 'jimu_func_call', inputs: { ARG0: { shadow: { type: 'math_number', fields: { NUM: 1 } } } } },
+              { kind: 'block', type: 'jimu_func_args' }
+            ]
+          },
+          {
             kind: 'category', name: '函数', colour: '#A06CD5', custom: 'PROCEDURE'
           }
         ]
@@ -2165,6 +2240,14 @@ const IRCompiler = {
     const funcs = [];
     let orphans = 0;
     workspace.getTopBlocks(true).forEach(b => {
+      if (b.type === 'jimu_func_def') {
+        funcs.push({
+          name: String(b.getFieldValue('NAME') || ''),
+          params: this.parseParams(b.getFieldValue('PARAMS')),
+          body: this.statements(b.getNextBlock())
+        });
+        return;
+      }
       if (b.type === 'procedures_defnoreturn' || b.type === 'procedures_defreturn') {
         const fn = { name: b.getFieldValue('NAME'), body: this.statements(b.getInputTargetBlock('STACK')) };
         if (b.type === 'procedures_defreturn') {
@@ -2189,6 +2272,11 @@ const IRCompiler = {
     return this._selfMode ? '@self' : b.getFieldValue('ELEMENT');
   },
 
+  // 参数字符串解析（"x, y" → ['x','y']；带参函数用）
+  parseParams(str) {
+    return String(str || '').split(/[,，]/).map(x => x.trim()).filter(Boolean);
+  },
+
   hatOf(b) {
     // 自我版帽子（元素脚本域）
     switch (b.type) {
@@ -2199,6 +2287,8 @@ const IRCompiler = {
     }
     switch (b.type) {
       case 'jimu_on_start': return { kind: 'onStart' };
+      case 'jimu_on_broadcast': return { kind: 'onMessage', message: String(b.getFieldValue('MSG') || '') };
+      case 'jimu_func_def': return { kind: 'funcDef' };
       case 'jimu_on_scene': return { kind: 'onSceneEnter', sceneId: b.getFieldValue('SCENE') };
       case 'jimu_on_key': return { kind: 'onKey', key: b.getFieldValue('KEY') };
       case 'jimu_on_click': return { kind: 'onElementClick', elId: this.EL(b) };
@@ -2296,6 +2386,15 @@ const IRCompiler = {
       case 'jimu_stop_script': return { op: 'ctrl.stopscript' };
       case 'jimu_stop_all': return { op: 'ctrl.stopall' };
       case 'jimu_ask': return { op: 'ask', text: this.expr(b, 'TEXT') };
+      case 'jimu_broadcast': return { op: 'broadcast', msg: this.expr(b, 'MSG') };
+      case 'jimu_func_call': {
+        const args = [];
+        ['ARG0', 'ARG1', 'ARG2'].forEach(inp => {
+          const t = b.getInputTargetBlock(inp);
+          if (t) args.push(this.exprOf(t));
+        });
+        return { op: 'func.call', name: b.getFieldValue('NAME'), args };
+      }
       case 'jimu_list_add': return {
         op: 'list.add', name: b.getFieldValue('NAME'), value: this.expr(b, 'VALUE')
       };
@@ -2496,6 +2595,7 @@ const IRCompiler = {
       case 'jimu_touch': return { k: 'touch', a: this.EL(b), b: b.getFieldValue('TARGET') };
       case 'jimu_answer': return { k: 'answer' };
       case 'jimu_datetime': return { k: 'datetime', what: b.getFieldValue('WHAT') };
+      case 'jimu_func_args': return { k: 'argv', name: b.getFieldValue('NAME') };
       case 'jimu_list_item': return {
         k: 'list.item', name: b.getFieldValue('NAME'), n: this.exprOf(b.getInputTargetBlock('N'))
       };

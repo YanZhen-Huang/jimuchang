@@ -274,6 +274,14 @@ const App = {
       await sleep(900);
       this.testBlocks3();
     }
+    if (params.get('testbroadcast') === '1') {
+      await sleep(900);
+      this.testBroadcast();
+    }
+    if (params.get('testfunc') === '1') {
+      await sleep(900);
+      this.testFunc();
+    }
   },
 
   bindUI() {
@@ -888,6 +896,76 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       console.log(r.every(x => x[1]) ? 'BLK3|PASS' : 'BLK3|FAIL');
     } catch (e) {
       console.log('BLK3|error|' + (e.message || e));
+    }
+  },
+
+  // BC 测试：广播系统端到端（全局帽 + 元素帽 + 分发 + self 注入）
+  async testBroadcast() {
+    try {
+      Project.newProject('广播测试');
+      if (!Project.data.chapters.length) Project.addChapter('章节 1');
+      const S = blocks => ({ blocks: { languageVersion: 0, blocks } });
+      const num = v => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
+      const A = Project.createElement('shape', { name: '甲', x: 200, y: 300 });
+      const B = Project.createElement('shape', { name: '乙', x: 600, y: 300 });
+      // 全局：当收到 go → 让甲 y+50（全局元素版）
+      Project.data.globalBlocks = S([{
+        type: 'jimu_on_broadcast', fields: { MSG: 'go' },
+        next: { block: { type: 'jimu_change', fields: { ELEMENT: A.id, PROP: 'y' }, inputs: { DELTA: num(50) } } }
+      }]);
+      // 甲（元素脚本）：当收到 go → 自己 x+100
+      A.blocks = S([{
+        type: 'jimu_self_on_message', fields: { MSG: 'go' },
+        next: { block: { type: 'jimu_self_change', fields: { PROP: 'x' }, inputs: { DELTA: num(100) } } }
+      }]);
+      // 乙（元素脚本）：当收到 go → 自己 y+100
+      B.blocks = S([{
+        type: 'jimu_self_on_message', fields: { MSG: 'go' },
+        next: { block: { type: 'jimu_self_change', fields: { PROP: 'y' }, inputs: { DELTA: num(100) } } }
+      }]);
+      Stage.renderAll();
+      await this.play();
+      await sleep(700);
+      const n = Executor.broadcast('go');
+      await sleep(500);
+      const g = id => (Project.findElementById(id) || {}).element || {};
+      const a = g(A.id), b = g(B.id);
+      console.log(`BC|handlers=${n} ax=${a.x} ay=${a.y} by=${b.y}`);
+      const ok = n === 3 && a.x === 300 && a.y === 350 && b.y === 400 && b.x === 600;
+      console.log(ok ? 'BC|PASS' : 'BC|FAIL');
+      this.stop();
+    } catch (e) {
+      console.log('BC|error|' + (e.message || e));
+    }
+  },
+
+  // FN 测试：带参函数端到端（定义/调用/参数传递/self 注入）
+  async testFunc() {
+    try {
+      Project.newProject('函数测试');
+      if (!Project.data.chapters.length) Project.addChapter('章节 1');
+      const S = blocks => ({ blocks: { languageVersion: 0, blocks } });
+      const num = v => ({ shadow: { type: 'math_number', fields: { NUM: v } } });
+      const A = Project.createElement('shape', { name: '甲', x: 200, y: 300 });
+      A.blocks = S([
+        { type: 'jimu_self_on_start', next: { block: {
+          type: 'jimu_func_call', fields: { NAME: '走两步' },
+          inputs: { ARG0: num(100) }
+        } } },
+        { type: 'jimu_func_def', fields: { NAME: '走两步', PARAMS: 'n' }, next: { block: {
+          type: 'jimu_self_change', fields: { PROP: 'x' },
+          inputs: { DELTA: { block: { type: 'jimu_func_args', fields: { NAME: 'n' } } } }
+        } } }
+      ]);
+      Stage.renderAll();
+      await this.play();
+      await sleep(900);
+      const a = (Project.findElementById(A.id) || {}).element || {};
+      console.log(`FN|x=${a.x}`);
+      console.log(a.x === 300 ? 'FN|PASS' : 'FN|FAIL');
+      this.stop();
+    } catch (e) {
+      console.log('FN|error|' + (e.message || e));
     }
   },
 
