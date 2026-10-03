@@ -33,6 +33,7 @@ const Player = {
     Executor.hooks.onSceneEnter = id => this.playEntrances(id);
     document.addEventListener('keydown', e => this.onKey(e));
     document.addEventListener('dblclick', () => this.toggleFullscreen());
+    this.bindTouchSwipe();
     window.addEventListener('resize', () => Stage.fit());
 
     Executor.presetScripts = true;
@@ -107,6 +108,30 @@ const Player = {
       return;
     }
     Executor.trigger('onKey', e.code);
+  },
+
+  // 触屏：左右滑动切换章节（起手在元素上的拖动/点击除外）
+  bindTouchSwipe() {
+    let start = null;
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) { start = null; return; }
+      const t = e.touches[0];
+      const onEl = e.target && e.target.closest && e.target.closest('.el');
+      start = { x: t.clientX, y: t.clientY, t: Date.now(), onEl: !!onEl };
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      if (!start || start.onEl) { start = null; return; }
+      const t = e.changedTouches[0];
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      const dt = Date.now() - start.t;
+      start = null;
+      if (dt > 700) return;
+      if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        if (dx < 0) this.nextScene();
+        else this.prevScene();
+      }
+    }, { passive: true });
   },
 
   async nextScene() {

@@ -17,6 +17,7 @@ const Settings = {
     hideCursor: true,
     pptRes: 720,             // 高保真导出分辨率（720/1080）
     pptQuality: 85,          // 导出图片质量 1-100
+    packCompress: true,      // 放映包图片自动压缩
     // 渲染性能
     ecoMode: false,
     threeFps: 60,
@@ -26,7 +27,10 @@ const Settings = {
     // 高级
     showAdvanced: true,
     cloneLimit: 200,
-    apiEnabled: true
+    apiEnabled: true,
+    // AI 助手（DeepSeek）
+    aiKey: '',
+    aiModel: 'deepseek-chat'
   },
   data: {},
   host: null,

@@ -37,6 +37,8 @@ const SETTING_DEFS = [
     { key: 'hideCursor', label: '播放时自动隐藏鼠标', type: 'bool' },
     { key: 'pptRes', label: 'PPT 高保真分辨率', type: 'select', hint: '1080p 更清晰，文件更大', options: [[720, '720p'], [1080, '1080p']] },
     { key: 'pptQuality', label: 'PPT 图片质量', type: 'select', options: [[70, '标准 70%'], [85, '较高 85%'], [95, '最高 95%']] }
+    ,
+    { key: 'packCompress', label: '放映包图片自动压缩', type: 'bool', hint: '导出时把大图重编码为 JPEG（无透明图），显著减小体积；视频不受影响' }
   ] },
   { group: '渲染性能', items: [
     { key: 'ecoMode', label: '节能模式', type: 'bool', hint: '3D 与特效统一降为 30 帧' },
@@ -49,8 +51,30 @@ const SETTING_DEFS = [
     { key: 'showAdvanced', label: '显示「高级」积木分类', type: 'bool', hint: '执行代码等进阶积木；已放到工作区的块不受影响' },
     { key: 'cloneLimit', label: '克隆体上限', type: 'select', options: [[100, '100 个'], [200, '200 个'], [500, '500 个']] },
     { key: 'apiEnabled', label: 'AI 接口（HTTP API）（重启生效）', type: 'bool', hint: '供外部 AI 控制的本地接口' }
+  ] },
+  { group: 'AI 助手（DeepSeek）', items: [
+    { key: 'aiKey', label: 'API Key', type: 'text', placeholder: 'sk-…（仅存本机）', hint: '在 platform.deepseek.com 获取；「✨ AI」按钮用一句话生成演示，按量计费约几分钱/次' },
+    { key: 'aiModel', label: '模型', type: 'select', options: [['deepseek-chat', 'deepseek-chat（快·便宜）'], ['deepseek-reasoner', 'deepseek-reasoner（强·较贵）']] }
   ] }
 ];
+
+// AI 生成器的系统提示（教 AI 输出积木剧场 DSL）
+const AI_SYSTEM_PROMPT = `你是"积木剧场"（图形化积木演示工具）的演示生成器。
+用户会用一句话描述想要的演示，你只输出一个 JSON 数组（不要 markdown 代码块、不要任何解释文字），数组元素是命令对象：
+{"cmd":"text","name":"标题","text":"积木剧场","x":460,"y":400,"w":1000,"size":120,"color":"#E6E9EF","bold":true}
+{"cmd":"shape","name":"装饰线","shape":"rect","fill":"#6C8CFF","x":860,"y":560,"w":200,"h":4}
+{"cmd":"icon","name":"图标1","char":"🚀","x":420,"y":380,"size":140,"color":"#6C8CFF"}
+{"cmd":"chapter","name":"封面","show":["标题","装饰线"],"bg":"#12101A"}
+{"cmd":"anim","target":"标题","type":"fadeIn","duration":0.8,"delay":0}
+{"cmd":"wait","sec":2}
+{"cmd":"next"}
+规则：
+- 舞台尺寸 1920×1080；元素坐标不要重叠；文字宽 w 与字号匹配（64 号字 w≥600，120 号 w≥1000）
+- 每章节用 {"cmd":"chapter"} 开始；show 列出该章节中可见的元素名（未列出的会隐藏）；bg 是十六进制背景色
+- 动画类型只能从这些里选：fadeIn, flyInLeft, flyInRight, flyInTop, flyInBottom, zoomIn, rotateIn, bounceIn, flipIn, typewriter, pulse, shake, wobble, breathe, glowPulse
+- 每个动画后可配 {"cmd":"wait","sec":N} 停留；章节末尾用 {"cmd":"next"} 推进（最后一章不加）
+- 生成 2~3 个章节，每章 2~4 个元素；文案中文、简洁有力
+- 只输出 JSON 数组：第一个字符必须是 [，最后一个字符必须是 ]`;
 
 const App = {
   host: null,
@@ -100,6 +124,11 @@ const App = {
     if (this.host) {
       try { await Settings.loadFromHost(this.host); } catch (e) { }
       try { await this.host.setTitle('积木剧场 · ' + Project.data.name); } catch (e) { }
+      try {
+        if (this.host.aiResult && this.host.aiResult.connect) {
+          this.host.aiResult.connect((id, ok, content) => this.onAiResult(id, ok, content));
+        }
+      } catch (e) { }
     }
     this.applySettings();
     this.applyTheme(Settings.get('theme') || 'dark');
@@ -291,6 +320,14 @@ const App = {
       await sleep(900);
       this.testSearch();
     }
+    if (params.get('testpack') === '1') {
+      await sleep(900);
+      this.testPack();
+    }
+    if (params.get('testai') === '1') {
+      await sleep(900);
+      this.testAi();
+    }
   },
 
   bindUI() {
@@ -317,6 +354,15 @@ const App = {
     on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
     on('btn-help', () => this.toggleHelp());
+    on('btn-ai', () => this.openAi());
+    on('btn-ai-close', () => document.getElementById('ai-overlay').classList.add('hidden'));
+    on('ai-send', () => this.aiGenerate());
+    const aiInput = document.getElementById('ai-input');
+    if (aiInput) {
+      aiInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.aiGenerate(); }
+      });
+    }
     on('btn-settings', () => this.openSettings());
     on('btn-settings-close', () => this.closeSettings());
     on('btn-theme', () => this.toggleTheme());
@@ -652,10 +698,59 @@ const App = {
   },
 
   // ---------- 导出放映包 ----------
+  // 资源压缩：大图重编码为 JPEG（有透明保留原图；视频/音频/SVG/GIF 跳过）
+  async compressResources(resources) {
+    const out = [];
+    for (const r of (resources || [])) {
+      let data = r.data;
+      const mime = r.mime || '';
+      if (data && data.length > 100000 && mime.indexOf('image/') === 0
+        && mime !== 'image/svg+xml' && mime !== 'image/gif') {
+        try {
+          const d2 = await this.recompressImage(data, mime);
+          if (d2 && d2.length < data.length) data = d2;
+        } catch (e) { }
+      }
+      out.push(Object.assign({}, r, { data }));
+    }
+    return out;
+  },
+
+  recompressImage(b64, mime, maxDim = 1600, q = 0.82) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let w = img.width, h = img.height;
+          const k = Math.min(1, maxDim / Math.max(w, h));
+          w = Math.max(1, Math.round(w * k));
+          h = Math.max(1, Math.round(h * k));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          // 透明抽样检测：有透明保持原图，否则转 JPEG
+          let hasAlpha = false;
+          try {
+            const d = ctx.getImageData(0, 0, w, h).data;
+            for (let i = 3; i < d.length; i += 40) { if (d[i] < 250) { hasAlpha = true; break; } }
+          } catch (e) { }
+          resolve(hasAlpha ? b64 : c.toDataURL('image/jpeg', q).split(',')[1]);
+        } catch (e) { resolve(b64); }
+      };
+      img.onerror = () => resolve(b64);
+      img.src = 'data:' + mime + ';base64,' + b64;
+    });
+  },
+
   async buildPlayerHtml() {
     JimuBlocks.save();
     const scripts = Executor.compileAll();
     const projectData = JSON.parse(JSON.stringify(Project.data));
+    // 资源压缩（图片重编码，减小放映包体积）
+    if (Settings.get('packCompress')) {
+      try { projectData.resources = await this.compressResources(projectData.resources); } catch (e) { }
+    }
     const has3d = projectData.elements.some(e => e.type === 'model3d');
     const files = ['easing.js', 'project.js', 'audio.js', 'effects.js', 'sprites.js', 'three-scene.js',
       'elements.js', 'stage.js', 'pen.js', 'animations.js', 'keyframes.js', 'executor.js',
@@ -687,15 +782,23 @@ const App = {
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>${title}</title>
 <style>
 ${css}
-html, body { height: 100%; overflow: hidden; }
+html, body { height: 100%; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+#rotate-hint {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, .45); font-size: 12px; display: none; z-index: 20;
+  pointer-events: none;
+}
+@media (orientation: portrait) { #rotate-hint { display: block; } }
 </style>
 </head>
 <body class="playing">
 <div id="stage-wrap"></div>
-<div id="play-hint">空格 推进 · ← → 切章节 · 双击全屏 · Esc 退出全屏</div>
+<div id="play-hint">空格 推进 · ← → 切章节 · 手机左右滑动切换 · 双击全屏</div>
+<div id="rotate-hint">📱 横屏观看效果更佳</div>
 <script>
 ${runtime}
 <\/script>
@@ -713,7 +816,12 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const html = await this.buildPlayerHtml();
     const b64 = btoa(unescape(encodeURIComponent(html)));
     const path = await this.host.exportHtml(b64, (Project.data.name || '未命名演示') + '-放映机.html');
-    if (path) toast('已导出：' + path.split('/').pop() + '（双击用浏览器打开）');
+    if (path) {
+      let resMb = 0;
+      try { (Project.data.resources || []).forEach(r => { resMb += ((r.data || '').length * 0.75) / 1048576; }); } catch (e) { }
+      const mb = (html.length * 0.75 / 1048576);
+      toast('已导出（' + mb.toFixed(1) + ' MB' + (resMb > 0.5 ? '，其中素材约 ' + resMb.toFixed(1) + ' MB' : '') + '）：' + path.split('/').pop());
+    }
     return path;
   },
 
@@ -987,6 +1095,65 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
   },
 
+  // AI 测试：DSL 执行器（离线，不调网络）
+  async testAi() {
+    try {
+      const cmds = [
+        { cmd: 'text', name: '标题', text: '国庆快乐', x: 460, y: 300, w: 1000, size: 120 },
+        { cmd: 'icon', name: '烟花', char: '🎆', x: 880, y: 620, size: 140 },
+        { cmd: 'chapter', name: '封面', show: ['标题', '烟花'], bg: '#1A0A0C' },
+        { cmd: 'anim', target: '标题', type: 'fadeIn', duration: 0.8 },
+        { cmd: 'wait', sec: 1 },
+        { cmd: 'next' },
+        { cmd: 'chapter', name: '尾声', show: ['烟花'], bg: '#120708' },
+        { cmd: 'anim', target: '烟花', type: 'bounceIn' }
+      ];
+      this.applyAiCommands(cmds);
+      await sleep(400);
+      const els = Project.data.elements.length;
+      const chs = Project.data.chapters.length;
+      const ch1 = Project.data.chapters[0];
+      const blocks1 = ch1.blocks ? ((ch1.blocks.blocks && ch1.blocks.blocks.blocks) || []).length : 0;
+      const vis1 = ch1.preset.visibility;
+      const titleEl = Project.data.elements.find(e => e.name === '标题');
+      const hiddenOk = titleEl && vis1[titleEl.id] === true;
+      console.log(`AI|els=${els} chapters=${chs} ch1blocks=${blocks1} vis=${hiddenOk}`);
+      const ok = els === 2 && chs === 2 && blocks1 === 1 && hiddenOk;
+      console.log(ok ? 'AI|PASS' : 'AI|FAIL');
+    } catch (e) {
+      console.log('AI|error|' + (e.message || e));
+    }
+  },
+
+  // PACK 测试：放映包图片压缩 + 体积报告
+  async testPack() {
+    try {
+      const c = document.createElement('canvas');
+      c.width = 1600; c.height = 1000;
+      const ctx = c.getContext('2d');
+      const g = ctx.createLinearGradient(0, 0, 1600, 1000);
+      g.addColorStop(0, '#112233');
+      g.addColorStop(1, '#AABBCC');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 1600, 1000);
+      for (let i = 0; i < 4000; i++) {
+        ctx.fillStyle = 'rgba(255,255,255,.4)';
+        ctx.fillRect(Math.random() * 1600, Math.random() * 1000, 3, 3);
+      }
+      const png = c.toDataURL('image/png').split(',')[1];
+      const res = await this.compressResources([{ id: 'r1', mime: 'image/png', data: png }]);
+      const ratio = res[0].data.length / png.length;
+      console.log(`PACK|compress|png=${(png.length / 1024) | 0}KB -> ${(res[0].data.length / 1024) | 0}KB (${(ratio * 100).toFixed(0)}%)`);
+      const html = await this.buildPlayerHtml();
+      const mb = (html.length * 0.75 / 1048576);
+      console.log(`PACK|player|${mb.toFixed(1)}MB`);
+      const ok = ratio < 0.7 && html.length > 1000;
+      console.log(ok ? 'PACK|PASS' : 'PACK|FAIL');
+    } catch (e) {
+      console.log('PACK|error|' + (e.message || e));
+    }
+  },
+
   // SEARCH 测试：积木搜索（打开/匹配/渲染/定位）
   async testSearch() {
     try {
@@ -1157,6 +1324,162 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.emptyHint.classList.remove('hidden');
   },
 
+  // ---------- AI 助手 ----------
+  openAi() {
+    const ov = document.getElementById('ai-overlay');
+    if (!ov) return;
+    ov.classList.remove('hidden');
+    const msgs = document.getElementById('ai-msgs');
+    if (msgs && !msgs.childElementCount) {
+      this.aiAddMsg('sys', '描述你想要的演示，我来搭（例如：做一个介绍国庆节的演示，标题+三个要点配图标，结尾放烟花效果）。');
+    }
+    setTimeout(() => { try { document.getElementById('ai-input').focus(); } catch (e) { } }, 80);
+  },
+
+  aiAddMsg(role, text) {
+    const box = document.getElementById('ai-msgs');
+    if (!box) return;
+    const d = document.createElement('div');
+    d.className = 'ai-msg ' + (role === 'user' ? 'user' : 'sys');
+    d.textContent = text;
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    return d;
+  },
+
+  aiGenerate() {
+    const inp = document.getElementById('ai-input');
+    const text = (inp && inp.value || '').trim();
+    if (!text) return;
+    if (this._aiBusy) return;
+    this.aiAddMsg('user', text);
+    if (inp) inp.value = '';
+    if (!Settings.get('aiKey')) {
+      this.aiAddMsg('sys', '⚠️ 请先到「设置 → AI 助手」填写 DeepSeek API Key（platform.deepseek.com 获取，约几分钱/次）');
+      return;
+    }
+    if (!this.host || !this.host.aiChat) {
+      this.aiAddMsg('sys', '⚠️ 需要桌面程序环境');
+      return;
+    }
+    this._aiBusy = true;
+    const wait = this.aiAddMsg('sys', '正在生成演示，请稍候…（约 10~30 秒）');
+    const id = 'ai' + Date.now();
+    this._aiPending = id;
+    const messages = [
+      { role: 'system', content: AI_SYSTEM_PROMPT },
+      { role: 'user', content: text }
+    ];
+    try {
+      this.host.aiChat(id, JSON.stringify({ model: Settings.get('aiModel') || 'deepseek-chat', messages }));
+    } catch (e) {
+      this._aiBusy = false;
+      if (wait) wait.textContent = '❌ 调用失败：' + (e.message || e);
+    }
+  },
+
+  onAiResult(id, ok, content) {
+    if (id !== this._aiPending) return;
+    this._aiBusy = false;
+    if (!ok) {
+      this.aiAddMsg('sys', '❌ ' + content);
+      return;
+    }
+    let cmds = null;
+    try {
+      let t = String(content).trim();
+      t = t.replace(/^```(json)?/gm, '').replace(/```/g, '').trim();
+      const a = t.indexOf('[');
+      const b = t.lastIndexOf(']');
+      if (a < 0 || b < 0) throw new Error('未找到 JSON 数组');
+      cmds = JSON.parse(t.slice(a, b + 1));
+      if (!Array.isArray(cmds)) throw new Error('格式不对');
+    } catch (e) {
+      this.aiAddMsg('sys', '❌ 解析生成结果失败：' + (e.message || e) + '\n可再试一次，或换个描述方式');
+      return;
+    }
+    try {
+      this.applyAiCommands(cmds);
+      const chs = cmds.filter(c => c && c.cmd === 'chapter').length;
+      this.aiAddMsg('sys', `✅ 已生成 ${chs} 个章节的演示，直接播放看看吧！（不满意可以再描述一次）`);
+      setTimeout(() => document.getElementById('ai-overlay').classList.add('hidden'), 900);
+    } catch (e) {
+      this.aiAddMsg('sys', '❌ 应用失败：' + (e.message || e));
+    }
+  },
+
+  // 把 AI 输出的 DSL 命令数组落成项目
+  applyAiCommands(cmds) {
+    JimuBlocks.save();
+    Project.newProject('AI 生成演示');
+    Project.data.chapters.length = 0;   // 清掉默认章节，由 AI 命令按需重建
+    const S = blocks => ({ blocks: { languageVersion: 0, blocks } });
+    const blk = (type, fields, next, inputs) => {
+      const o = { type };
+      if (fields) o.fields = fields;
+      if (inputs) o.inputs = inputs;
+      if (next) o.next = { block: next };
+      return o;
+    };
+    const link = list => {
+      for (let i = list.length - 1; i > 0; i--) list[i - 1].next = { block: list[i] };
+      return list[0];
+    };
+    const elMap = {};
+    const chapters = [];
+    let cur = null;
+    for (const c of (cmds || [])) {
+      if (!c || !c.cmd) continue;
+      if (c.cmd === 'text') {
+        elMap[c.name] = Project.createElement('text', { name: c.name || '文字', x: c.x, y: c.y, w: c.w,
+          props: { text: c.text || '', size: c.size || 64, color: c.color || '#E6E9EF', align: c.align || 'center', bold: !!c.bold } });
+      } else if (c.cmd === 'shape') {
+        elMap[c.name] = Project.createElement('shape', { name: c.name || '形状', x: c.x, y: c.y, w: c.w, h: c.h,
+          props: { shape: c.shape || 'rect', fill: c.fill || '#6C8CFF', radius: c.radius } });
+      } else if (c.cmd === 'icon') {
+        elMap[c.name] = Project.createElement('icon', { name: c.name || '图标', x: c.x, y: c.y, w: c.w, h: c.h,
+          props: { char: c.char || '⭐', size: c.size || 120, color: c.color || '#F5A623' } });
+      } else if (c.cmd === 'chapter') {
+        const ch = Project.addChapter(c.name || ('章节 ' + (chapters.length + 1)));
+        if (c.bg) ch.preset.background = { type: 'color', value: c.bg };
+        cur = { ch, blocks: [], show: c.show || null };
+        chapters.push(cur);
+      } else if (cur && c.cmd === 'anim') {
+        const tgt = elMap[c.target];
+        if (tgt) cur.blocks.push(blk('jimu_anim', {
+          ELEMENT: tgt.id, ANIM: c.type || 'fadeIn',
+          DUR: c.duration || 0.6, DELAY: c.delay || 0, EASE: c.ease || 'easeOutCubic'
+        }));
+      } else if (cur && c.cmd === 'wait') {
+        cur.blocks.push(blk('jimu_wait', null, null, { SEC: { shadow: { type: 'math_number', fields: { NUM: c.sec || 1 } } } }));
+      } else if (cur && c.cmd === 'next') {
+        cur.blocks.push(blk('jimu_scene_next'));
+      }
+    }
+    if (!chapters.length) throw new Error('没有生成任何章节');
+    // 章节显隐预设（无 show 的章节默认全显示）
+    chapters.forEach(({ ch, show }) => {
+      ch.preset.visibility = {};
+      Project.data.elements.forEach(el => { ch.preset.visibility[el.id] = show ? show.indexOf(el.name) >= 0 : true; });
+    });
+    // 章节脚本
+    chapters.forEach(({ ch, blocks }) => {
+      if (!blocks.length) return;
+      const hat = blk('jimu_on_scene', { SCENE: ch.id });
+      ch.blocks = S([link([hat].concat(blocks))]);
+    });
+    Project.data.globalBlocks = S([]);
+    // 应用
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+    this.activeTab = 'global';
+    JimuBlocks.switchTo('global');
+    this.renderTabs(); this.renderScriptTabs(); this.renderElementBar();
+    Editor.select(null);
+    Panel.show();
+    this.markDirty();
+  },
+
   // ---------- 积木搜索（Ctrl+F） ----------
   blockLabel(b) {
     const parts = [];
@@ -1249,6 +1572,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
           + (it.hint ? `<span class="set-hint">${it.hint}</span>` : '') + '</div>';
         if (it.type === 'bool') {
           html += `<label class="set-switch"><input type="checkbox" data-key="${it.key}" ${Settings.get(it.key) ? 'checked' : ''}><span></span></label>`;
+        } else if (it.type === 'text') {
+          html += `<input type="text" data-key="${it.key}" value="${esc(Settings.get(it.key) || '')}" placeholder="${it.placeholder || ''}">`;
         } else {
           html += `<select data-key="${it.key}">` + it.options.map(o =>
             `<option value="${o[0]}" ${String(Settings.get(it.key)) === String(o[0]) ? 'selected' : ''}>${o[1]}</option>`).join('') + '</select>';
@@ -1260,6 +1585,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     box.innerHTML = html;
     box.querySelectorAll('input[type=checkbox]').forEach(inp => {
       inp.onchange = () => Settings.set(inp.dataset.key, inp.checked);
+    });
+    box.querySelectorAll('input[type=text]').forEach(inp => {
+      inp.onchange = () => Settings.set(inp.dataset.key, inp.value.trim());
     });
     box.querySelectorAll('select').forEach(sel => {
       sel.onchange = () => {
@@ -1282,6 +1610,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (typeof Model3D !== 'undefined' && Model3D.applyShadows) { try { Model3D.applyShadows(); } catch (e) { } }
     if (this.host && this.host.setPref) {
       try { this.host.setPref('apiEnabled', Settings.get('apiEnabled') ? '1' : '0'); } catch (e) { }
+      try { this.host.setPref('aiKey', String(Settings.get('aiKey') || '')); } catch (e) { }
     }
   },
 

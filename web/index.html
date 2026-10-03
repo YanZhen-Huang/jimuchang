@@ -49,6 +49,7 @@
     <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
     <button id="btn-settings" class="tbtn" title="设置">⚙</button>
     <button id="btn-help" class="tbtn" title="帮助">？</button>
+    <button id="btn-ai" class="tbtn" title="AI 生成演示">✨ AI</button>
     <button id="btn-demo" class="tbtn">示例</button>
     <button id="btn-play" class="tbtn primary">▶ 播放</button>
   </header>
@@ -76,16 +77,17 @@
         <div class="ppt-group">
           <h4>转换模式</h4>
           <label class="ppt-radio"><input type="radio" name="ppt-mode" value="editable" checked>
-            <span>可编辑<small>文字 / 形状 / 图片 / 图标 / 图表 重建为 PPT 原生对象，可继续编辑</small></span></label>
+            <span>可编辑<small>文字 / 形状 / 图片 / 图标 / 图表 重建为 PPT 原生对象，可继续编辑（动画近似转换）</small></span></label>
           <label class="ppt-radio"><input type="radio" name="ppt-mode" value="fidelity">
-            <span>高保真<small>每个场景整页截图铺满，视觉 100% 一致但不可编辑（3D / 小程序 / 特效也能保留）</small></span></label>
+            <span>高保真<small>每页整页截图铺满，视觉 100% 一致但不可编辑、互动丢失（3D / 小程序 / 特效画面能保留）</small></span></label>
         </div>
         <div class="ppt-group">
           <h4>选项</h4>
           <label class="ppt-check"><input type="checkbox" id="ppt-anim" checked>
             <span>转换动画<small>把积木脚本的动画转换为 PPT 动画（淡入 / 飞入 / 缩放，其余效果近似为淡入）</small></span></label>
         </div>
-        <div class="ppt-warn">💡 可编辑模式暂不包含 3D / 小程序 / 特效 / 帧动画——需要这些请用「高保真」模式。</div>
+        <div class="ppt-warn">💡 <b>可编辑模式</b>：3D / 小程序 / 特效 / 帧动画会跳过；动画为近似转换（淡入 / 飞入 / 缩放，其余效果近似为淡入）。<br>
+💡 <b>高保真模式</b>：逐页截图铺满——画面 100% 一致，但 <b>不可编辑、互动全部丢失</b>（点击 / 按键 / 脚本逻辑都不会在 PPT 里生效），仅适合作为静态汇报留档。</div>
       </div>
       <div class="ppt-foot">
         <button class="p-btn" onclick="document.getElementById('ppt-overlay').classList.add('hidden')">取消</button>
@@ -112,6 +114,21 @@
         </div>
         <div class="help-dim" style="margin-top:10px">提示：保存过的项目会出现在这里，点击即可打开。</div>
       </div>
+    </div>
+  </div>
+
+  <div id="ai-overlay" class="hidden">
+    <div class="help-panel ai-panel">
+      <div class="help-head">
+        <span>✨ AI 助手 · 一句话生成演示</span>
+        <button class="p-btn" id="btn-ai-close">关闭</button>
+      </div>
+      <div id="ai-msgs" class="ai-msgs"></div>
+      <div class="ai-input-row">
+        <textarea id="ai-input" rows="2" placeholder="例如：做一个介绍国庆节的演示，标题+三个要点配图标，结尾放烟花效果"></textarea>
+        <button id="ai-send" class="p-btn primary">生成</button>
+      </div>
+      <div class="ai-foot">生成会覆盖当前项目内容 · 需在「设置 → AI 助手」填 DeepSeek Key · 费用由你的账号承担（约几分钱/次）</div>
     </div>
   </div>
 

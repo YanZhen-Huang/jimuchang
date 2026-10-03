@@ -13,6 +13,12 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QMimeDatabase>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
@@ -52,9 +58,46 @@ class HostBridge : public QObject {
 public:
     explicit HostBridge(QObject *parent = nullptr) : QObject(parent) {}
     void setWindow(QWidget *w) { m_win = w; }
+    QNetworkAccessManager *m_nam = nullptr;
+
+signals:
+    // AI 请求异步结果（JS 侧 host.aiResult.connect(...) 接收）
+    void aiResult(const QString &id, bool ok, const QString &content);
 
 public slots:
     QString ping() { return QStringLiteral("pong-from-cpp"); }
+
+    // AI 助手：代理 DeepSeek Chat Completions（免 CORS；key 存 QSettings.aiKey）
+    void aiChat(const QString &id, const QString &messagesJson) {
+        QSettings st;
+        const QString key = st.value(QStringLiteral("aiKey")).toString().trimmed();
+        if (key.isEmpty()) { emit aiResult(id, false, QStringLiteral("未配置 API Key（设置 → AI 助手）")); return; }
+        if (!m_nam) m_nam = new QNetworkAccessManager(this);
+        QNetworkRequest req(QUrl(QStringLiteral("https://api.deepseek.com/chat/completions")));
+        req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+        req.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
+        QJsonObject body;
+        const QJsonDocument inDoc = QJsonDocument::fromJson(messagesJson.toUtf8());
+        const QJsonObject inObj = inDoc.object();
+        body.insert(QStringLiteral("model"), inObj.value(QStringLiteral("model")).toString(QStringLiteral("deepseek-chat")));
+        body.insert(QStringLiteral("temperature"), 0.7);
+        body.insert(QStringLiteral("messages"), inObj.value(QStringLiteral("messages")).toArray());
+        QNetworkReply *reply = m_nam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+        connect(reply, &QNetworkReply::finished, this, [this, reply, id]() {
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError) {
+                emit aiResult(id, false, QStringLiteral("网络错误：") + reply->errorString());
+                return;
+            }
+            const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+            const QJsonArray choices = doc.object().value(QStringLiteral("choices")).toArray();
+            const QString content = choices.isEmpty() ? QString()
+                : choices.at(0).toObject().value(QStringLiteral("message")).toObject()
+                    .value(QStringLiteral("content")).toString();
+            if (content.isEmpty()) { emit aiResult(id, false, QStringLiteral("响应为空（检查 Key 与额度）")); return; }
+            emit aiResult(id, true, content);
+        });
+    }
 
     QString info() {
         return QStringLiteral("jimuchang %1 | Qt %2")
@@ -427,6 +470,14 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-search"))) {
             q.addQueryItem(QStringLiteral("testsearch"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-pack"))) {
+            q.addQueryItem(QStringLiteral("testpack"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-ai"))) {
+            q.addQueryItem(QStringLiteral("testai"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (hasQuery) {

@@ -46,6 +46,47 @@ const Stage = {
       window.addEventListener('mouseup', () => {
         if (typeof Executor !== 'undefined') Executor.mouse.down = false;
       });
+      // 触屏：触摸映射为鼠标坐标（侦测积木在手机上可用）
+      const touchPos = e => {
+        const t = e.touches && e.touches[0];
+        if (t) updatePos({ clientX: t.clientX, clientY: t.clientY });
+      };
+      window.addEventListener('touchstart', e => {
+        if (typeof Executor !== 'undefined') Executor.mouse.down = true;
+        touchPos(e);
+      }, { passive: true });
+      window.addEventListener('touchmove', touchPos, { passive: true });
+      window.addEventListener('touchend', () => {
+        if (typeof Executor !== 'undefined') Executor.mouse.down = false;
+      }, { passive: true });
+      // 触屏拖拽（播放态可拖动元素）
+      Stage.rootEl.addEventListener('touchstart', e => {
+        if (typeof App === 'undefined' || !App.playing) return;
+        const elDom = e.target.closest('.el');
+        if (!elDom) return;
+        const id = elDom.dataset.id;
+        const f = Project.findElementById(id);
+        if (!f || !f.element.draggable) return;
+        const t0 = e.touches[0];
+        const startX = t0.clientX, startY = t0.clientY;
+        const ox = f.element.x, oy = f.element.y;
+        const r = Stage.rootEl.getBoundingClientRect();
+        const k = r.width ? 1920 / r.width : 1;
+        const move = ev => {
+          ev.preventDefault();
+          const t = ev.touches[0];
+          f.element.x = Math.round(ox + (t.clientX - startX) * k);
+          f.element.y = Math.round(oy + (t.clientY - startY) * k);
+          const dom = Stage.elDom(id);
+          if (dom) Elements.applyBox(f.element, dom);
+        };
+        const up = () => {
+          window.removeEventListener('touchmove', move);
+          window.removeEventListener('touchend', up);
+        };
+        window.addEventListener('touchmove', move, { passive: false });
+        window.addEventListener('touchend', up);
+      }, { passive: true });
       // 播放态拖拽：元素被"设为可拖动"后，观众可以拖着它走
       Stage.rootEl.addEventListener('mousedown', e => {
         if (typeof App === 'undefined' || !App.playing) return;
