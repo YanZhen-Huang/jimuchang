@@ -598,7 +598,7 @@ const ContextMenu = {
         return;
       }
       const b = document.createElement('button');
-      b.className = 'ctx-item' + (it.danger ? ' danger' : '');
+      b.className = 'ctx-item' + (it.danger ? ' danger' : '') + (it.active ? ' active' : '');
       b.textContent = it.label;
       b.onclick = () => { this.hide(); it.action(); };
       this.el.appendChild(b);

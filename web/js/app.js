@@ -201,6 +201,10 @@ const App = {
       await sleep(700);
       this.testR2();
     }
+    if (params.get('testreveal') === '1') {
+      await sleep(900);
+      this.testReveal();
+    }
   },
 
   bindUI() {
@@ -288,27 +292,29 @@ const App = {
     if (r) r.disabled = !History.canRedo();
   },
 
-  // ---------- 脚本切换栏（全局 / 元素脚本） ----------
+  // ---------- 脚本切换栏（全局 / 元素下拉，永不溢出） ----------
   renderScriptTabs() {
     const box = document.getElementById('script-tabs');
     if (!box) return;
     const active = this.activeTab || 'global';
+    const cur = active.indexOf('el:') === 0 ? Project.getElement(active.slice(3)) : null;
+    const n = Project.data.elements.length;
     let html = `<div class="tab${active === 'global' ? ' active' : ''}" data-key="global" title="全局脚本（当演示开始 / 按下键 / 收到消息）">全局</div>`;
-    Project.data.elements.forEach(el => {
-      const key = 'el:' + el.id;
-      html += `<div class="tab${active === key ? ' active' : ''}" data-key="${key}" title="编辑「${esc(el.name)}」的脚本">`
-        + `<span class="el-ico">${ELEMENT_ICONS[el.type] || '◻'}</span>${esc(el.name)}</div>`;
-    });
+    html += `<div class="tab tab-drop${cur ? ' active' : ''}" id="btn-el-drop" title="选择要编辑脚本的元素">`
+      + (cur ? `<span class="el-ico">${ELEMENT_ICONS[cur.type] || '◻'}</span>${esc(cur.name)}` : `选择元素…（${n} 个）`) + ' ▾</div>';
     box.innerHTML = html;
-    box.querySelectorAll('.tab').forEach(t => {
-      t.onclick = () => {
-        const k = t.dataset.key;
-        if (k.indexOf('el:') === 0) this.selectElement(k.slice(3), true);
-        else this.switchTab(k);
-      };
-    });
-    const act = box.querySelector('.tab.active');
-    if (act && act.scrollIntoView) { try { act.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) { } }
+    box.querySelector('[data-key="global"]').onclick = () => this.switchTab('global');
+    box.querySelector('#btn-el-drop').onclick = e => this.elementDropMenu(e);
+  },
+
+  elementDropMenu(e) {
+    const items = Project.data.elements.map(el => ({
+      label: `${ELEMENT_ICONS[el.type] || '◻'} ${el.name}`,
+      active: this.activeTab === 'el:' + el.id,
+      action: () => this.selectElement(el.id, true)
+    }));
+    if (!items.length) items.push({ label: '（暂无元素，用工具栏「＋」添加）', action: () => { } });
+    ContextMenu.show(e.clientX, e.clientY, items);
   },
 
   // ---------- 元素列表条 ----------
@@ -339,10 +345,28 @@ const App = {
   // 选中元素（switchScript=true 时同步把积木区切到该元素的脚本）
   selectElement(id, switchScript) {
     const f = Project.findElementById(id);
-    if (f) this.ensureElementVisible(f.element);
+    if (f) this.revealElement(f.element);
     Editor.select(id);
     if (switchScript) this.switchTab('el:' + id);
     else { this.renderScriptTabs(); this.renderElementBar(); }
+  },
+
+  // 编辑元素时把舞台切到"看得见它"的上下文：
+  // 找显式显示它的章节 → 切到那个章节画面；找不到 → 点亮它（编辑态兜底）
+  revealElement(el) {
+    if (!el) return;
+    let explicit = null, implicit = null;
+    for (const ch of Project.data.chapters || []) {
+      const vis = ch.preset && ch.preset.visibility;
+      if (vis && vis[el.id] === true) { explicit = ch; break; }
+      if ((!vis || !Object.keys(vis).length) && !implicit) implicit = ch;
+    }
+    const target = explicit || implicit;
+    if (target) {
+      if (Stage.currentChapterId !== target.id) Stage.goChapter(target.id, { instant: true });
+      return;
+    }
+    this.ensureElementVisible(el);
   },
 
   // 编辑态：被当前章节预览藏起来的元素，一旦要编辑它就点亮（否则看不见、点不到）
@@ -440,7 +464,7 @@ const App = {
     if (isEl) {
       const el = Project.getElement(key.slice(3));
       if (el) {
-        this.ensureElementVisible(el);
+        this.revealElement(el);
         Editor.select(el.id);
         Panel.show();
       }
@@ -640,9 +664,24 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     return clone;
   },
 
-  // R2 自动化测试：三个元素各写独立脚本，播放时各自表演互不干扰
-  async testR2() {
+  // REVEAL 测试：点元素脚本应把舞台切到"看得见它"的章节
+  async testReveal() {
     try {
+      const t2 = Project.data.elements.find(e => e.name === '标题2');
+      if (!t2) { console.log('REVEAL|no-t2'); return; }
+      this.selectElement(t2.id, true);
+      await sleep(500);
+      const cur = Stage.currentChapter();
+      const el = Project.findElementById(t2.id).element;
+      console.log(`REVEAL|chapter=${cur ? cur.name : '?'}|visible=${el.visible}|tabEl=${this.activeTab.indexOf('el:') === 0}`);
+      console.log((cur && cur.name === '特性' && el.visible) ? 'REVEAL|PASS' : 'REVEAL|FAIL');
+    } catch (e) {
+      console.log('REVEAL|error|' + (e.message || e));
+    }
+  },
+
+  // R2 自动化测试：三个元素各写独立脚本，播放时各自表演互不干扰
+  async testR2() {    try {
       Project.newProject('R2 测试');
       if (!Project.data.chapters.length) Project.addChapter('章节 1');
       const S = blocks => ({ blocks: { languageVersion: 0, blocks } });

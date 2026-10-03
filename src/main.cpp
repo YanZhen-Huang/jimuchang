@@ -382,6 +382,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testr2"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-reveal"))) {
+            q.addQueryItem(QStringLiteral("testreveal"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);
