@@ -314,7 +314,14 @@ const App = {
       action: () => this.selectElement(el.id, true)
     }));
     if (!items.length) items.push({ label: '（暂无元素，用工具栏「＋」添加）', action: () => { } });
-    ContextMenu.show(e.clientX, e.clientY, items);
+    // 固定贴在按钮正下方展开（不跟随鼠标位置）
+    const btn = document.getElementById('btn-el-drop');
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      ContextMenu.show(r.left, r.bottom + 6, items);
+    } else {
+      ContextMenu.show(e.clientX, e.clientY, items);
+    }
   },
 
   // ---------- 元素列表条 ----------
