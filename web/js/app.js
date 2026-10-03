@@ -25,6 +25,7 @@ const ELEMENT_ICONS = {
 // 设置面板配置
 const SETTING_DEFS = [
   { group: '编辑器', items: [
+    { key: 'theme', label: '界面主题', type: 'select', options: [['dark', '深色'], ['light', '浅色'], ['national', '国庆专属 🎉']] },
     { key: 'autosaveMin', label: '自动保存间隔', type: 'select', hint: '自动保存到缓存，意外退出后可恢复', options: [[0, '关闭'], [1, '1 分钟'], [2, '2 分钟'], [5, '5 分钟']] },
     { key: 'alignGuides', label: '对齐辅助线', type: 'bool', hint: '拖动元素时显示吸附参考线' },
     { key: 'undoLimit', label: '撤销步数上限', type: 'select', options: [[30, '30 步'], [60, '60 步'], [100, '100 步']] },
@@ -145,6 +146,10 @@ const App = {
       await sleep(600);
       const n = document.querySelectorAll('#home-recent .home-recent-item').length;
       console.log('P7TEST|home|recent=' + n);
+    }
+    if (params.get('testtheme') === 'national') {
+      this.applyTheme('national');
+      console.log('THEME|national|' + document.body.classList.contains('national'));
     }
     if (params.get('testtheme') === 'light') {
       this.applyTheme('light');
@@ -344,14 +349,18 @@ const App = {
   applyTheme(mode) {
     this.themeMode = mode;
     document.body.classList.toggle('light', mode === 'light');
+    document.body.classList.toggle('national', mode === 'national');
+    try { if (JimuBlocks && JimuBlocks.setTheme) JimuBlocks.setTheme(mode); } catch (e) { }
     const btn = document.getElementById('btn-theme');
-    if (btn) btn.textContent = mode === 'light' ? '🌙' : '☀';
+    if (btn) btn.textContent = mode === 'light' ? '🌙' : (mode === 'national' ? '🎉' : '☀');
     JimuBlocks.setTheme(mode);
     Settings.set('theme', mode);
   },
 
   toggleTheme() {
-    this.applyTheme(this.themeMode === 'light' ? 'dark' : 'light');
+    const order = ['dark', 'light', 'national'];
+    const i = order.indexOf(this.themeMode || 'dark');
+    this.applyTheme(order[(i + 1) % order.length]);
   },
 
   markDirty(noCapture) {
@@ -1261,6 +1270,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.setupAutosave();
     this.applyFpsMeter();
     this.updateBlockCount();
+    if (this.themeMode !== Settings.get('theme')) this.applyTheme(Settings.get('theme'));
     if (typeof JimuBlocks !== 'undefined' && JimuBlocks.refreshToolbox) {
       try { JimuBlocks.refreshToolbox(); } catch (e) { }
     }

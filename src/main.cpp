@@ -389,6 +389,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testtheme"), QStringLiteral("light"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-theme-national"))) {
+            q.addQueryItem(QStringLiteral("testtheme"), QStringLiteral("national"));
+            hasQuery = true;
+        }
         if (args.contains(QStringLiteral("--test-r2"))) {
             q.addQueryItem(QStringLiteral("testr2"), QStringLiteral("1"));
             hasQuery = true;

@@ -481,6 +481,28 @@ body.playing #play-hint { display: block; }
 .help-dim { color: #5A6376; font-size: 12px; line-height: 1.8; }
 
 /* ---------------- 浅色主题 ---------------- */
+/* 国庆专属主题（中国红 + 金色） */
+body.national {
+  --bg: #170A0B;
+  --panel: #221012;
+  --panel2: #1C0D0F;
+  --hover: #341618;
+  --line: #3D1B1E;
+  --text: #FFEFDF;
+  --dim: #C99A8B;
+  --accent: #E23A2E;
+  --ok: #D4AF37;
+  --danger: #FF6B5E;
+}
+body.national #toolbar { border-bottom: 1px solid #E23A2E; }
+body.national .brand { color: #F5C445; }
+body.national .tbtn.primary {
+  background: linear-gradient(135deg, #E23A2E, #C8102E);
+  border-color: #F5C445;
+}
+body.national #stage-wrap { background: #120708; }
+body.national .tab.active { background: #E23A2E; border-color: #F5C445; }
+
 body.light {
   --bg: #F5F6F8;
   --panel: #FFFFFF;
