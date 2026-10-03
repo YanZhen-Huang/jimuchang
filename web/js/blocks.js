@@ -77,7 +77,9 @@
     jimu_adv: { colourPrimary: '#4CC2C0' },
     jimu_motion: { colourPrimary: '#4C8DF0' },
     jimu_sense: { colourPrimary: '#7C6CF0' },
-    jimu_ctrl: { colourPrimary: '#8A93A6' }
+    jimu_ctrl: { colourPrimary: '#8A93A6' },
+    jimu_math: { colourPrimary: '#4E9A6B' },
+    jimu_text: { colourPrimary: '#5B9BD5' }
   };
 
   // Blockly 13 移除了内置 FieldColour，用轻量替代（hex 输入 + 校验）
@@ -1221,6 +1223,163 @@
     }
   };
 
+  // ================================================================
+  // S2 补全积木：数学扩展 / 文本处理 / 侦测 / 控制
+  // ================================================================
+  const touchTargetOptions = () => {
+    const list = [['舞台边缘', '@edge']];
+    (Project.data && Project.data.elements || []).forEach(e => list.push([e.name, e.id]));
+    return list;
+  };
+
+  // ---- 数学扩展 ----
+  defs['jimu_bitwise'] = {
+    init() {
+      this.appendValueInput('A');
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldDropdown([['与', 'and'], ['或', 'or'], ['异或', 'xor']]), 'OP');
+      this.appendValueInput('B');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_math');
+    }
+  };
+  defs['jimu_shift'] = {
+    init() {
+      this.appendValueInput('A');
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldDropdown([['左移', 'shl'], ['右移', 'shr']]), 'OP');
+      this.appendValueInput('B');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_math');
+    }
+  };
+
+  // ---- 文本处理 ----
+  defs['jimu_text_letter'] = {
+    init() {
+      this.appendDummyInput().appendField('文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('的第');
+      this.appendValueInput('N');
+      this.appendDummyInput().appendField('个字符');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_text');
+    }
+  };
+  defs['jimu_text_contains'] = {
+    init() {
+      this.appendDummyInput().appendField('文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('包含');
+      this.appendValueInput('SUB');
+      this.appendDummyInput().appendField('？');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_text');
+    }
+  };
+  defs['jimu_text_replace'] = {
+    init() {
+      this.appendDummyInput().appendField('把文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('中的');
+      this.appendValueInput('FROM');
+      this.appendDummyInput().appendField('替换为');
+      this.appendValueInput('TO');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_text');
+    }
+  };
+  defs['jimu_text_case'] = {
+    init() {
+      this.appendDummyInput().appendField('文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('转为')
+        .appendField(new Blockly.FieldDropdown([['大写', 'upper'], ['小写', 'lower']]), 'OP');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_text');
+    }
+  };
+  defs['jimu_text_trim'] = {
+    init() {
+      this.appendDummyInput().appendField('文字');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('去掉首尾空格');
+      this.setInputsInline(true);
+      this.setOutput(true);
+      this.setStyle('jimu_text');
+    }
+  };
+
+  // ---- 侦测 ----
+  defs['jimu_mouse'] = {
+    init() {
+      this.appendDummyInput().appendField('鼠标')
+        .appendField(new Blockly.FieldDropdown([['x 坐标', 'x'], ['y 坐标', 'y']]), 'AXIS');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_mouse_down'] = {
+    init() {
+      this.appendDummyInput().appendField('鼠标按下？');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_touch'] = {
+    init() {
+      this.appendDummyInput().appendField('元素')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT');
+      this.appendDummyInput().appendField('碰到')
+        .appendField(new Blockly.FieldDropdown(touchTargetOptions), 'TARGET');
+      this.appendDummyInput().appendField('？');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_self_touch'] = {
+    init() {
+      this.appendDummyInput().appendField('我碰到')
+        .appendField(new Blockly.FieldDropdown(touchTargetOptions), 'TARGET');
+      this.appendDummyInput().appendField('？');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_ask'] = {
+    init() {
+      this.appendDummyInput().appendField('询问');
+      this.appendValueInput('TEXT');
+      this.appendDummyInput().appendField('并等待');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_answer'] = {
+    init() {
+      this.appendDummyInput().appendField('回答');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+
+  // ---- 控制扩充 ----
+  defs['jimu_stop_all'] = {
+    init() {
+      this.appendDummyInput().appendField('停止全部脚本');
+      this.setPreviousStatement(true);
+      this.setStyle('jimu_ctrl');
+    }
+  };
+
   // 注册
   for (const [type, def] of Object.entries(defs)) {
     Blockly.Blocks[type] = def;
@@ -1382,7 +1541,12 @@
               { kind: 'block', type: 'jimu_scene_name' },
               { kind: 'block', type: 'jimu_timer' },
               { kind: 'block', type: 'jimu_timer_reset' },
-              { kind: 'block', type: 'jimu_rand_color' }
+              { kind: 'block', type: 'jimu_rand_color' },
+              { kind: 'block', type: 'jimu_mouse' },
+              { kind: 'block', type: 'jimu_mouse_down' },
+              { kind: 'block', type: 'jimu_touch' },
+              { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
+              { kind: 'block', type: 'jimu_answer' }
             ]
           },
           {
@@ -1421,6 +1585,7 @@
               { kind: 'block', type: 'jimu_wait_until' },
               { kind: 'block', type: 'jimu_repeat_until' },
               { kind: 'block', type: 'jimu_stop_script' },
+              { kind: 'block', type: 'jimu_stop_all' },
               { kind: 'block', type: 'logic_compare' },
               { kind: 'block', type: 'logic_operation' },
               { kind: 'block', type: 'logic_negate' },
@@ -1429,6 +1594,58 @@
               { kind: 'block', type: 'math_arithmetic' },
               { kind: 'block', type: 'text' },
               { kind: 'block', type: 'text_join' }
+            ]
+          },
+          {
+            kind: 'category', name: '数学', colour: '#4E9A6B',
+            contents: [
+              { kind: 'block', type: 'math_round' },
+              { kind: 'block', type: 'math_number_property' },
+              { kind: 'block', type: 'math_constant' },
+              { kind: 'block', type: 'math_single' },
+              { kind: 'block', type: 'math_trig' },
+              { kind: 'block', type: 'jimu_bitwise' },
+              { kind: 'block', type: 'jimu_shift' }
+            ]
+          },
+          {
+            kind: 'category', name: '文本', colour: '#5B9BD5',
+            contents: [
+              { kind: 'block', type: 'text' },
+              { kind: 'block', type: 'text_join' },
+              { kind: 'block', type: 'text_length' },
+              { kind: 'block', type: 'text_isEmpty' },
+              { kind: 'block', type: 'jimu_text_letter' },
+              { kind: 'block', type: 'jimu_text_contains' },
+              { kind: 'block', type: 'jimu_text_replace' },
+              { kind: 'block', type: 'jimu_text_case' },
+              { kind: 'block', type: 'jimu_text_trim' }
+            ]
+          },
+          {
+            kind: 'category', name: '数学', colour: '#4E9A6B',
+            contents: [
+              { kind: 'block', type: 'math_round' },
+              { kind: 'block', type: 'math_number_property' },
+              { kind: 'block', type: 'math_constant' },
+              { kind: 'block', type: 'math_single' },
+              { kind: 'block', type: 'math_trig' },
+              { kind: 'block', type: 'jimu_bitwise' },
+              { kind: 'block', type: 'jimu_shift' }
+            ]
+          },
+          {
+            kind: 'category', name: '文本', colour: '#5B9BD5',
+            contents: [
+              { kind: 'block', type: 'text' },
+              { kind: 'block', type: 'text_join' },
+              { kind: 'block', type: 'text_length' },
+              { kind: 'block', type: 'text_isEmpty' },
+              { kind: 'block', type: 'jimu_text_letter' },
+              { kind: 'block', type: 'jimu_text_contains' },
+              { kind: 'block', type: 'jimu_text_replace' },
+              { kind: 'block', type: 'jimu_text_case' },
+              { kind: 'block', type: 'jimu_text_trim' }
             ]
           },
           {
@@ -1528,7 +1745,12 @@
               { kind: 'block', type: 'jimu_timer' },
               { kind: 'block', type: 'jimu_timer_reset' },
               { kind: 'block', type: 'jimu_scene_name' },
-              { kind: 'block', type: 'jimu_rand_color' }
+              { kind: 'block', type: 'jimu_rand_color' },
+              { kind: 'block', type: 'jimu_mouse' },
+              { kind: 'block', type: 'jimu_mouse_down' },
+              { kind: 'block', type: 'jimu_self_touch' },
+              { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
+              { kind: 'block', type: 'jimu_answer' }
             ]
           },
           {
@@ -1564,6 +1786,7 @@
               { kind: 'block', type: 'jimu_wait_until' },
               { kind: 'block', type: 'jimu_repeat_until' },
               { kind: 'block', type: 'jimu_stop_script' },
+              { kind: 'block', type: 'jimu_stop_all' },
               { kind: 'block', type: 'logic_compare' },
               { kind: 'block', type: 'logic_operation' },
               { kind: 'block', type: 'logic_negate' },
@@ -1778,6 +2001,8 @@ const IRCompiler = {
         body: this.statements(b.getInputTargetBlock('DO'))
       };
       case 'jimu_stop_script': return { op: 'ctrl.stopscript' };
+      case 'jimu_stop_all': return { op: 'ctrl.stopall' };
+      case 'jimu_ask': return { op: 'ask', text: this.expr(b, 'TEXT') };
       case 'jimu_volume': return { op: 'media.volume', value: Number(b.getFieldValue('VOL')) };
       case 'jimu_stop_all_sound': return { op: 'media.stopall' };
       case 'jimu_3d_scale': return {
@@ -1921,6 +2146,35 @@ const IRCompiler = {
       case 'text_length': return { k: 'strlen', v: this.exprOf(b.getInputTargetBlock('VALUE')) };
       case 'text_isEmpty': return { k: 'strempty', v: this.exprOf(b.getInputTargetBlock('VALUE')) };
       case 'math_constant': return { k: 'const', name: b.getFieldValue('CONSTANT') };
+      case 'math_trig': return {
+        k: 'trig', op: b.getFieldValue('OP'), v: this.exprOf(b.getInputTargetBlock('NUM'))
+      };
+      case 'jimu_bitwise': return {
+        k: 'bitwise', op: b.getFieldValue('OP'),
+        a: this.exprOf(b.getInputTargetBlock('A')), b: this.exprOf(b.getInputTargetBlock('B'))
+      };
+      case 'jimu_shift': return {
+        k: 'shift', op: b.getFieldValue('OP'),
+        a: this.exprOf(b.getInputTargetBlock('A')), b: this.exprOf(b.getInputTargetBlock('B'))
+      };
+      case 'jimu_text_letter': return {
+        k: 'letter', text: this.exprOf(b.getInputTargetBlock('TEXT')), n: this.exprOf(b.getInputTargetBlock('N'))
+      };
+      case 'jimu_text_contains': return {
+        k: 'contains', text: this.exprOf(b.getInputTargetBlock('TEXT')), sub: this.exprOf(b.getInputTargetBlock('SUB'))
+      };
+      case 'jimu_text_replace': return {
+        k: 'replace', text: this.exprOf(b.getInputTargetBlock('TEXT')),
+        from: this.exprOf(b.getInputTargetBlock('FROM')), to: this.exprOf(b.getInputTargetBlock('TO'))
+      };
+      case 'jimu_text_case': return {
+        k: 'textcase', op: b.getFieldValue('OP'), v: this.exprOf(b.getInputTargetBlock('TEXT'))
+      };
+      case 'jimu_text_trim': return { k: 'trim', v: this.exprOf(b.getInputTargetBlock('TEXT')) };
+      case 'jimu_mouse': return { k: 'mouse', axis: b.getFieldValue('AXIS') };
+      case 'jimu_mouse_down': return { k: 'mousedown' };
+      case 'jimu_touch': return { k: 'touch', a: this.EL(b), b: b.getFieldValue('TARGET') };
+      case 'jimu_answer': return { k: 'answer' };
       default:
         return { k: 'unsupported', type: b.type };
     }

@@ -5,6 +5,9 @@ const Executor = {
   sceneCtx: null,
   playing: false,
   hooks: {},   // onSceneEnter(sceneId)
+  mouse: { x: 0, y: 0, down: false },   // 舞台坐标（S2 侦测）
+  lastAnswer: '',                        // 询问回答
+  _ctxs: [],                             // 运行中脚本上下文（停止全部用）
 
   // ---------- 编译 ----------
   compileAll() {
@@ -48,6 +51,8 @@ const Executor = {
     this.lastMessage = null;
     this.timerT0 = performance.now();
     this.cloneCount = 0;
+    this._ctxs = [];
+    this.lastAnswer = '';
     // 放映机模式：脚本已由导出时预编译注入，跳过 Blockly 编译
     if (!this.presetScripts) {
       this.scripts = this.compileAll();
@@ -74,10 +79,19 @@ const Executor = {
     this.playing = false;
     if (this.sceneCtx) this.sceneCtx.aborted = true;
     this.sceneCtx = null;
+    this._ctxs = [];
+    const askOv = document.getElementById('ask-overlay');
+    if (askOv) askOv.remove();
     document.querySelectorAll('.el').forEach(d => Anim.clear(d));
   },
 
-  newCtx() { return { vars: this.vars, aborted: false }; },
+  newCtx() {
+    const ctx = { vars: this.vars, aborted: false };
+    if (!this._ctxs) this._ctxs = [];
+    this._ctxs.push(ctx);
+    if (this._ctxs.length > 500) this._ctxs.splice(0, 100);
+    return ctx;
+  },
 
   async fireSceneEnter(sceneId) {
     if (this.sceneCtx) this.sceneCtx.aborted = true;
@@ -352,6 +366,16 @@ const Executor = {
         break;
       }
       case 'ctrl.stopscript': ctx.aborted = true; break;
+      case 'ctrl.stopall': {
+        (this._ctxs || []).forEach(c => { c.aborted = true; });
+        if (this.sceneCtx) this.sceneCtx.aborted = true;
+        break;
+      }
+      case 'ask': {
+        const q = String(await this.evalExpr(instr.text, ctx));
+        this.lastAnswer = await this.promptAsk(q, ctx);
+        break;
+      }
       case 'media.volume':
         if (AudioMgr.bgm) {
           try { AudioMgr.bgm.volume = Math.max(0, Math.min(1, Number(instr.value) / 100)); } catch (e) { }
@@ -575,6 +599,60 @@ const Executor = {
     await this.fireSceneEnter(sceneId);
   },
 
+  // 询问并等待（播放态输入框）
+  promptAsk(question, ctx) {
+    return new Promise(resolve => {
+      const ov = document.createElement('div');
+      ov.id = 'ask-overlay';
+      const box = document.createElement('div');
+      box.className = 'ask-box';
+      const q = document.createElement('div');
+      q.className = 'ask-q';
+      q.textContent = question;
+      const inp = document.createElement('input');
+      inp.maxLength = 300;
+      const btn = document.createElement('button');
+      btn.className = 'p-btn primary';
+      btn.textContent = '确定';
+      box.appendChild(q); box.appendChild(inp); box.appendChild(btn);
+      ov.appendChild(box);
+      document.body.appendChild(ov);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearInterval(timer);
+        const v = inp.value;
+        ov.remove();
+        resolve(v);
+      };
+      btn.onclick = finish;
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') finish(); });
+      const timer = setInterval(() => { if (ctx && ctx.aborted) finish(); }, 200);
+      setTimeout(() => { try { inp.focus(); } catch (e) { } }, 80);
+    });
+  },
+
+  // 碰撞侦测（DOM rect 换算到舞台坐标）
+  checkTouch(aId, bId) {
+    const A = this.boxOf(aId);
+    if (!A) return false;
+    if (bId === '@edge') return A.x <= 0 || A.y <= 0 || A.x + A.w >= 1920 || A.y + A.h >= 1080;
+    const B = this.boxOf(bId);
+    if (!B) return false;
+    return !(A.x + A.w < B.x || B.x + B.w < A.x || A.y + A.h < B.y || B.y + B.h < A.y);
+  },
+
+  boxOf(id) {
+    const dom = Stage.elDom(id);
+    if (!dom) return null;
+    const r = dom.getBoundingClientRect();
+    const root = Stage.rootEl.getBoundingClientRect();
+    if (!root.width) return null;
+    const k = 1920 / root.width;
+    return { x: (r.left - root.left) * k, y: (r.top - root.top) * k, w: r.width * k, h: r.height * k };
+  },
+
   async sleepAbort(ms, ctx) {
     const t0 = performance.now();
     while (performance.now() - t0 < ms) {
@@ -671,6 +749,61 @@ const Executor = {
       case 'strlen': return String(await this.evalExpr(e.v, ctx) ?? '').length;
       case 'strempty': return String(await this.evalExpr(e.v, ctx) ?? '').length === 0;
       case 'const': return { PI: Math.PI, E: Math.E, GOLDEN_RATIO: 1.618033988749895, SQRT2: Math.SQRT2, SQRT1_2: Math.SQRT1_2, INFINITY: Infinity }[e.name] || 0;
+      case 'trig': {
+        const tv = Number(await this.evalExpr(e.v, ctx)) || 0;
+        const rad = tv * Math.PI / 180;
+        switch (e.op) {
+          case 'SIN': return Math.sin(rad);
+          case 'COS': return Math.cos(rad);
+          case 'TAN': return Math.tan(rad);
+          case 'ASIN': return Math.asin(Math.max(-1, Math.min(1, tv))) * 180 / Math.PI;
+          case 'ACOS': return Math.acos(Math.max(-1, Math.min(1, tv))) * 180 / Math.PI;
+          case 'ATAN': return Math.atan(tv) * 180 / Math.PI;
+          default: return 0;
+        }
+      }
+      case 'bitwise': {
+        const ba = Math.trunc(Number(await this.evalExpr(e.a, ctx)) || 0);
+        const bb = Math.trunc(Number(await this.evalExpr(e.b, ctx)) || 0);
+        if (e.op === 'and') return ba & bb;
+        if (e.op === 'or') return ba | bb;
+        return ba ^ bb;
+      }
+      case 'shift': {
+        const sa = Math.trunc(Number(await this.evalExpr(e.a, ctx)) || 0);
+        const sb = Math.trunc(Number(await this.evalExpr(e.b, ctx)) || 0);
+        return e.op === 'shl' ? (sa << sb) : (sa >> sb);
+      }
+      case 'letter': {
+        const lt = String(await this.evalExpr(e.text, ctx) ?? '');
+        const ln = Math.trunc(Number(await this.evalExpr(e.n, ctx)) || 0);
+        if (ln < 1 || ln > lt.length) return '';
+        return lt[ln - 1];
+      }
+      case 'contains': {
+        const ct = String(await this.evalExpr(e.text, ctx) ?? '');
+        const cs = String(await this.evalExpr(e.sub, ctx) ?? '');
+        return cs !== '' && ct.includes(cs);
+      }
+      case 'replace': {
+        const rt = String(await this.evalExpr(e.text, ctx) ?? '');
+        const rf = String(await this.evalExpr(e.from, ctx) ?? '');
+        const rto = String(await this.evalExpr(e.to, ctx) ?? '');
+        return rf === '' ? rt : rt.split(rf).join(rto);
+      }
+      case 'textcase': {
+        const tc = String(await this.evalExpr(e.v, ctx) ?? '');
+        return e.op === 'upper' ? tc.toUpperCase() : tc.toLowerCase();
+      }
+      case 'trim': return String(await this.evalExpr(e.v, ctx) ?? '').trim();
+      case 'mouse': return e.axis === 'y' ? this.mouse.y : this.mouse.x;
+      case 'mousedown': return !!this.mouse.down;
+      case 'touch': {
+        const aId = e.a === '@self' ? ctx.selfElId : e.a;
+        if (!aId) return false;
+        return this.checkTouch(aId, e.b);
+      }
+      case 'answer': return this.lastAnswer || '';
       case 'unsupported':
         console.warn('[积木] 表达式块未实现:', e.type);
         return 0;

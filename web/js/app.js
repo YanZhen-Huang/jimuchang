@@ -266,6 +266,10 @@ const App = {
         console.log('SETTEST|error|' + (e.message || e));
       }
     }
+    if (params.get('testblocks2') === '1') {
+      await sleep(900);
+      this.testBlocks2();
+    }
   },
 
   bindUI() {
@@ -766,6 +770,53 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       console.log((saved && n === 1) ? 'ELBLK|PASS' : 'ELBLK|FAIL');
     } catch (e) {
       console.log('ELBLK|error|' + (e.message || e));
+    }
+  },
+
+  // BLK2 测试：S2 补全积木（数学/文本/侦测/控制）语义验证
+  async testBlocks2() {
+    try {
+      const E = Executor;
+      const num = v => ({ k: 'num', v });
+      const str = v => ({ k: 'str', v });
+      const ev = async expr => await E.evalExpr(expr, E.newCtx());
+      const r = [];
+      // 数学
+      r.push(['trig_sin30', Math.abs((await ev({ k: 'trig', op: 'SIN', v: num(30) })) - 0.5) < 0.001]);
+      r.push(['log_ln', Math.abs((await ev({ k: 'single', op: 'LN', v: num(Math.E) })) - 1) < 0.001]);
+      r.push(['bitwise_and', (await ev({ k: 'bitwise', op: 'and', a: num(12), b: num(10) })) === 8]);
+      r.push(['shift_shl', (await ev({ k: 'shift', op: 'shl', a: num(1), b: num(4) })) === 16]);
+      // 文本
+      r.push(['letter', (await ev({ k: 'letter', text: str('hello'), n: num(2) })) === 'e']);
+      r.push(['contains', (await ev({ k: 'contains', text: str('hello'), sub: str('ell') })) === true]);
+      r.push(['replace', (await ev({ k: 'replace', text: str('a-b-c'), from: str('-'), to: str('+') })) === 'a+b+c']);
+      r.push(['case', (await ev({ k: 'textcase', op: 'upper', v: str('ab') })) === 'AB']);
+      r.push(['trim', (await ev({ k: 'trim', v: str('  hi  ') })) === 'hi']);
+      // 侦测
+      E.mouse.x = 123; E.mouse.y = 456; E.mouse.down = true;
+      r.push(['mouse', (await ev({ k: 'mouse', axis: 'x' })) === 123 && (await ev({ k: 'mouse', axis: 'y' })) === 456]);
+      r.push(['mousedown', (await ev({ k: 'mousedown' })) === true]);
+      E.mouse.down = false;
+      // 碰撞（用 demo 元素：出界 → 碰边；重合 → 相碰）
+      const el = Project.data.elements[0];
+      const el2 = Project.data.elements[1];
+      const ox = el.x, oy = el.y, ox2 = el2.x, oy2 = el2.y;
+      el.x = -200; Stage.refreshAll();
+      r.push(['touch_edge', E.checkTouch(el.id, '@edge') === true]);
+      el.x = ox; el2.x = ox; el2.y = oy; Stage.refreshAll();
+      r.push(['touch_el', E.checkTouch(el.id, el2.id) === true]);
+      el2.x = ox2 + 5000; Stage.refreshAll();
+      r.push(['touch_far', E.checkTouch(el.id, el2.id) === false]);
+      el.x = ox; el.y = oy; el2.x = ox2; el2.y = oy2; Stage.refreshAll();
+      // 停止全部
+      const c1 = E.newCtx(); const c2 = E.newCtx();
+      await E.exec({ op: 'ctrl.stopall' }, c2);
+      r.push(['stopall', c1.aborted === true && c2.aborted === true]);
+      E._ctxs = [];
+      r.forEach(x => console.log('BLK2|' + x[0] + '|' + (x[1] ? 'ok' : 'FAIL')));
+      console.log(r.every(x => x[1]) ? 'BLK2|PASS' : 'BLK2|FAIL');
+    } catch (e) {
+      console.log('BLK2|error|' + (e.message || e));
     }
   },
 

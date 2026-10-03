@@ -27,6 +27,26 @@ const Stage = {
       if (this._fitRaf) return;
       this._fitRaf = requestAnimationFrame(() => { this._fitRaf = null; this.fit(); });
     }).observe(wrapEl);
+    // 鼠标追踪（侦测积木：鼠标 x/y、按下状态；换算到 1920 舞台坐标）
+    if (!Stage._mouseBound) {
+      Stage._mouseBound = true;
+      const updatePos = e => {
+        if (typeof Executor === 'undefined' || !Stage.rootEl) return;
+        const r = Stage.rootEl.getBoundingClientRect();
+        if (!r.width) return;
+        const k = 1920 / r.width;
+        Executor.mouse.x = Math.round((e.clientX - r.left) * k);
+        Executor.mouse.y = Math.round((e.clientY - r.top) * k);
+      };
+      window.addEventListener('mousemove', updatePos);
+      window.addEventListener('mousedown', e => {
+        if (typeof Executor !== 'undefined') Executor.mouse.down = true;
+        updatePos(e);
+      });
+      window.addEventListener('mouseup', () => {
+        if (typeof Executor !== 'undefined') Executor.mouse.down = false;
+      });
+    }
     this.fit();
   },
 
