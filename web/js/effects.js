@@ -149,9 +149,14 @@ const Effects = {
     const items = this.initSceneItems(fx.type, fx.density || 90);
     const start = performance.now();
     const loop = () => {
-      const t = performance.now() - start;
-      ctx.clearRect(0, 0, 1920, 1080);
-      this.drawSceneItems(ctx, fx.type, items, t);
+      const now = performance.now();
+      const fps = (typeof Settings !== 'undefined') ? Settings.fps('fx') : 60;
+      if (now - (this._sceneLast || 0) >= 1000 / fps - 2) {
+        this._sceneLast = now;
+        const t = now - start;
+        ctx.clearRect(0, 0, 1920, 1080);
+        this.drawSceneItems(ctx, fx.type, items, t);
+      }
       this._sceneRaf = requestAnimationFrame(loop);
     };
     this._sceneRaf = requestAnimationFrame(loop);

@@ -108,6 +108,59 @@ body {
 }
 #blockly-empty.hidden { display: none; }
 
+/* ---------------- 设置面板 ---------------- */
+#settings-overlay {
+  position: fixed; inset: 0; background: rgba(8, 10, 14, .72);
+  z-index: 500; display: flex; align-items: center; justify-content: center;
+}
+#settings-overlay.hidden { display: none; }
+body.light #settings-overlay { background: rgba(240, 242, 245, .8); }
+.settings-panel { width: 580px; max-width: 94vw; }
+.settings-body { padding: 4px 20px 18px; max-height: 72vh; overflow-y: auto; }
+.set-group { margin-top: 16px; }
+.set-group h4 {
+  font-size: 12px; color: var(--dim); margin: 0 0 6px;
+  letter-spacing: 1px; font-weight: normal;
+}
+.set-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.set-item:last-child { border-bottom: none; }
+.set-label { font-size: 13px; color: var(--text); }
+.set-hint { display: block; font-size: 11px; color: var(--dim); margin-top: 2px; line-height: 1.5; }
+.set-item select {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px;
+  padding: 4px 9px; font-size: 12px; outline: none; flex: none;
+}
+.set-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; cursor: pointer; }
+.set-switch input { display: none; }
+.set-switch span {
+  position: absolute; inset: 0; border-radius: 11px;
+  background: var(--line); transition: background .18s;
+}
+.set-switch span::before {
+  content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; top: 3px; left: 3px; transition: transform .18s;
+}
+.set-switch input:checked + span { background: var(--accent); }
+.set-switch input:checked + span::before { transform: translateX(18px); }
+
+/* 帧率/块数/FPS 小挂件 */
+#block-count {
+  margin-left: auto; flex: none; font-size: 11px; color: var(--dim);
+  padding: 2px 8px; border: 1px dashed var(--line); border-radius: 7px;
+}
+#fps-meter {
+  position: fixed; right: 10px; bottom: 8px; z-index: 400;
+  font-size: 11px; color: rgba(138, 147, 166, .8);
+  font-family: monospace; pointer-events: none;
+  background: rgba(0, 0, 0, .25); padding: 2px 7px; border-radius: 6px;
+}
+#fps-meter.hidden { display: none; }
+body.playing #fps-meter { display: none; }
+
 /* 脚本切换栏（全局 / 元素脚本） */
 #script-tabs {
   display: flex; align-items: center; gap: 6px;

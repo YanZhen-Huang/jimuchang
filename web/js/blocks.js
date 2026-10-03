@@ -1276,10 +1276,10 @@
     },
     async init(divId) {
       const ws = Blockly.inject(divId, {
-        toolbox: this.toolbox(),
+        toolbox: this.filterAdvancedTb(this.toolbox()),
         renderer: 'zelos',
         theme,
-        sounds: false,
+        sounds: (typeof Settings !== 'undefined') ? Settings.get('blockSounds') : false,
         media: 'vendor/blockly/media/',
         grid: { spacing: 26, length: 3, colour: '#1C212B', snap: true },
         zoom: { controls: true, wheel: true, startScale: 0.85, maxScale: 2, minScale: 0.3 },
@@ -1293,6 +1293,7 @@
         if (!e) return;
         if (e.type === 'create' || e.type === 'delete') {
           if (typeof App !== 'undefined' && App.updateBlocklyEmpty) App.updateBlocklyEmpty();
+          if (typeof App !== 'undefined' && App.updateBlockCount) App.updateBlockCount();
         }
       });
       return ws;
@@ -1603,8 +1604,22 @@
       if (state) {
         try { Blockly.serialization.workspaces.load(state, this.ws); } catch (e) { console.warn('积木加载失败', e); }
       }
-      try { this.ws.updateToolbox(selfMode ? this.selfToolbox() : this.toolbox()); } catch (e) { console.warn('工具箱切换失败', e); }
+      try { this.refreshToolbox(); } catch (e) { console.warn('工具箱切换失败', e); }
       if (typeof App !== 'undefined' && App.updateBlocklyEmpty) App.updateBlocklyEmpty();
+    },
+
+    // 高级分类开关：关闭时从工具箱里去掉「高级」分类
+    filterAdvancedTb(tb) {
+      if (!tb || !tb.contents) return tb;
+      if (typeof Settings === 'undefined' || Settings.get('showAdvanced')) return tb;
+      return { kind: 'categoryToolbox', contents: tb.contents.filter(c => c.name !== '高级') };
+    },
+
+    // 按当前上下文重建工具箱（含高级过滤，设置变更后调用）
+    refreshToolbox() {
+      if (!this.ws || !this.current) return;
+      const tb = this.current.indexOf('el:') === 0 ? this.selfToolbox() : this.toolbox();
+      this.ws.updateToolbox(this.filterAdvancedTb(tb));
     },
 
     save() {

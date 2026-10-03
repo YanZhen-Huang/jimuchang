@@ -22,6 +22,35 @@ const ELEMENT_ICONS = {
   audio: '🎵', chart: '📊', sprite: '🎞', model3d: '🧊', webapp: '🧩'
 };
 
+// 设置面板配置
+const SETTING_DEFS = [
+  { group: '编辑器', items: [
+    { key: 'autosaveMin', label: '自动保存间隔', type: 'select', hint: '自动保存到缓存，意外退出后可恢复', options: [[0, '关闭'], [1, '1 分钟'], [2, '2 分钟'], [5, '5 分钟']] },
+    { key: 'alignGuides', label: '对齐辅助线', type: 'bool', hint: '拖动元素时显示吸附参考线' },
+    { key: 'undoLimit', label: '撤销步数上限', type: 'select', options: [[30, '30 步'], [60, '60 步'], [100, '100 步']] },
+    { key: 'blockCount', label: '显示积木块数', type: 'bool' },
+    { key: 'blockSounds', label: '积木音效（重启生效）', type: 'bool' }
+  ] },
+  { group: '播放与导出', items: [
+    { key: 'defaultTransition', label: '默认章节转场时长', type: 'select', options: [[0.3, '0.3 秒'], [0.6, '0.6 秒'], [1, '1 秒']] },
+    { key: 'hideCursor', label: '播放时自动隐藏鼠标', type: 'bool' },
+    { key: 'pptRes', label: 'PPT 高保真分辨率', type: 'select', hint: '1080p 更清晰，文件更大', options: [[720, '720p'], [1080, '1080p']] },
+    { key: 'pptQuality', label: 'PPT 图片质量', type: 'select', options: [[70, '标准 70%'], [85, '较高 85%'], [95, '最高 95%']] }
+  ] },
+  { group: '渲染性能', items: [
+    { key: 'ecoMode', label: '节能模式', type: 'bool', hint: '3D 与特效统一降为 30 帧' },
+    { key: 'threeFps', label: '3D 模型帧率（播放）', type: 'select', options: [[30, '30 帧'], [60, '60 帧']] },
+    { key: 'fxFps', label: '粒子 / 氛围特效帧率', type: 'select', options: [[30, '30 帧'], [60, '60 帧']] },
+    { key: 'threeShadows', label: '3D 阴影', type: 'bool' },
+    { key: 'showFps', label: '显示帧率计数器', type: 'bool' }
+  ] },
+  { group: '高级', items: [
+    { key: 'showAdvanced', label: '显示「高级」积木分类', type: 'bool', hint: '执行代码等进阶积木；已放到工作区的块不受影响' },
+    { key: 'cloneLimit', label: '克隆体上限', type: 'select', options: [[100, '100 个'], [200, '200 个'], [500, '500 个']] },
+    { key: 'apiEnabled', label: 'AI 接口（HTTP API）（重启生效）', type: 'bool', hint: '供外部 AI 控制的本地接口' }
+  ] }
+];
+
 const App = {
   host: null,
   hostReady: null,
@@ -63,15 +92,16 @@ const App = {
     Stage.renderAll();
     this.renderTabs();
     this.switchTab(Project.data.chapters[0].id);
-    let savedTheme = 'dark';
-    try { savedTheme = localStorage.getItem('jimuchang-theme') || 'dark'; } catch (e) { }
-    this.applyTheme(savedTheme);
     History.reset();
 
+    // 宿主就绪后加载持久化偏好（qrc 下 localStorage 不可靠，统一走 QSettings）
     await this.hostReady;
     if (this.host) {
+      try { await Settings.loadFromHost(this.host); } catch (e) { }
       try { await this.host.setTitle('积木剧场 · ' + Project.data.name); } catch (e) { }
     }
+    this.applySettings();
+    this.applyTheme(Settings.get('theme') || 'dark');
 
     // 自动化测试钩子：--test-save / --test-open / --test-play
     const params = new URLSearchParams(location.search);
@@ -213,6 +243,29 @@ const App = {
       await sleep(800);
       this.testElblocks();
     }
+    if (params.get('testsettings') === '1') {
+      await sleep(800);
+      try {
+        const before = { bc: Settings.get('blockCount'), fps: Settings.get('showFps') };
+        console.log(`SETTEST|before|blockCount=${before.bc}|showFps=${before.fps}`);
+        if (before.bc === true) {
+          // 上次写入的值被持久化恢复 → 验证成功 → 清理回默认（不污染用户环境）
+          Settings.reset();
+          await sleep(300);
+          console.log('SETTEST|persist|PASS（已清理回默认）');
+        } else {
+          Settings.set('blockCount', true);
+          Settings.set('showFps', true);
+          await sleep(500);
+          const hasBc = !!document.getElementById('block-count');
+          const hasFps = !!document.getElementById('fps-meter');
+          console.log(`SETTEST|apply|blockCountEl=${hasBc}|fpsEl=${hasFps}`);
+          console.log((hasBc && hasFps) ? 'SETTEST|apply|PASS' : 'SETTEST|apply|FAIL');
+        }
+      } catch (e) {
+        console.log('SETTEST|error|' + (e.message || e));
+      }
+    }
   },
 
   bindUI() {
@@ -239,13 +292,15 @@ const App = {
     on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
     on('btn-help', () => this.toggleHelp());
+    on('btn-settings', () => this.openSettings());
+    on('btn-settings-close', () => this.closeSettings());
     on('btn-theme', () => this.toggleTheme());
     on('btn-home', () => this.showHome());
     on('home-new', () => { document.getElementById('home-overlay').classList.add('hidden'); this.newProject(); });
     on('home-demo', () => { document.getElementById('home-overlay').classList.add('hidden'); this.loadDemo(); });
     on('home-open', () => { document.getElementById('home-overlay').classList.add('hidden'); this.open(); });
-    // 自动保存：每 2 分钟（有修改且不在播放时）
-    setInterval(() => this.autoSave(), 120000);
+    // 自动保存：间隔由设置决定（默认 2 分钟）
+    this.setupAutosave();
     // "更多"下拉菜单：JS 控制 + 延迟关闭（划过间隙不消失）
     const dd = document.querySelector('.tb-dropdown');
     if (dd) {
@@ -272,7 +327,7 @@ const App = {
     const btn = document.getElementById('btn-theme');
     if (btn) btn.textContent = mode === 'light' ? '🌙' : '☀';
     JimuBlocks.setTheme(mode);
-    try { localStorage.setItem('jimuchang-theme', mode); } catch (e) { }
+    Settings.set('theme', mode);
   },
 
   toggleTheme() {
@@ -313,6 +368,12 @@ const App = {
     box.innerHTML = html;
     box.querySelector('[data-key="global"]').onclick = () => this.switchTab('global');
     box.querySelector('#btn-el-drop').onclick = e => this.elementDropMenu(e);
+    if (Settings.get('blockCount')) {
+      const c = document.createElement('span');
+      c.id = 'block-count';
+      box.appendChild(c);
+      this.updateBlockCount();
+    }
   },
 
   elementDropMenu(e) {
@@ -412,10 +473,10 @@ const App = {
 
   // ---------- 章节书签栏（默认收起为一个小书签按钮；章节只是辅助书签） ----------
   chapterBarOpen() {
-    try { return localStorage.getItem('jimuchang-chapter-bar') === 'open'; } catch (e) { return false; }
+    return Settings.get('chapterBar') === 'open';
   },
   setChapterBarOpen(open) {
-    try { localStorage.setItem('jimuchang-chapter-bar', open ? 'open' : 'closed'); } catch (e) { }
+    Settings.set('chapterBar', open ? 'open' : 'closed');
   },
 
   renderTabs() {
@@ -808,6 +869,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   armCursorHide() {
     clearTimeout(this._cursorTimer);
+    if (!Settings.get('hideCursor')) return;
     this._cursorTimer = setTimeout(() => {
       if (this.playing) document.body.classList.add('hide-cursor');
     }, 2500);
@@ -858,6 +920,112 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.emptyHint.classList.remove('hidden');
   },
 
+  // ---------- 设置面板 ----------
+  openSettings() {
+    this.renderSettings();
+    document.getElementById('settings-overlay').classList.remove('hidden');
+  },
+
+  closeSettings() {
+    document.getElementById('settings-overlay').classList.add('hidden');
+  },
+
+  renderSettings() {
+    const box = document.getElementById('settings-body');
+    if (!box) return;
+    let html = '';
+    SETTING_DEFS.forEach(g => {
+      html += `<div class="set-group"><h4>${g.group}</h4>`;
+      g.items.forEach(it => {
+        html += '<div class="set-item"><div><span class="set-label">' + it.label + '</span>'
+          + (it.hint ? `<span class="set-hint">${it.hint}</span>` : '') + '</div>';
+        if (it.type === 'bool') {
+          html += `<label class="set-switch"><input type="checkbox" data-key="${it.key}" ${Settings.get(it.key) ? 'checked' : ''}><span></span></label>`;
+        } else {
+          html += `<select data-key="${it.key}">` + it.options.map(o =>
+            `<option value="${o[0]}" ${String(Settings.get(it.key)) === String(o[0]) ? 'selected' : ''}>${o[1]}</option>`).join('') + '</select>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    box.innerHTML = html;
+    box.querySelectorAll('input[type=checkbox]').forEach(inp => {
+      inp.onchange = () => Settings.set(inp.dataset.key, inp.checked);
+    });
+    box.querySelectorAll('select').forEach(sel => {
+      sel.onchange = () => {
+        const def = SETTING_DEFS.flatMap(g => g.items).find(i => i.key === sel.dataset.key);
+        const opt = def && def.options.find(o => String(o[0]) === sel.value);
+        Settings.set(sel.dataset.key, opt ? opt[0] : sel.value);
+      };
+    });
+  },
+
+  // 设置生效（Settings.set 后自动调用）
+  applySettings() {
+    this.setupAutosave();
+    this.applyFpsMeter();
+    this.updateBlockCount();
+    if (typeof JimuBlocks !== 'undefined' && JimuBlocks.refreshToolbox) {
+      try { JimuBlocks.refreshToolbox(); } catch (e) { }
+    }
+    if (typeof Model3D !== 'undefined' && Model3D.applyShadows) { try { Model3D.applyShadows(); } catch (e) { } }
+    if (this.host && this.host.setPref) {
+      try { this.host.setPref('apiEnabled', Settings.get('apiEnabled') ? '1' : '0'); } catch (e) { }
+    }
+  },
+
+  setupAutosave() {
+    clearInterval(this._autosaveTimer);
+    const min = Settings.get('autosaveMin');
+    if (!min) return;
+    this._autosaveTimer = setInterval(() => this.autoSave(), min * 60000);
+  },
+
+  updateBlockCount() {
+    if (!Settings.get('blockCount')) {
+      const el0 = document.getElementById('block-count');
+      if (el0) el0.style.display = 'none';
+      return;
+    }
+    const el = document.getElementById('block-count');
+    if (!el) { this.renderScriptTabs(); return; }
+    if (!JimuBlocks.ws) return;
+    el.style.display = '';
+    el.textContent = JimuBlocks.ws.getAllBlocks(false).length + ' 块';
+  },
+
+  applyFpsMeter() {
+    let el = document.getElementById('fps-meter');
+    const on = Settings.get('showFps');
+    if (on) {
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'fps-meter';
+        document.body.appendChild(el);
+      }
+      el.classList.remove('hidden');
+      if (!this._fpsRaf) {
+        let last = performance.now(), frames = 0;
+        const tick = t => {
+          frames++;
+          if (t - last >= 1000) {
+            const m = document.getElementById('fps-meter');
+            if (m) m.textContent = frames + ' FPS';
+            frames = 0;
+            last = t;
+          }
+          this._fpsRaf = requestAnimationFrame(tick);
+        };
+        this._fpsRaf = requestAnimationFrame(tick);
+      }
+    } else {
+      if (el) el.classList.add('hidden');
+      if (this._fpsRaf) { cancelAnimationFrame(this._fpsRaf); this._fpsRaf = null; }
+    }
+  },
+
   // 手动切章节 = 完整切换（中止当前章节脚本 + 应用预设 + 执行新章节脚本）
   async nextScene() {
     const i = Project.chapterIndex(Stage.currentChapterId);
@@ -888,7 +1056,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   showPptDialog() {
     try {
-      const saved = JSON.parse(localStorage.getItem('jimuchang-ppt') || '{}');
+      const saved = Settings.get('pptOpts') || {};
       if (saved.mode) {
         const r = document.querySelector('input[name="ppt-mode"][value="' + saved.mode + '"]');
         if (r) r.checked = true;
@@ -907,7 +1075,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     btn.textContent = '生成中…';
     try {
       const anim = !!(document.getElementById('ppt-anim') || {}).checked;
-      try { localStorage.setItem('jimuchang-ppt', JSON.stringify({ mode, anim })); } catch (e) { }
+      Settings.set('pptOpts', { mode, anim });
       const b64 = await PptxExport.generate({ mode, anim });
       const name = (Project.data.name || '未命名演示') + '.pptx';
       const path = await this.host.exportPptx(b64, name);

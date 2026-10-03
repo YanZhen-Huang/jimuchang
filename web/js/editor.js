@@ -108,6 +108,7 @@ const Editor = {
   },
 
   computeSnap(el, scene) {
+    if (typeof Settings !== 'undefined' && !Settings.get('alignGuides')) return null;
     const TH = 8;
     const others = Project.data.elements.filter(o => o.id !== el.id && o.visible !== false);
     const xs = [960], ys = [540];

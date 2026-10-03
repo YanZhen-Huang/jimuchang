@@ -35,6 +35,9 @@ const Model3D = {
     }
     const T = this.THREE;
     const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    if (typeof Settings !== 'undefined' && renderer.shadowMap) {
+      renderer.shadowMap.enabled = Settings.get('threeShadows');
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(el.w, el.h, false);
     const scene = new T.Scene();
@@ -130,6 +133,18 @@ const Model3D = {
   },
 
   loop(now) {
+    // 帧率控制：编辑态 30 帧；播放态按设置（节能模式统一 30）
+    const editing = typeof App !== 'undefined' && App && !App.playing;
+    const targetFps = (typeof Settings !== 'undefined')
+      ? (editing ? Math.min(30, Settings.fps('three')) : Settings.fps('three'))
+      : (editing ? 30 : 60);
+    const minGap = 1000 / targetFps - 2;
+    if (this._lastLoop && now - this._lastLoop < minGap) {
+      if (this.instances.size) requestAnimationFrame(t => this.loop(t));
+      else this.running = false;
+      return;
+    }
+    this._lastLoop = now;
     this.instances.forEach(inst => {
       const dt = inst._last ? Math.min(0.06, (now - inst._last) / 1000) : 0.016;
       inst._last = now;
@@ -147,13 +162,21 @@ const Model3D = {
       }
       if (inst.tween) this.stepTween(inst, now);
       if (inst.mixer) inst.mixer.update(dt);
-      inst._frame = (inst._frame || 0) + 1;
-      const editing = typeof App !== 'undefined' && App && !App.playing;
-      if (editing && (inst._frame & 1)) return;
       try { inst.renderer.render(inst.scene, inst.camera); } catch (e) { }
     });
     if (this.instances.size) requestAnimationFrame(t => this.loop(t));
     else this.running = false;
+  },
+
+  // 设置变更时刷新已有实例的阴影开关
+  applyShadows() {
+    const on = (typeof Settings !== 'undefined') ? Settings.get('threeShadows') : true;
+    this.instances.forEach(inst => {
+      if (inst.renderer && inst.renderer.shadowMap) {
+        inst.renderer.shadowMap.enabled = on;
+        inst.renderer.shadowMap.needsUpdate = true;
+      }
+    });
   },
 
   updateCamera(inst) {

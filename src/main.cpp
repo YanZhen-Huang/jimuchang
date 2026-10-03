@@ -196,6 +196,17 @@ public slots:
         s.setValue(QStringLiteral("recentFiles"), list);
     }
 
+    // 全局偏好读写（设置面板用；部分项重启生效）
+    void setPref(const QString &key, const QString &val) {
+        QSettings s;
+        s.setValue(key, val);
+    }
+
+    QString getPref(const QString &key) {
+        QSettings s;
+        return s.value(key).toString();
+    }
+
     QString exportPptx(const QString &base64, const QString &suggestedName) {
         if (!m_win) return QString();
         const QString path = QFileDialog::getSaveFileName(
@@ -390,6 +401,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testelblocks"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-settings"))) {
+            q.addQueryItem(QStringLiteral("testsettings"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);
@@ -398,7 +413,8 @@ int main(int argc, char *argv[]) {
     win.show();
 
     // 本地 AI 接口（127.0.0.1 + Bearer 令牌，配置见 ~/.config/jimuchang/api.json）
-    const bool noApi = args.contains(QStringLiteral("--no-api"));
+    const bool noApi = args.contains(QStringLiteral("--no-api"))
+        || !QSettings().value(QStringLiteral("apiEnabled"), true).toBool();
     if (!noApi) {
         auto *api = new ApiServer(view, &app);
         bridge->setApiServer(api);

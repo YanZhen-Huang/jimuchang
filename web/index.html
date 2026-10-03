@@ -47,6 +47,7 @@
     </div>
     <div class="spacer"></div>
     <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
+    <button id="btn-settings" class="tbtn" title="设置">⚙</button>
     <button id="btn-help" class="tbtn" title="帮助">？</button>
     <button id="btn-demo" class="tbtn">示例</button>
     <button id="btn-play" class="tbtn primary">▶ 播放</button>
@@ -111,6 +112,16 @@
         </div>
         <div class="help-dim" style="margin-top:10px">提示：保存过的项目会出现在这里，点击即可打开。</div>
       </div>
+    </div>
+  </div>
+
+  <div id="settings-overlay" class="hidden">
+    <div class="help-panel settings-panel">
+      <div class="help-head">
+        <span>设置</span>
+        <button class="p-btn" id="btn-settings-close">关闭</button>
+      </div>
+      <div id="settings-body" class="settings-body"></div>
     </div>
   </div>
 
@@ -185,6 +196,7 @@
   <div id="toast"></div>
 
   <script src="js/easing.js"></script>
+  <script src="js/settings.js"></script>
   <script src="js/project.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/effects.js"></script>

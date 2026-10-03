@@ -101,7 +101,8 @@ const Stage = {
     let bgPromise = null;
     if (curBg !== newBg) {
       if (!instant && this.currentChapterId) {
-        bgPromise = this.transitionBackground(targetBg, opts.duration !== undefined ? opts.duration : 0.6);
+        const defDur = (typeof Settings !== 'undefined') ? Settings.get('defaultTransition') : 0.6;
+        bgPromise = this.transitionBackground(targetBg, opts.duration !== undefined ? opts.duration : defDur);
       } else {
         Project.data.stage.background = JSON.parse(JSON.stringify(targetBg));
         this.applyStageBg();

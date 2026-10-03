@@ -282,7 +282,8 @@ const Executor = {
         const fcs = Project.findElementById(instr.elId);
         if (!fcs) break;
         this.cloneCount = (this.cloneCount || 0) + 1;
-        if (this.cloneCount > 200) { console.warn('克隆体超过 200 个，已忽略'); break; }
+        const cloneMax = (typeof Settings !== 'undefined') ? Settings.get('cloneLimit') : 200;
+        if (this.cloneCount > cloneMax) { console.warn('克隆体超过上限（' + cloneMax + '），已忽略'); break; }
         const copy2 = JSON.parse(JSON.stringify(fcs.element));
         copy2.id = Project.uid('el');
         copy2.name = fcs.element.name + '·克隆';

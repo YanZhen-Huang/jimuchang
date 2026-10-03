@@ -319,7 +319,7 @@ const PptxExport = {
     if (sel) Editor.select(sel);
   },
 
-  // 从整窗截图里裁出舞台区域，输出 1280×720 PNG dataURL
+  // 从整窗截图里裁出舞台区域，输出高保真 PNG/JPEG dataURL（分辨率/质量由设置决定）
   cropStage(fullB64) {
     return new Promise(resolve => {
       const img = new Image();
@@ -328,13 +328,14 @@ const PptxExport = {
           const r = Stage.rootEl.getBoundingClientRect();
           const sx = img.width / window.innerWidth;
           const sy = img.height / window.innerHeight;
-          console.log('CROP|grab=' + img.width + 'x' + img.height + '|inner=' + window.innerWidth + 'x' + window.innerHeight + '|dpr=' + window.devicePixelRatio + '|stage=' + [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(','));
+          const res = (typeof Settings !== 'undefined') ? Settings.get('pptRes') : 720;
+          const quality = (typeof Settings !== 'undefined') ? Settings.get('pptQuality') : 85;
           const c = document.createElement('canvas');
-          c.width = 1280;
-          c.height = 720;
+          c.width = res >= 1080 ? 1920 : 1280;
+          c.height = Math.round(c.width * 9 / 16);
           const ctx = c.getContext('2d');
           ctx.drawImage(img, r.left * sx, r.top * sy, r.width * sx, r.height * sy, 0, 0, c.width, c.height);
-          resolve(c.toDataURL('image/png'));
+          resolve(c.toDataURL('image/jpeg', quality / 100));
         } catch (e) { resolve(null); }
       };
       img.onerror = () => resolve(null);

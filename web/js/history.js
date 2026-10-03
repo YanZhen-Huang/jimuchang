@@ -6,6 +6,7 @@ const History = {
   _timer: 0,
 
   reset() {
+    if (typeof Settings !== 'undefined') this.limit = Settings.get('undoLimit');
     this.stack = [];
     this.index = -1;
     clearTimeout(this._timer);
