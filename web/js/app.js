@@ -351,6 +351,11 @@ const App = {
     document.body.classList.toggle('light', mode === 'light');
     document.body.classList.toggle('national', mode === 'national');
     try { if (JimuBlocks && JimuBlocks.setTheme) JimuBlocks.setTheme(mode); } catch (e) { }
+    try {
+      if (typeof Festive !== 'undefined') {
+        if (mode === 'national') Festive.start(); else Festive.stop();
+      }
+    } catch (e) { }
     const btn = document.getElementById('btn-theme');
     if (btn) btn.textContent = mode === 'light' ? '🌙' : (mode === 'national' ? '🎉' : '☀');
     JimuBlocks.setTheme(mode);
