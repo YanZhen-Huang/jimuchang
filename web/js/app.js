@@ -328,6 +328,14 @@ const App = {
       await sleep(900);
       this.testAi();
     }
+    if (params.get('testperf') === '1') {
+      await sleep(900);
+      this.testPerf();
+    }
+    if (params.get('testexe') === '1') {
+      await sleep(900);
+      this.testExe();
+    }
   },
 
   bindUI() {
@@ -349,8 +357,11 @@ const App = {
     on('btn-add-sprite', () => Editor.addElement('sprite'));
     on('btn-add-model3d', () => Editor.addElement('model3d'));
     on('btn-add-webapp', () => Editor.addElement('webapp'));
-    on('btn-export', () => this.exportPlayer());
-    on('btn-export-ppt', () => this.showPptDialog());
+    on('btn-export-main', () => this.openExportPanel());
+    on('btn-export-close', () => this.closeExportPanel());
+    on('card-export-html', () => { this.closeExportPanel(); this.exportPlayer(); });
+    on('card-export-exe', () => { this.closeExportPanel(); this.exportExe(); });
+    on('card-export-ppt', () => { this.closeExportPanel(); this.showPptDialog(); });
     on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
     on('btn-help', () => this.toggleHelp());
@@ -697,6 +708,17 @@ const App = {
     this.markDirty();
   },
 
+  // ---------- 导出面板（集成入口） ----------
+  openExportPanel() {
+    const ov = document.getElementById('export-overlay');
+    if (ov) ov.classList.remove('hidden');
+  },
+
+  closeExportPanel() {
+    const ov = document.getElementById('export-overlay');
+    if (ov) ov.classList.add('hidden');
+  },
+
   // ---------- 导出放映包 ----------
   // 资源压缩：大图重编码为 JPEG（有透明保留原图；视频/音频/SVG/GIF 跳过）
   async compressResources(resources) {
@@ -822,6 +844,18 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const mb = (html.length * 0.75 / 1048576);
       toast('已导出（' + mb.toFixed(1) + ' MB' + (resMb > 0.5 ? '，其中素材约 ' + resMb.toFixed(1) + ' MB' : '') + '）：' + path.split('/').pop());
     }
+    return path;
+  },
+
+  // 导出 Windows 单文件程序（.exe：外壳 + HTML 内嵌）
+  async exportExe() {
+    if (!this.host) { toast('浏览器预览模式无法导出'); return; }
+    await this.hostReady;
+    toast('正在打包 Windows 程序…');
+    const html = await this.buildPlayerHtml();
+    const b64 = btoa(unescape(encodeURIComponent(html)));
+    const path = await this.host.exportExe(b64, (Project.data.name || '未命名演示') + '.exe');
+    if (path) toast('已导出：' + path.split('/').pop() + '（拷到 Windows 双击全屏播放）');
     return path;
   },
 
@@ -1092,6 +1126,53 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.stop();
     } catch (e) {
       console.log('FN|error|' + (e.message || e));
+    }
+  },
+
+  // EXE 测试：导出 Windows 单文件程序（结构验证在外部脚本）
+  async testExe() {
+    try {
+      const html = await this.buildPlayerHtml();
+      const b64 = btoa(unescape(encodeURIComponent(html)));
+      const p = await this.host.exportExeTo('/tmp/jc_export_test.exe', b64);
+      console.log('EXE|path=' + p);
+      this.openExportPanel();   // 截图用：展示导出面板
+    } catch (e) {
+      console.log('EXE|error|' + (e.message || e));
+    }
+  },
+
+  // PERF 测试：关键操作耗时打点
+  async testPerf() {
+    const marks = [];
+    const T = (label, fn) => { const t0 = performance.now(); fn(); marks.push([label, performance.now() - t0]); };
+    const TA = async (label, fn) => { const t0 = performance.now(); await fn(); marks.push([label, performance.now() - t0]); };
+    try {
+      await TA('demo-build(12el+scripts)+renderAll', async () => { Project.newProject('perf'); this.buildDemo(); Stage.renderAll(); });
+      T('renderAll x1', () => { Stage.renderAll(); });
+      T('renderAll x5', () => { for (let i = 0; i < 5; i++) Stage.renderAll(); });
+      T('switchTab x20(global<->ch1)', () => {
+        for (let i = 0; i < 10; i++) { this.switchTab('global'); this.switchTab(Project.data.chapters[0].id); }
+      });
+      const el = Project.data.elements[0];
+      T('Editor.select x20', () => { for (let i = 0; i < 20; i++) Editor.select(el.id); });
+      T('ElementBar+ScriptTabs x20', () => { for (let i = 0; i < 20; i++) { this.renderScriptTabs(); this.renderElementBar(); } });
+      await TA('pack', async () => { await Project.pack(); });
+      await TA('unpack', async () => { const b64 = await Project.pack(); await Project.unpack(b64); });
+      await TA('compileAll', async () => { Executor.compileAll(); });
+      // 大项目：100 元素渲染
+      T('100el renderAll', () => {
+        Project.newProject('perf100');
+        Project.addChapter('页');
+        for (let i = 0; i < 100; i++) {
+          Project.createElement('shape', { name: '方块' + i, x: (i % 10) * 190, y: ((i / 10) | 0) * 100, w: 120, h: 80 });
+        }
+        Stage.renderAll();
+      });
+      marks.forEach(m => console.log('PERF|' + m[0] + '|' + m[1].toFixed(1) + 'ms'));
+      console.log('PERF|DONE');
+    } catch (e) {
+      console.log('PERF|error|' + (e.message || e));
     }
   },
 
@@ -1605,7 +1686,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.updateBlockCount();
     if (this.themeMode !== Settings.get('theme')) this.applyTheme(Settings.get('theme'));
     if (typeof JimuBlocks !== 'undefined' && JimuBlocks.refreshToolbox) {
-      try { JimuBlocks.refreshToolbox(); } catch (e) { }
+      try { JimuBlocks.refreshToolbox(true); } catch (e) { }
     }
     if (typeof Model3D !== 'undefined' && Model3D.applyShadows) { try { Model3D.applyShadows(); } catch (e) { } }
     if (this.host && this.host.setPref) {

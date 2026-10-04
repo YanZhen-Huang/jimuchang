@@ -2206,10 +2206,13 @@
       return { kind: 'categoryToolbox', contents: tb.contents.filter(c => c.name !== '高级') };
     },
 
-    // 按当前上下文重建工具箱（含高级过滤，设置变更后调用）
-    refreshToolbox() {
+    // 按当前上下文重建工具箱（含高级过滤）；上下文类型未变时跳过重建（性能）
+    refreshToolbox(force) {
       if (!this.ws || !this.current) return;
-      const tb = this.current.indexOf('el:') === 0 ? this.selfToolbox() : this.toolbox();
+      const wantSelf = this.current.indexOf('el:') === 0;
+      if (!force && this._tbSelf === wantSelf) return;
+      this._tbSelf = wantSelf;
+      const tb = wantSelf ? this.selfToolbox() : this.toolbox();
       this.ws.updateToolbox(this.filterAdvancedTb(tb));
     },
 

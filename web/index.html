@@ -38,8 +38,6 @@
           <button id="btn-add-model3d">3D 模型</button>
           <button id="btn-add-webapp">小程序</button>
           <div class="menu-title">文件</div>
-          <button id="btn-export">导出放映包…</button>
-          <button id="btn-export-ppt">导出为 PPT…</button>
           <button id="btn-restore-autosave">恢复自动保存</button>
           <button id="btn-home">主页 / 最近文件…</button>
         </div>
@@ -51,6 +49,7 @@
     <button id="btn-help" class="tbtn" title="帮助">？</button>
     <button id="btn-ai" class="tbtn" title="AI 生成演示">✨ AI</button>
     <button id="btn-demo" class="tbtn">示例</button>
+    <button id="btn-export-main" class="tbtn export-main" title="导出演示（网页 / Windows 程序 / PPT）">⬆ 导出</button>
     <button id="btn-play" class="tbtn primary">▶ 播放</button>
   </header>
 
@@ -113,6 +112,32 @@
           <div id="home-recent"></div>
         </div>
         <div class="help-dim" style="margin-top:10px">提示：保存过的项目会出现在这里，点击即可打开。</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-overlay" class="hidden">
+    <div class="help-panel export-panel">
+      <div class="help-head">
+        <span>导出演示</span>
+        <button class="p-btn" id="btn-export-close">关闭</button>
+      </div>
+      <div class="export-cards">
+        <button class="export-card" id="card-export-html">
+          <b>🎬</b>
+          <span class="ec-title">网页放映包</span>
+          <span class="ec-desc">单文件 .html · 浏览器双击即放 · 手机可看（滑动切页）· 可发微信</span>
+        </button>
+        <button class="export-card" id="card-export-exe">
+          <b>💻</b>
+          <span class="ec-title">Windows 程序</span>
+          <span class="ec-desc">单文件 .exe · 双击全屏播放 · 接收方无需安装任何东西（需系统 Edge 浏览器）</span>
+        </button>
+        <button class="export-card" id="card-export-ppt">
+          <b>📊</b>
+          <span class="ec-title">PPT 演示文稿</span>
+          <span class="ec-desc">.pptx · 可编辑（近似动画）/ 高保真（截图留档）两种模式</span>
+        </button>
       </div>
     </div>
   </div>

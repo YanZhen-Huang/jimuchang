@@ -250,6 +250,38 @@ public slots:
         return s.value(key).toString();
     }
 
+    // 导出 Windows 单文件程序：[外壳 exe] + [HTML] + [8字节偏移]
+    bool writeExeBundle(const QString &path, const QString &htmlBase64) {
+        QFile shell(QStringLiteral(":/assets/jimu_shell.exe"));
+        if (!shell.open(QIODevice::ReadOnly)) return false;
+        const QByteArray shellData = shell.readAll();
+        const QByteArray html = QByteArray::fromBase64(htmlBase64.toLatin1());
+        QFile out(path);
+        if (!out.open(QIODevice::WriteOnly)) return false;
+        out.write(shellData);
+        out.write(html);
+        QByteArray tail(8, 0);
+        const quint64 off = (quint64)shellData.size();
+        for (int i = 0; i < 8; i++) tail[i] = char((off >> (8 * i)) & 0xFF);
+        out.write(tail);
+        out.close();
+        return true;
+    }
+
+    QString exportExe(const QString &htmlBase64, const QString &suggestedName) {
+        if (!m_win) return QString();
+        const QString path = QFileDialog::getSaveFileName(
+            m_win, QStringLiteral("导出 Windows 程序"),
+            QDir::homePath() + QLatin1Char('/') + suggestedName,
+            QStringLiteral("Windows 程序 (*.exe)"));
+        if (path.isEmpty()) return QString();
+        return writeExeBundle(path, htmlBase64) ? path : QString();
+    }
+
+    QString exportExeTo(const QString &path, const QString &htmlBase64) {
+        return writeExeBundle(path, htmlBase64) ? path : QString();
+    }
+
     QString exportPptx(const QString &base64, const QString &suggestedName) {
         if (!m_win) return QString();
         const QString path = QFileDialog::getSaveFileName(
@@ -478,6 +510,14 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-ai"))) {
             q.addQueryItem(QStringLiteral("testai"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-perf"))) {
+            q.addQueryItem(QStringLiteral("testperf"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-exe"))) {
+            q.addQueryItem(QStringLiteral("testexe"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (hasQuery) {

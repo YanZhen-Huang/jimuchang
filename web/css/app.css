@@ -761,3 +761,33 @@ body.light #ai-overlay { background: rgba(240, 242, 245, .8); }
   border-radius: 7px; padding: 4px 9px; font-size: 12px; outline: none; width: 230px;
 }
 .set-item input[type=text]:focus { border-color: var(--accent); }
+
+
+/* 导出面板 / 导出主按钮 */
+#export-overlay {
+  position: fixed; inset: 0; background: rgba(8, 10, 14, .72);
+  z-index: 555; display: flex; align-items: center; justify-content: center;
+}
+#export-overlay.hidden { display: none; }
+body.light #export-overlay { background: rgba(240, 242, 245, .8); }
+.export-panel { width: 560px; max-width: 94vw; }
+.export-cards { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 18px; }
+.export-card {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; cursor: pointer; color: var(--text);
+  transition: border-color .15s, background .15s, transform .12s;
+  font-family: inherit;
+}
+.export-card:hover {
+  border-color: var(--accent); background: var(--hover); transform: translateX(3px);
+}
+.export-card b { font-size: 26px; flex: none; font-weight: normal; }
+.export-card .ec-title { font-size: 14px; font-weight: bold; display: block; }
+.export-card .ec-desc { font-size: 11px; color: var(--dim); display: block; margin-top: 3px; line-height: 1.5; }
+.export-card > span { flex: 1; }
+.export-main {
+  background: linear-gradient(135deg, rgba(108, 140, 255, .25), rgba(160, 108, 213, .25));
+  border-color: rgba(108, 140, 255, .55) !important;
+}
+.export-main:hover { border-color: var(--accent) !important; }
