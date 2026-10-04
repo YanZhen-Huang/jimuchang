@@ -357,7 +357,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.1"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.2"));
 
     MainWindow win;
     win.resize(1440, 900);
