@@ -47,7 +47,8 @@ const SETTING_DEFS = [
     { key: 'threeFps', label: '3D 模型帧率（播放）', type: 'select', options: [[30, '30 帧'], [60, '60 帧']] },
     { key: 'fxFps', label: '粒子 / 氛围特效帧率', type: 'select', options: [[30, '30 帧'], [60, '60 帧']] },
     { key: 'threeShadows', label: '3D 阴影', type: 'bool' },
-    { key: 'showFps', label: '显示帧率计数器', type: 'bool' }
+    { key: 'showFps', label: '显示帧率计数器', type: 'bool' },
+    { key: 'disableGpu', label: '禁用 GPU 加速（重启生效）', type: 'bool', hint: '画面花屏 / 白屏时打开自救' }
   ] },
   { group: '高级', items: [
     { key: 'showAdvanced', label: '显示「高级」积木分类', type: 'bool', hint: '执行代码等进阶积木；已放到工作区的块不受影响' },
@@ -322,6 +323,25 @@ const App = {
         console.log('SETTEST|error|' + (e.message || e));
       }
     }
+    if (params.get('testhotkeys') === '1') {
+      await sleep(700);
+      try {
+        const fire = (init) => {
+          const e = new KeyboardEvent('keydown', Object.assign({ bubbles: true, cancelable: true }, init));
+          document.dispatchEvent(e);
+          return e.defaultPrevented;
+        };
+        const p = fire({ key: 'p', ctrlKey: true });
+        const u = fire({ key: 'u', ctrlKey: true });
+        const z0 = fire({ key: '0', ctrlKey: true });
+        const dev = fire({ key: 'i', ctrlKey: true, shiftKey: true });
+        const f12 = fire({ key: 'F12' });
+        const plain = !fire({ key: 'a' });
+        const ok1 = p && u && z0 && dev && f12 && plain;
+        console.log(`HOTKEY|p=${p}|u=${u}|0=${z0}|dev=${dev}|f12=${f12}|plain=${plain}`);
+        console.log(ok1 ? 'HOTKEY|PASS' : 'HOTKEY|FAIL');
+      } catch (e) { console.log('HOTKEY|error|' + (e.message || e)); }
+    }
     if (params.get('testuiscale') === '1') {
       await sleep(700);
       try {
@@ -479,6 +499,9 @@ const App = {
       });
     }
     document.addEventListener('keydown', e => this.onKeyDown(e));
+    // 内核治理：阻止文件拖入触发页面导航（拖入 .bdp 打开功能后续再做）
+    document.addEventListener('dragover', e => e.preventDefault());
+    document.addEventListener('drop', e => e.preventDefault());
     // 禁止触摸板双指捏合缩放整个页面（Ctrl+Wheel 网页缩放）；积木区放行（Blockly 用它缩放）
     document.addEventListener('wheel', e => {
       if (e.ctrlKey && !(e.target && e.target.closest && e.target.closest('#blocklyDiv'))) {
@@ -2227,6 +2250,15 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   // ---------- 键盘 ----------
   onKeyDown(e) {
+    // 内核治理：拦截浏览器默认行为（打印 / 页面缩放 / 查看源码 / 开发者工具），播放时同样生效
+    if (e.ctrlKey || e.metaKey) {
+      const k = e.key.toLowerCase();
+      if (['p', 'u', '+', '=', '-', '_', '0'].includes(k) || (e.shiftKey && ['i', 'j', 'c'].includes(k))) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.key === 'F12') { e.preventDefault(); return; }
     if (this.playing) {
       if (e.key === 'Escape') { this.stop(); return; }
       if (e.key === ' ') {

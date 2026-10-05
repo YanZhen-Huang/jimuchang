@@ -389,6 +389,20 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+    // 设置 → 渲染性能 → 禁用 GPU 加速（花屏自救；必须在 QApplication 创建前设置）
+    {
+        QSettings s;
+        const QJsonObject pref = QJsonDocument::fromJson(
+            s.value(QStringLiteral("settingsJson")).toString().toUtf8()).object();
+        if (pref.value(QStringLiteral("disableGpu")).toBool()) {
+            QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+            if (!flags.contains("--disable-gpu")) {
+                if (!flags.isEmpty()) flags += ' ';
+                flags += "--disable-gpu";
+                qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+            }
+        }
+    }
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
@@ -543,6 +557,10 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-uiscale"))) {
             q.addQueryItem(QStringLiteral("testuiscale"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-hotkeys"))) {
+            q.addQueryItem(QStringLiteral("testhotkeys"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (hasQuery) {

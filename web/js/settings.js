@@ -21,6 +21,7 @@ const Settings = {
     pptQuality: 85,          // 导出图片质量 1-100
     packCompress: true,      // 放映包图片自动压缩
     // 渲染性能
+    disableGpu: false,
     ecoMode: false,
     threeFps: 60,
     fxFps: 60,
