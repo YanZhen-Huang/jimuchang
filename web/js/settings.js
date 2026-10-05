@@ -12,6 +12,8 @@ const Settings = {
     undoLimit: 60,
     blockCount: false,
     blockSounds: false,
+    showHomeOnStart: true,
+    uiScale: 100,
     // 播放与导出
     defaultTransition: 0.6,
     hideCursor: true,

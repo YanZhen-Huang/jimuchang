@@ -18,6 +18,10 @@
       <button id="btn-new" class="tbtn">新建</button>
       <button id="btn-open" class="tbtn">打开</button>
       <button id="btn-save" class="tbtn">保存</button>
+      <button id="btn-save-as" class="tbtn">另存为</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
       <button id="btn-undo" class="tbtn" title="撤销 (Ctrl+Z)" disabled>↶</button>
       <button id="btn-redo" class="tbtn" title="重做 (Ctrl+Y)" disabled>↷</button>
     </div>
@@ -44,13 +48,21 @@
       </div>
     </div>
     <div class="spacer"></div>
-    <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
-    <button id="btn-settings" class="tbtn" title="设置">⚙</button>
-    <button id="btn-help" class="tbtn" title="帮助">？</button>
-    <button id="btn-ai" class="tbtn" title="AI 生成演示">✨ AI</button>
-    <button id="btn-demo" class="tbtn">示例</button>
-    <button id="btn-export-main" class="tbtn export-main" title="导出演示（网页 / Windows 程序 / PPT）">⬆ 导出</button>
-    <button id="btn-play" class="tbtn primary">▶ 播放</button>
+    <div class="tb-group">
+      <button id="btn-demo" class="tbtn">示例</button>
+      <button id="btn-ai" class="tbtn" title="AI 生成演示">✨ AI</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
+      <button id="btn-help" class="tbtn" title="帮助">？</button>
+      <button id="btn-settings" class="tbtn" title="设置">⚙</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-group">
+      <button id="btn-export-main" class="tbtn export-main" title="导出演示（网页 / Windows 程序 / PPT）">⬆ 导出</button>
+      <button id="btn-play" class="tbtn primary">▶ 播放</button>
+    </div>
   </header>
 
   <main id="layout">
@@ -106,12 +118,17 @@
           <button id="home-new" class="home-card"><b>＋</b><span>空白项目</span></button>
           <button id="home-demo" class="home-card"><b>▶</b><span>示例演示</span></button>
           <button id="home-open" class="home-card"><b>📂</b><span>打开文件…</span></button>
+          <button id="home-ai" class="home-card"><b>✨</b><span>AI 生成</span></button>
+        </div>
+        <div class="home-tpl-wrap">
+          <h4>模板 · 点开就能改</h4>
+          <div id="home-templates"></div>
         </div>
         <div class="home-recent-wrap">
           <h4>最近打开</h4>
           <div id="home-recent"></div>
         </div>
-        <div class="help-dim" style="margin-top:10px">提示：保存过的项目会出现在这里，点击即可打开。</div>
+        <div class="help-dim" style="margin-top:10px">拖积木做动画 · 3D / 图表 / 粒子特效 · 导出 HTML / PPT / exe · AI 一句话生成</div>
       </div>
     </div>
   </div>
@@ -248,7 +265,8 @@
   <script src="js/easing.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/festive.js"></script>
-  <script src="js/project.js"></script>
+    <script src="js/project.js"></script>
+    <script src="js/templates.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/effects.js"></script>
   <script src="js/sprites.js"></script>

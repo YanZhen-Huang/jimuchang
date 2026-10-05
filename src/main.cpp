@@ -110,6 +110,11 @@ public slots:
         else m_win->showNormal();
     }
 
+    // 界面缩放（网页缩放因子；设置 → 编辑器 → 界面缩放）
+    void setZoom(double factor) {
+        if (m_view) m_view->setZoomFactor(qBound(0.5, factor, 2.0));
+    }
+
     void setTitle(const QString &t) {
         if (m_win) m_win->setWindowTitle(t.isEmpty() ? QStringLiteral("积木剧场") : t);
     }
@@ -518,6 +523,26 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-exe"))) {
             q.addQueryItem(QStringLiteral("testexe"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-fx"))) {
+            q.addQueryItem(QStringLiteral("testfx"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-save2"))) {
+            q.addQueryItem(QStringLiteral("testsave2"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-templates"))) {
+            q.addQueryItem(QStringLiteral("testtemplates"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-ctabs"))) {
+            q.addQueryItem(QStringLiteral("testctabs"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-uiscale"))) {
+            q.addQueryItem(QStringLiteral("testuiscale"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (hasQuery) {

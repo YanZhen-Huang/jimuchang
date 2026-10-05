@@ -30,7 +30,9 @@ const SETTING_DEFS = [
     { key: 'alignGuides', label: '对齐辅助线', type: 'bool', hint: '拖动元素时显示吸附参考线' },
     { key: 'undoLimit', label: '撤销步数上限', type: 'select', options: [[30, '30 步'], [60, '60 步'], [100, '100 步']] },
     { key: 'blockCount', label: '显示积木块数', type: 'bool' },
-    { key: 'blockSounds', label: '积木音效（重启生效）', type: 'bool' }
+    { key: 'blockSounds', label: '积木音效（重启生效）', type: 'bool' },
+    { key: 'showHomeOnStart', label: '启动时显示主页', type: 'bool', hint: '主页含模板库、示例和最近文件' },
+    { key: 'uiScale', label: '界面缩放', type: 'select', options: [[80, '80%'], [90, '90%'], [100, '100%'], [110, '110%'], [125, '125%']], hint: '全屏 / 大屏觉得界面太大就调小' }
   ] },
   { group: '播放与导出', items: [
     { key: 'defaultTransition', label: '默认章节转场时长', type: 'select', options: [[0.3, '0.3 秒'], [0.6, '0.6 秒'], [1, '1 秒']] },
@@ -133,6 +135,11 @@ const App = {
     this.applySettings();
     this.applyTheme(Settings.get('theme') || 'dark');
 
+    // 启动首屏：主页（模板 / 示例 / 最近文件）；带测试参数时不弹，避免干扰自动化
+    if (!location.search && Settings.get('showHomeOnStart') !== false) {
+      setTimeout(() => { try { this.showHome(); } catch (e) { } }, 350);
+    }
+
     // 自动化测试钩子：--test-save / --test-open / --test-play
     const params = new URLSearchParams(location.search);
     const testSave = params.get('testsave');
@@ -150,6 +157,21 @@ const App = {
         console.log(same ? 'P1TEST|PASS' : 'P1TEST|FAIL');
       } catch (e) {
         console.log('P1TEST|error|' + e.message);
+      }
+    }
+    if (params.get('testsave2') === '1' && this.host) {
+      await sleep(700);
+      try {
+        const tmp = '/tmp/opencode/save2-test.bdp';
+        Project.filePath = tmp;
+        await this.save();           // 已有 filePath → 应直接覆盖保存，不弹对话框
+        const back = await this.host.readFileBase64(tmp);
+        const ok = !!back;
+        console.log(`SAVE2|overwrite=${ok}`);
+        console.log(ok ? 'SAVE2|PASS' : 'SAVE2|FAIL');
+        Project.filePath = null;
+      } catch (e) {
+        console.log('SAVE2|error|' + (e.message || e));
       }
     }
     const testOpen = params.get('testopen');
@@ -300,6 +322,65 @@ const App = {
         console.log('SETTEST|error|' + (e.message || e));
       }
     }
+    if (params.get('testuiscale') === '1') {
+      await sleep(700);
+      try {
+        const before = window.innerWidth;
+        Settings.set('uiScale', 80);
+        await sleep(600);
+        const after = window.innerWidth;
+        const ok = after > before + 50;
+        console.log(`UISCALE|before=${before}|after=${after}`);
+        console.log(ok ? 'UISCALE|PASS' : 'UISCALE|FAIL');
+        Settings.set('uiScale', 100);
+      } catch (e) {
+        console.log('UISCALE|error|' + (e.message || e));
+      }
+    }
+    if (params.get('testctabs') === '1') {
+      await sleep(700);
+      try {
+        const el = Project.data.elements[0];
+        this.selectElement(el.id, true);       // ① 元素条点击：选中 + 切到它的脚本
+        await sleep(350);
+        const tab = document.querySelector('#tab-el');
+        const active1 = !!(tab && tab.classList.contains('active') && tab.textContent.includes(el.name));
+        this.switchTab('global');               // 回全局
+        await sleep(250);
+        Editor.select(null);                    // ② 无选中 + 全局 → 提示
+        await sleep(250);
+        const tip = document.querySelector('#script-tabs .tab-tip');
+        Editor.select(el.id);                   // ③ 舞台点选（不切脚本）→ 非 active 元素 tab
+        await sleep(250);
+        const tab2 = document.querySelector('#tab-el');
+        const nonActive = !!(tab2 && !tab2.classList.contains('active') && tab2.textContent.includes(el.name));
+        const ok = active1 && !!tip && nonActive;
+        console.log(`CTABS|active=${active1}|tip=${!!tip}|nonactive=${nonActive}`);
+        console.log(ok ? 'CTABS|PASS' : 'CTABS|FAIL');
+        this.selectElement(el.id, true);        // 还原
+      } catch (e) {
+        console.log('CTABS|error|' + (e.message || e));
+      }
+    }
+    if (params.get('testtemplates') === '1') {
+      await sleep(800);
+      try {
+        const results = Templates.list.map(t => {
+          Project.newProject(t.name);
+          Templates.build(t.key);
+          const ok = Project.data.elements.length > 0 && Project.data.chapters.length > 0;
+          return `${t.key}=${ok ? 'ok' : 'FAIL'}(${Project.data.elements.length}el/${Project.data.chapters.length}ch)`;
+        });
+        console.log('TPL|' + results.join('|'));
+        console.log(results.every(r => !r.includes('FAIL')) ? 'TPL|PASS' : 'TPL|FAIL');
+      } catch (e) {
+        console.log('TPL|error|' + (e.message || e));
+      }
+    }
+    if (params.get('testfx') === '1') {
+      await sleep(900);
+      this.testFx();
+    }
     if (params.get('testblocks2') === '1') {
       await sleep(900);
       this.testBlocks2();
@@ -343,6 +424,7 @@ const App = {
     on('btn-new', () => this.newProject());
     on('btn-open', () => this.open());
     on('btn-save', () => this.save());
+    on('btn-save-as', () => this.saveAs());
     on('btn-undo', () => History.undo());
     on('btn-redo', () => History.redo());
     on('btn-play', () => this.play());
@@ -381,6 +463,7 @@ const App = {
     on('home-new', () => { document.getElementById('home-overlay').classList.add('hidden'); this.newProject(); });
     on('home-demo', () => { document.getElementById('home-overlay').classList.add('hidden'); this.loadDemo(); });
     on('home-open', () => { document.getElementById('home-overlay').classList.add('hidden'); this.open(); });
+    on('home-ai', () => { document.getElementById('home-overlay').classList.add('hidden'); this.openAi(); });
     // 自动保存：间隔由设置决定（默认 2 分钟）
     this.setupAutosave();
     // "更多"下拉菜单：JS 控制 + 延迟关闭（划过间隙不消失）
@@ -396,6 +479,12 @@ const App = {
       });
     }
     document.addEventListener('keydown', e => this.onKeyDown(e));
+    // 禁止触摸板双指捏合缩放整个页面（Ctrl+Wheel 网页缩放）；积木区放行（Blockly 用它缩放）
+    document.addEventListener('wheel', e => {
+      if (e.ctrlKey && !(e.target && e.target.closest && e.target.closest('#blocklyDiv'))) {
+        e.preventDefault();
+      }
+    }, { passive: false });
     window.addEventListener('mousemove', () => {
       if (!this.playing) return;
       document.body.classList.remove('hide-cursor');
@@ -451,14 +540,23 @@ const App = {
     const box = document.getElementById('script-tabs');
     if (!box) return;
     const active = this.activeTab || 'global';
-    const cur = active.indexOf('el:') === 0 ? Project.getElement(active.slice(3)) : null;
-    const n = Project.data.elements.length;
+    const activeElId = active.indexOf('el:') === 0 ? active.slice(3) : null;
+    const activeEl = activeElId ? Project.getElement(activeElId) : null;
+    const selEl = Editor.selectedId ? Project.getElement(Editor.selectedId) : null;
+    // 元素脚本唯一入口：舞台点选 / 舞台下方元素条。这里只跟随显示，不再另设下拉。
+    const show = activeEl || selEl;
     let html = `<div class="tab${active === 'global' ? ' active' : ''}" data-key="global" title="全局脚本（当演示开始 / 按下键 / 收到消息）">全局</div>`;
-    html += `<div class="tab tab-drop${cur ? ' active' : ''}" id="btn-el-drop" title="选择要编辑脚本的元素">`
-      + (cur ? `<span class="el-ico">${ELEMENT_ICONS[cur.type] || '◻'}</span>${esc(cur.name)}` : `选择元素…（${n} 个）`) + ' ▾</div>';
+    if (show) {
+      const on = active === 'el:' + show.id;
+      html += `<div class="tab${on ? ' active' : ''}" id="tab-el" data-key="el:${show.id}" title="${on ? '正在编辑：' : '点击编辑：'}${esc(show.name)} 的脚本">`
+        + `<span class="el-ico">${ELEMENT_ICONS[show.type] || '◻'}</span>${esc(show.name)}</div>`;
+    } else {
+      html += `<div class="tab tab-tip" title="在舞台上点选元素，或点击下方元素条">选中元素编辑脚本</div>`;
+    }
     box.innerHTML = html;
     box.querySelector('[data-key="global"]').onclick = () => this.switchTab('global');
-    box.querySelector('#btn-el-drop').onclick = e => this.elementDropMenu(e);
+    const te = box.querySelector('#tab-el');
+    if (te) te.onclick = () => this.switchTab(te.dataset.key);
     if (Settings.get('blockCount')) {
       const c = document.createElement('span');
       c.id = 'block-count';
@@ -628,8 +726,8 @@ const App = {
   switchTab(key) {
     const isEl = key.indexOf('el:') === 0;
     if (key !== 'global' && !isEl && !Project.getChapter(key)) return;
+    this.activeTab = key;              // 先更新上下文：switchTo 内刷新空提示时要用
     JimuBlocks.switchTo(key);
-    this.activeTab = key;
     if (isEl) {
       const el = Project.getElement(key.slice(3));
       if (el) {
@@ -919,6 +1017,29 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   // ELBLK 测试：元素脚本的保存/切回恢复链路
+  // FX 测试：属性面板"背景特效"应写入舞台级 stage.fx 并渲染（回归 2026-10-05 fx 面板失效修复）
+  async testFx() {
+    try {
+      Editor.select(null);
+      Panel.show();
+      await sleep(300);
+      const sel = document.querySelector('#props select[data-prop="fx.type"]');
+      if (!sel) { console.log('FXTEST|no-select'); return; }
+      sel.value = 'starfield';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(500);
+      const stageOk = !!(Project.data.stage.fx && Project.data.stage.fx.type === 'starfield');
+      const canvasOk = !!document.querySelector('.scene-fx');
+      console.log(`FXTEST|stage=${stageOk}|canvas=${canvasOk}`);
+      console.log((stageOk && canvasOk) ? 'FXTEST|PASS' : 'FXTEST|FAIL');
+      Project.data.stage.fx = null;
+      Stage.renderAll();
+      console.log(!document.querySelector('.scene-fx') ? 'FXTEST|cleanup|PASS' : 'FXTEST|cleanup|FAIL');
+    } catch (e) {
+      console.log('FXTEST|error|' + (e.message || e));
+    }
+  },
+
   async testElblocks() {
     try {
       const el = Project.data.elements.find(e => e.name === '标题');
@@ -1693,6 +1814,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       try { this.host.setPref('apiEnabled', Settings.get('apiEnabled') ? '1' : '0'); } catch (e) { }
       try { this.host.setPref('aiKey', String(Settings.get('aiKey') || '')); } catch (e) { }
     }
+    try { if (this.host && this.host.setZoom) this.host.setZoom((Settings.get('uiScale') || 100) / 100); } catch (e) { }
   },
 
   setupAutosave() {
@@ -1764,12 +1886,32 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (!this.host) { toast('浏览器预览模式无法保存'); return; }
     await this.hostReady;
     const base64 = await Project.pack();
+    // 已保存过 → 直接覆盖原文件；首次保存 → 走"另存为"选路径
+    if (Project.filePath) {
+      const ok = await this.host.saveProjectDirect(Project.filePath, base64);
+      if (ok) {
+        this.clearDirty();
+        toast('已保存：' + Project.filePath.split('/').pop());
+      } else {
+        toast('保存失败：' + Project.filePath);
+      }
+      return;
+    }
+    await this.saveAs();
+  },
+
+  // 另存为：总是选择新路径（Ctrl+Shift+S / 「另存为」按钮）
+  async saveAs() {
+    JimuBlocks.save();
+    if (!this.host) { toast('浏览器预览模式无法保存'); return; }
+    await this.hostReady;
+    const base64 = await Project.pack();
     const path = await this.host.saveProject(base64, (Project.data.name || '未命名演示') + '.bdp');
     if (path) {
       Project.filePath = path;
       this.clearDirty();
       try { await this.host.addRecentFile(path); } catch (e) { console.warn("记录最近文件失败:", e.message || e); }
-      toast('已保存：' + path.split('/').pop());
+      toast('已另存为：' + path.split('/').pop());
     }
   },
 
@@ -1841,6 +1983,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   async showHome() {
     document.getElementById('home-overlay').classList.remove('hidden');
+    this.renderHomeTemplates();
     const box = document.getElementById('home-recent');
     if (!this.host) { box.innerHTML = '<div class="help-dim">浏览器预览模式无最近文件</div>'; return; }
     await this.hostReady;
@@ -1947,6 +2090,45 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     Panel.show();
     this.clearDirty();
     History.reset();
+  },
+
+  // 主页模板卡片
+  renderHomeTemplates() {
+    const tbox = document.getElementById('home-templates');
+    if (!tbox || typeof Templates === 'undefined') return;
+    tbox.innerHTML = Templates.list.map(t =>
+      `<button class="home-tpl" data-tpl="${t.key}" title="${esc(t.desc)}">
+        <b>${t.icon}</b><span>${t.name}</span><small>${esc(t.desc)}</small>
+      </button>`).join('');
+    tbox.querySelectorAll('.home-tpl').forEach(n => {
+      n.onclick = () => {
+        document.getElementById('home-overlay').classList.add('hidden');
+        this.loadTemplate(n.dataset.tpl);
+      };
+    });
+  },
+
+  // 载入模板（"点开就能改"的起步项目）
+  loadTemplate(key) {
+    if (typeof Templates === 'undefined') return;
+    const t = Templates.list.find(x => x.key === key);
+    if (!t) return;
+    if (this.dirty && !confirm('当前项目有未保存的修改，确定载入模板吗？')) return;
+    JimuBlocks.ws.clear();
+    JimuBlocks.current = null;
+    Project.newProject(t.name);
+    Templates.build(key);
+    this.activeTab = 'global';
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+    JimuBlocks.switchTo('global');
+    this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
+    Panel.show();
+    this.clearDirty();
+    History.reset();
+    toast('模板「' + t.name + '」已载入，改改就能用');
   },
 
   loadDemo() {
@@ -2081,6 +2263,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const map = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] };
       const m = map[e.key];
       if (m) { Editor.nudge(m[0], m[1]); e.preventDefault(); }
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault(); this.saveAs();
     } else if (e.ctrlKey && e.key.toLowerCase() === 's') {
       e.preventDefault(); this.save();
     } else if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.shiftKey) {
