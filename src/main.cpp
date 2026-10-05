@@ -389,6 +389,9 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+    // Deepin 会导出 QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough：与下方显式设置重复，
+    // 且会让 Qt 在 QApplication 构造后二次应用并打印警告——这里清除，策略由显式设置保证。
+    qunsetenv("QT_SCALE_FACTOR_ROUNDING_POLICY");
     // 设置 → 渲染性能 → 禁用 GPU 加速（花屏自救；必须在 QApplication 创建前设置）
     {
         QSettings s;
@@ -408,7 +411,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.2"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.3"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -557,6 +560,14 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-uiscale"))) {
             q.addQueryItem(QStringLiteral("testuiscale"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-canvaszoom"))) {
+            q.addQueryItem(QStringLiteral("testcanvaszoom"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-playview"))) {
+            q.addQueryItem(QStringLiteral("testplayview"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (args.contains(QStringLiteral("--test-hotkeys"))) {

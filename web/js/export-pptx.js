@@ -297,22 +297,28 @@ const PptxExport = {
     }
     const chapters = Project.data.chapters;
     const sel = Editor.selectedId;
+    const view = Stage.saveView ? Stage.saveView() : null;
+    if (Stage.resetView) Stage.resetView();   // 截图按舞台实际位置裁切：先重置视图，避免缩放/平移裁偏
     Editor.select(null);
-    for (const chapter of chapters) {
-      await Stage.goChapter(chapter.id, { instant: true });
-      if (App.host.raiseWindow) App.host.raiseWindow();
-      await sleep(360);
-      let fullB64 = await App.host.captureWindow();
-      if (!fullB64) {           // 黑帧：等重绘后重试一次
-        await sleep(340);
-        fullB64 = await App.host.captureWindow();
+    try {
+      for (const chapter of chapters) {
+        await Stage.goChapter(chapter.id, { instant: true });
+        if (App.host.raiseWindow) App.host.raiseWindow();
+        await sleep(360);
+        let fullB64 = await App.host.captureWindow();
+        if (!fullB64) {           // 黑帧：等重绘后重试一次
+          await sleep(340);
+          fullB64 = await App.host.captureWindow();
+        }
+        if (!fullB64) continue;
+        const dataUrl = await this.cropStage(fullB64);
+        if (!dataUrl) continue;
+        const slide = pptx.addSlide();
+        slide.addImage({ data: dataUrl, x: 0, y: 0, w: this.SLIDE_W, h: this.SLIDE_H });
+        slide.addNotes('章节：' + chapter.name);
       }
-      if (!fullB64) continue;
-      const dataUrl = await this.cropStage(fullB64);
-      if (!dataUrl) continue;
-      const slide = pptx.addSlide();
-      slide.addImage({ data: dataUrl, x: 0, y: 0, w: this.SLIDE_W, h: this.SLIDE_H });
-      slide.addNotes('章节：' + chapter.name);
+    } finally {
+      if (view && Stage.restoreView) Stage.restoreView(view);
     }
     const back = Stage.currentChapter() || chapters[0];
     if (back) await Stage.goChapter(back.id, { instant: true });

@@ -346,16 +346,25 @@ const App = {
       await sleep(700);
       try {
         const before = window.innerWidth;
+        const orig = Settings.get('uiScale');
         Settings.set('uiScale', 80);
         await sleep(600);
         const after = window.innerWidth;
         const ok = after > before + 50;
         console.log(`UISCALE|before=${before}|after=${after}`);
         console.log(ok ? 'UISCALE|PASS' : 'UISCALE|FAIL');
-        Settings.set('uiScale', 100);
+        Settings.set('uiScale', orig || 100);   // 恢复原值，别覆盖用户设置
       } catch (e) {
         console.log('UISCALE|error|' + (e.message || e));
       }
+    }
+    if (params.get('testcanvaszoom') === '1') {
+      await sleep(900);
+      this.testCanvasZoom();
+    }
+    if (params.get('testplayview') === '1') {
+      await sleep(900);
+      this.testPlayView();
     }
     if (params.get('testctabs') === '1') {
       await sleep(700);
@@ -1020,6 +1029,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     hint.style.opacity = '1';
     setTimeout(() => { if (this.playing) hint.style.opacity = '0'; }, 6000);
     this.armCursorHide();
+    Stage.enterPlayView();
     if (this.host) await this.host.setFullscreen(true);
     await sleep(120);
     Stage.fit();
@@ -1060,6 +1070,107 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       console.log(!document.querySelector('.scene-fx') ? 'FXTEST|cleanup|PASS' : 'FXTEST|cleanup|FAIL');
     } catch (e) {
       console.log('FXTEST|error|' + (e.message || e));
+    }
+  },
+
+  // ZOOM 测试：画布缩放 / 平移 / 锚点 / 快捷键 / 缩放下的拖拽换算
+  async testCanvasZoom() {
+    const results = [];
+    const check = (name, ok) => { results.push(`${name}=${ok ? 'ok' : 'FAIL'}`); return ok; };
+    try {
+      const wrap = document.getElementById('stage-wrap');
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      const wr = wrap.getBoundingClientRect();
+      const cx = wr.left + w / 2, cy = wr.top + h / 2;
+      const fit = Stage.fitScale;
+      const rr0 = Stage.rootEl.getBoundingClientRect();
+      check('init-center', Math.abs(rr0.left + rr0.width / 2 - cx) < 3 && Math.abs(rr0.top + rr0.height / 2 - cy) < 3);
+      // ① Ctrl+滚轮放大
+      wrap.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, clientX: cx, clientY: cy, bubbles: true, cancelable: true }));
+      await sleep(160);
+      const rr1 = Stage.rootEl.getBoundingClientRect();
+      check('wheel-in', Stage.scale > fit * 1.05 && rr1.width > rr0.width + 4);
+      // ② 锚点：缩放前后指针下的舞台坐标不变
+      const ax = cx + 120, ay = cy - 60;
+      const wa = Stage.screenToWorld(ax, ay);
+      wrap.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, clientX: ax, clientY: ay, bubbles: true, cancelable: true }));
+      await sleep(160);
+      const wb = Stage.screenToWorld(ax, ay);
+      check('anchor', Math.abs(wa.x - wb.x) < 2 && Math.abs(wa.y - wb.y) < 2);
+      // ③ Ctrl+0 → 适应窗口
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(160);
+      check('shortcut-fit', Math.abs(Stage.scale - Stage.fitScale) < 1e-6 && Stage.panX === 0 && Stage.panY === 0);
+      // ④ Ctrl+= 放大 → Ctrl+1 回到 100%
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(120);
+      const zoomed = Stage.scale > Stage.fitScale;
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '1', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(120);
+      check('shortcut-zoom', zoomed && Math.abs(Stage.scale - 1) < 1e-6);
+      // ⑤ 缩放下的元素拖拽换算：屏幕移动 100px → 舞台位移 100 / scale
+      const guidesOrig = Settings.get('alignGuides');
+      Settings.set('alignGuides', false);
+      Stage.renderAll();
+      const el = Project.data.elements.find(e => e.visible !== false && !e.locked) || Project.data.elements[0];
+      Editor.select(el.id);
+      await sleep(220);
+      const dom = Stage.elDom(el.id);
+      const rr = dom.getBoundingClientRect();
+      const sx = rr.left + rr.width / 2, sy = rr.top + rr.height / 2;
+      const ox = el.x, oy = el.y;
+      dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: sx, clientY: sy, button: 0 }));
+      await sleep(60);
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: sx + 100, clientY: sy + 50 }));
+      await sleep(60);
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      await sleep(160);
+      const gotDx = el.x - ox, gotDy = el.y - oy;
+      check('drag-scale', Math.abs(gotDx - 100 / Stage.scale) < 3 && Math.abs(gotDy - 50 / Stage.scale) < 3);
+      el.x = ox; el.y = oy;
+      Settings.set('alignGuides', guidesOrig);
+      // ⑥ 普通滚轮平移 + 边界 clamp
+      Stage.setZoom(1);
+      wrap.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: cx, clientY: cy, bubbles: true, cancelable: true }));
+      await sleep(120);
+      const wheelPan = Math.abs(Stage.panY + 100) < 3;
+      Stage.panBy(100000, 100000);
+      const limX = Math.max(0, 960 * Stage.scale - w / 2);
+      check('wheel-pan', wheelPan);
+      check('pan-clamp', Math.abs(Stage.panX - limX) < 2);
+      // ⑦ UI 百分比显示
+      const label = document.getElementById('zoom-label');
+      check('ui-label', !!label && label.textContent === Math.round(Stage.scale * 100) + '%');
+      // 清理：恢复视图与项目数据
+      Stage.resetView();
+      Stage.renderAll();
+      console.log('ZOOM|' + results.join('|'));
+      console.log(results.every(r => !r.includes('FAIL')) ? 'ZOOM|PASS' : 'ZOOM|FAIL');
+    } catch (e) {
+      console.log('ZOOM|error|' + (e.message || e));
+      console.log('ZOOM|FAIL');
+    }
+  },
+
+  // PLAYVIEW 测试：Ctrl+P 进演示 → 播放态强制适应窗口 → 退出恢复用户视图
+  async testPlayView() {
+    try {
+      Stage.setZoom(1.5);
+      Stage.panBy(80, 40);
+      const zoomBefore = Stage.zoom, panBefore = Stage.panX;
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(700);
+      const playing = this.playing && document.body.classList.contains('playing');
+      const fitInPlay = Math.abs(Stage.scale - Stage.fitScale) < 1e-6 && Stage.panX === 0;
+      this.stop();
+      await sleep(700);
+      const restored = Math.abs(Stage.zoom - zoomBefore) < 1e-6 && Math.abs(Stage.panX - panBefore) < 1e-6 && !this.playing;
+      console.log(`PLAYVIEW|playing=${playing}|fit=${fitInPlay}|restore=${restored}|zoom=${zoomBefore}`);
+      console.log((playing && fitInPlay && restored) ? 'PLAYVIEW|PASS' : 'PLAYVIEW|FAIL');
+      Stage.resetView();
+    } catch (e) {
+      console.log('PLAYVIEW|error|' + (e.message || e));
+      console.log('PLAYVIEW|FAIL');
     }
   },
 
@@ -1482,6 +1593,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this._dataBackup = null;
     }
     if (this.host) this.host.setFullscreen(false);
+    Stage.exitPlayView();
     const sc = Stage.currentChapter() || Project.data.chapters[0];
     Stage.renderAll();
     if (sc) Stage.goChapter(sc.id, { instant: true });
@@ -2250,6 +2362,23 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   // ---------- 键盘 ----------
   onKeyDown(e) {
+    // 画布缩放快捷键（编辑模式）：Ctrl+= 放大 / Ctrl+- 缩小 / Ctrl+0 适应 / Ctrl+1 回到 100%
+    if ((e.ctrlKey || e.metaKey) && !this.playing) {
+      const zk = e.key;
+      if (zk === '=' || zk === '+' || zk === '-' || zk === '_' || zk === '0' || zk === '1') {
+        e.preventDefault();
+        if (zk === '0') Stage.resetView();
+        else if (zk === '1') Stage.setZoom(1);
+        else Stage.zoomBy((zk === '=' || zk === '+') ? 1.25 : 0.8);
+        return;
+      }
+    }
+    // Ctrl+P：进入演示（接管浏览器打印；演示中再按无动作）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      if (!this.playing) this.play();
+      return;
+    }
     // 内核治理：拦截浏览器默认行为（打印 / 页面缩放 / 查看源码 / 开发者工具），播放时同样生效
     if (e.ctrlKey || e.metaKey) {
       const k = e.key.toLowerCase();

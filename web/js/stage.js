@@ -3,6 +3,9 @@ const Stage = {
   wrapEl: null, rootEl: null,
   layerEl: null, bgEl: null, elsEl: null,
   scale: 1, currentChapterId: null, transitioning: false,
+  fitScale: 1, zoom: null,           // zoom=null 表示"跟随适应窗口"
+  panX: 0, panY: 0,                  // 视图平移（屏幕像素）
+  _playingView: false, _spaceDown: false, _zoomLabel: null,
 
   init(wrapEl) {
     this.wrapEl = wrapEl;
@@ -114,6 +117,8 @@ const Stage = {
         window.addEventListener('mouseup', up);
       });
     }
+    this._bindZoomUI();
+    this._bindPan();
     this.fit();
   },
 
@@ -121,8 +126,182 @@ const Stage = {
     if (!this.wrapEl) return;
     const cw = this.wrapEl.clientWidth - 20, ch = this.wrapEl.clientHeight - 20;
     if (cw < 10 || ch < 10) return;
-    this.scale = Math.min(cw / 1920, ch / 1080);
-    this.rootEl.style.transform = `scale(${this.scale})`;
+    this.fitScale = Math.min(cw / 1920, ch / 1080);
+    this._applyViewport();
+  },
+
+  // ---------- 画布视图：缩放 / 平移 ----------
+  _bindZoomUI() {
+    const wrap = this.wrapEl;
+    const bar = document.createElement('div');
+    bar.id = 'zoom-bar';
+    bar.innerHTML = `<button id="zoom-out" title="缩小 (Ctrl+-)">−</button>`
+      + `<span id="zoom-label" title="点击适应窗口 (Ctrl+0)">100%</span>`
+      + `<button id="zoom-in" title="放大 (Ctrl+=)">＋</button>`
+      + `<button id="zoom-fit" title="适应窗口 (Ctrl+0)">适应</button>`;
+    wrap.appendChild(bar);
+    bar.addEventListener('mousedown', e => e.stopPropagation());
+    bar.querySelector('#zoom-out').onclick = () => this.zoomBy(1 / 1.2);
+    bar.querySelector('#zoom-in').onclick = () => this.zoomBy(1.2);
+    bar.querySelector('#zoom-fit').onclick = () => this.resetView();
+    bar.querySelector('#zoom-label').onclick = () => this.resetView();
+    this._zoomLabel = bar.querySelector('#zoom-label');
+    // Ctrl+滚轮（含触摸板双指捏合）缩放画布；普通滚轮平移（画布未溢出时自动归位）
+    wrap.addEventListener('wheel', e => {
+      if (this._playingView) return;
+      e.preventDefault();
+      if (e.ctrlKey) {
+        this.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0018));
+      } else {
+        this.panBy(-e.deltaX, -e.deltaY);
+      }
+    }, { passive: false });
+  },
+
+  _bindPan() {
+    const canPan = e => !this._playingView && (e.button === 1 || (e.button === 0 && this._spaceDown));
+    this.rootEl.addEventListener('mousedown', e => {
+      if (!canPan(e)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();      // 平移手势优先，不触发元素拖拽 / 取消选择
+      const sx = e.clientX, sy = e.clientY, px = this.panX, py = this.panY;
+      document.body.classList.add('view-panning');
+      const move = ev => {
+        this.panX = px + (ev.clientX - sx);
+        this.panY = py + (ev.clientY - sy);
+        this._applyViewport();
+      };
+      const up = () => {
+        document.body.classList.remove('view-panning');
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+      };
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    });
+    window.addEventListener('keydown', e => {
+      if (e.code !== 'Space' || this._playingView) return;
+      const t = e.target;
+      const tag = ((t && t.tagName) || '').toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea' || (t && t.isContentEditable)) return;
+      if (t && t.closest && t.closest('#blocklyDiv')) return;
+      this._spaceDown = true;
+      document.body.classList.add('view-pan-ready');
+    });
+    window.addEventListener('keyup', e => {
+      if (e.code !== 'Space') return;
+      this._spaceDown = false;
+      document.body.classList.remove('view-pan-ready');
+    });
+    window.addEventListener('blur', () => {
+      this._spaceDown = false;
+      document.body.classList.remove('view-pan-ready');
+    });
+  },
+
+  _applyViewport() {
+    if (!this.rootEl) return;
+    const v = this._playingView ? this.fitScale : (this.zoom == null ? this.fitScale : this.zoom);
+    this.scale = v;
+    this._clampPan();
+    this.rootEl.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${v})`;
+    if (this._zoomLabel) this._zoomLabel.textContent = Math.round(v * 100) + '%';
+  },
+
+  _clampPan() {
+    if (!this.wrapEl) return;
+    const limX = Math.max(0, 960 * this.scale - this.wrapEl.clientWidth / 2);
+    const limY = Math.max(0, 540 * this.scale - this.wrapEl.clientHeight / 2);
+    this.panX = Math.max(-limX, Math.min(limX, this.panX));
+    this.panY = Math.max(-limY, Math.min(limY, this.panY));
+  },
+
+  _viewCenter() {
+    const r = this.wrapEl.getBoundingClientRect();
+    return { x: r.left + this.wrapEl.clientWidth / 2, y: r.top + this.wrapEl.clientHeight / 2 };
+  },
+
+  // 屏幕坐标 → 1920x1080 舞台坐标（含缩放与平移）
+  screenToWorld(clientX, clientY) {
+    const c = this._viewCenter();
+    return {
+      x: (clientX - c.x - this.panX) / this.scale + 960,
+      y: (clientY - c.y - this.panY) / this.scale + 540
+    };
+  },
+
+  // 以指针位置为锚点缩放：指针下的舞台点保持不动
+  zoomAt(clientX, clientY, factor) {
+    if (this._playingView) return;
+    const cur = this.scale || this.fitScale;
+    const next = Math.max(0.05, Math.min(4, cur * factor));
+    if (Math.abs(next - cur) < 1e-6) return;
+    const c = this._viewCenter();
+    const w = this.screenToWorld(clientX, clientY);
+    this.zoom = next;
+    this.panX = clientX - c.x - (w.x - 960) * next;
+    this.panY = clientY - c.y - (w.y - 540) * next;
+    this._applyViewport();
+  },
+
+  // 以画布中心为锚点缩放（按钮 / 快捷键）
+  zoomBy(factor) {
+    if (this._playingView) return;
+    const c = this._viewCenter();
+    this.zoomAt(c.x, c.y, factor);
+  },
+
+  setZoom(v) {
+    if (this._playingView) return;
+    const next = Math.max(0.05, Math.min(4, v));
+    const ratio = next / (this.scale || this.fitScale);
+    this.zoom = next;
+    this.panX *= ratio;
+    this.panY *= ratio;
+    this._applyViewport();
+  },
+
+  resetView() {
+    this.zoom = null;
+    this.panX = 0;
+    this.panY = 0;
+    this._applyViewport();
+  },
+
+  panBy(dx, dy) {
+    this.panX += dx;
+    this.panY += dy;
+    this._applyViewport();
+  },
+
+  saveView() { return { zoom: this.zoom, panX: this.panX, panY: this.panY }; },
+  restoreView(v) {
+    if (!v) return;
+    this.zoom = v.zoom;
+    this.panX = v.panX;
+    this.panY = v.panY;
+    this._applyViewport();
+  },
+
+  // 播放模式：临时忽略用户缩放（全屏适应），退出后恢复
+  enterPlayView() {
+    this._savedView = this.saveView();
+    this._playingView = true;
+    this.panX = 0;
+    this.panY = 0;
+    this._applyViewport();
+  },
+
+  exitPlayView() {
+    if (!this._playingView) return;
+    this._playingView = false;
+    if (this._savedView) {
+      this.zoom = this._savedView.zoom;
+      this.panX = this._savedView.panX;
+      this.panY = this._savedView.panY;
+    }
+    this._savedView = null;
+    this._applyViewport();
   },
 
   applyBg(bgEl, bg) {
