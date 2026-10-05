@@ -135,6 +135,7 @@ const App = {
     }
     this.applySettings();
     this.applyTheme(Settings.get('theme') || 'dark');
+    this.applyLayoutPrefs();
 
     // 启动首屏：主页（模板 / 示例 / 最近文件）；带测试参数时不弹，避免干扰自动化
     if (!location.search && Settings.get('showHomeOnStart') !== false) {
@@ -366,6 +367,10 @@ const App = {
       await sleep(900);
       this.testPlayView();
     }
+    if (params.get('testlayout') === '1') {
+      await sleep(900);
+      this.testLayout();
+    }
     if (params.get('testctabs') === '1') {
       await sleep(700);
       try {
@@ -457,6 +462,8 @@ const App = {
     on('btn-undo', () => History.undo());
     on('btn-redo', () => History.redo());
     on('btn-play', () => this.play());
+    on('btn-toggle-left', () => this.toggleLeftCollapse());
+    this.initLayoutUI();
     on('btn-demo', () => this.loadDemo());
     on('btn-add-text', () => Editor.addElement('text'));
     on('btn-add-image', () => this.addMediaElement('image'));
@@ -1171,6 +1178,65 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     } catch (e) {
       console.log('PLAYVIEW|error|' + (e.message || e));
       console.log('PLAYVIEW|FAIL');
+    }
+  },
+
+  // LAYOUT 测试：积木区拖宽 / 收起（Ctrl+B），属性面板折叠
+  async testLayout() {
+    const results = [];
+    const check = (name, ok) => { results.push(`${name}=${ok ? 'ok' : 'FAIL'}`); return ok; };
+    try {
+      const left = document.getElementById('left');
+      const resizer = document.getElementById('left-resizer');
+      const w0 = left.getBoundingClientRect().width;
+      // ① 拖动分隔条加宽
+      const rx = resizer.getBoundingClientRect().left + 2;
+      resizer.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: rx, clientY: 400, button: 0 }));
+      await sleep(60);
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: rx + 90, clientY: 400 }));
+      await sleep(80);
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      await sleep(150);
+      const w1 = left.getBoundingClientRect().width;
+      check('drag-wider', w1 > w0 + 50);
+      // ② Ctrl+B 收起 → 再按展开
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(130);
+      const collapsed = left.getBoundingClientRect().width === 0;
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(130);
+      const restored = left.getBoundingClientRect().width > 200;
+      check('collapse-toggle', collapsed && restored);
+      // ③ 属性面板折叠 / 展开
+      Panel.collapsed = false; Panel.show();
+      await sleep(130);
+      const h0 = document.getElementById('props').getBoundingClientRect().height;
+      document.querySelector('#props .p-title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await sleep(130);
+      const h1 = document.getElementById('props').getBoundingClientRect().height;
+      document.querySelector('#props .p-title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await sleep(130);
+      const h2 = document.getElementById('props').getBoundingClientRect().height;
+      check('props-collapse', h1 < h0 - 40 && h2 > h1 + 40);
+      // 清理：布局偏好复位
+      left.style.flex = '';
+      Settings.set('leftWidth', 0);
+      Settings.set('leftCollapsed', false);
+      Settings.set('propsCollapsed', false);
+      Panel.collapsed = false; Panel.show();
+      this.leftCollapsed = false;
+      document.body.classList.remove('left-collapsed');
+      await sleep(120);
+      console.log('LAYOUT|' + results.join('|'));
+      console.log(results.every(r => !r.includes('FAIL')) ? 'LAYOUT|PASS' : 'LAYOUT|FAIL');
+      // 截图走查：保持"积木区收起 + 属性面板折叠"展示态（仅本次会话，不持久化）
+      left.style.display = 'none';
+      document.body.classList.add('left-collapsed');
+      Panel.collapsed = true; Panel.show();
+      console.log('LAYOUT|shot|左栏收起 + 属性折叠展示态（截图用，不持久化）');
+    } catch (e) {
+      console.log('LAYOUT|error|' + (e.message || e));
+      console.log('LAYOUT|FAIL');
     }
   },
 
@@ -1952,6 +2018,71 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     try { if (this.host && this.host.setZoom) this.host.setZoom((Settings.get('uiScale') || 100) / 100); } catch (e) { }
   },
 
+  // ---------- 布局：积木区拖宽 / 收起，属性面板折叠 ----------
+  initLayoutUI() {
+    const left = document.getElementById('left');
+    const resizer = document.getElementById('left-resizer');
+    if (!left || !resizer) return;
+    resizer.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = Math.max(left.getBoundingClientRect().width, this.leftCollapsed ? 240 : 0);
+      resizer.classList.add('dragging');
+      const move = ev => {
+        const w = Math.max(240, Math.min(window.innerWidth * 0.75, startW + (ev.clientX - startX)));
+        left.style.flex = '0 0 ' + Math.round(w) + 'px';
+        if (this.leftCollapsed) this.toggleLeftCollapse(false);
+      };
+      const up = () => {
+        resizer.classList.remove('dragging');
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        const w = Math.round(left.getBoundingClientRect().width);
+        if (w > 0) Settings.set('leftWidth', w);
+        this.resizeBlocklySoon();
+      };
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    });
+    resizer.addEventListener('dblclick', () => this.toggleLeftCollapse());
+  },
+
+  // 启动时恢复布局偏好（在 host 设置加载之后调用）
+  applyLayoutPrefs() {
+    const left = document.getElementById('left');
+    const w = Number(Settings.get('leftWidth')) || 0;
+    if (left && w > 0) left.style.flex = '0 0 ' + Math.round(w) + 'px';
+    this.leftCollapsed = false;
+    if (Settings.get('leftCollapsed')) this.toggleLeftCollapse(true);
+    if (typeof Panel !== 'undefined') {
+      Panel.collapsed = !!Settings.get('propsCollapsed');
+      try { Panel.show(); } catch (e) { }
+    }
+  },
+
+  toggleLeftCollapse(force) {
+    const left = document.getElementById('left');
+    if (!left) return;
+    const next = (force === undefined) ? !this.leftCollapsed : !!force;
+    if (next === this.leftCollapsed) return;
+    this.leftCollapsed = next;
+    left.style.display = next ? 'none' : '';
+    document.body.classList.toggle('left-collapsed', next);
+    Settings.set('leftCollapsed', next);
+    this.resizeBlocklySoon();
+  },
+
+  // Blockly 对容器尺寸变化不敏感：折叠 / 拖宽后主动 resize（立即 + 延迟各一次）
+  resizeBlocklySoon() {
+    const doIt = () => {
+      try { if (typeof Blockly !== 'undefined' && typeof JimuBlocks !== 'undefined') Blockly.svgResize(JimuBlocks.ws); } catch (e) { }
+    };
+    doIt();
+    clearTimeout(this._rszTimer);
+    this._rszTimer = setTimeout(doIt, 160);
+  },
+
   setupAutosave() {
     clearInterval(this._autosaveTimer);
     const min = Settings.get('autosaveMin');
@@ -2436,6 +2567,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       e.preventDefault(); this.open();
     } else if (e.ctrlKey && e.key.toLowerCase() === 'n') {
       e.preventDefault(); this.newProject();
+    } else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+      e.preventDefault(); this.toggleLeftCollapse();
     } else if (e.key === 'F5') {
       e.preventDefault(); this.play();
     } else if (e.key === 'Escape') {

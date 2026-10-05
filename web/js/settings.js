@@ -6,6 +6,9 @@ const Settings = {
     theme: 'dark',
     chapterBar: 'closed',
     pptOpts: null,
+    leftWidth: 0,            // 0=自适应；>0=积木区拖拽宽度(px)
+    leftCollapsed: false,    // 积木区收起
+    propsCollapsed: false,   // 属性面板折叠
     // 编辑器
     autosaveMin: 2,          // 0=关闭
     alignGuides: true,

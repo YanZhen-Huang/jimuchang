@@ -96,6 +96,16 @@ body {
 /* ---------------- 布局 ---------------- */
 #layout { flex: 1; display: flex; min-height: 0; }
 #left { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* 积木区宽度调节 / 收起 */
+#left-resizer {
+  flex: none; width: 5px; cursor: col-resize; position: relative; z-index: 30;
+  background: transparent; transition: background .15s;
+}
+#left-resizer:hover, #left-resizer.dragging { background: var(--accent); }
+body.left-collapsed #left-resizer { opacity: .3; }
+body.left-collapsed #right { width: 100%; max-width: none; }
+body.left-collapsed #btn-toggle-left { border-color: var(--accent); color: var(--accent); }
+body.playing #left-resizer { display: none; }
 #blocklyDiv { position: relative; flex: 1; min-width: 0; }
 
 /* 积木区空状态提示 */
@@ -361,9 +371,13 @@ body.playing .el[data-type="audio"] { display: none !important; }
   padding: 12px 16px;
   background: var(--panel2);
 }
+#props.collapsed { height: auto; padding: 10px 16px 12px; overflow: hidden; }
 #props::-webkit-scrollbar { width: 8px; }
 #props::-webkit-scrollbar-thumb { background: #2A3140; border-radius: 4px; }
-.p-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.p-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; cursor: pointer; user-select: none; }
+.p-title::after { content: '▾'; float: right; opacity: .3; font-weight: 400; font-size: 11px; line-height: 17px; }
+#props.collapsed .p-title { margin-bottom: 0; }
+#props.collapsed .p-title::after { content: '▸'; }
 .p-type {
   font-size: 11px; color: var(--dim); border: 1px solid var(--line);
   border-radius: 5px; padding: 1px 7px; margin-left: 6px; font-weight: 400;
@@ -740,13 +754,14 @@ body.light #search-overlay { background: rgba(240, 242, 245, .6); }
 body.playing #festive-canvas { opacity: .3; }
 #festive-lanterns { pointer-events: none; }
 .lantern {
-  position: fixed; top: 3px; width: 44px; height: 54px;
+  position: fixed; top: 52px; width: 44px; height: 54px;
   background: radial-gradient(circle at 50% 42%, #FF6A55, #C8102E 72%);
   border-radius: 50% / 44%;
   box-shadow: 0 0 16px rgba(226, 58, 46, .65), inset 0 0 10px rgba(255, 220, 150, .45);
   z-index: 320; transform-origin: 50% -10px;
   animation: lantern-sway 3.6s ease-in-out infinite;
 }
+body.playing .lantern { top: 3px; }   /* 播放时没有工具栏，回到顶部悬挂 */
 .lantern i {
   position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
   width: 2px; height: 12px; background: #F5C445;

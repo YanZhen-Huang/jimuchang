@@ -290,7 +290,7 @@ const Editor = {
 
 // ---------- 属性面板 ----------
 const Panel = {
-  el: null,
+  el: null, collapsed: false,
 
   init(el) {
     this.el = el;
@@ -298,15 +298,27 @@ const Panel = {
     el.addEventListener('change', e => this.onInput(e));
     el.addEventListener('click', e => {
       const btn = e.target.closest('button[data-action]');
-      if (!btn) return;
-      this.onAction(btn.dataset.action);
+      if (btn) { this.onAction(btn.dataset.action); return; }
+      if (e.target.closest('.p-title')) this.toggleCollapse();
     });
   },
 
   show() {
+    if (this.collapsed) {
+      this.el.classList.add('collapsed');
+      this.el.innerHTML = '<div class="p-title" title="点击展开属性面板">属性面板已收起</div>';
+      return;
+    }
+    this.el.classList.remove('collapsed');
     const sel = Editor.selected();
     if (sel) this.renderElement(null, sel.element);
     else this.renderScene();
+  },
+
+  toggleCollapse() {
+    this.collapsed = !this.collapsed;
+    try { Settings.set('propsCollapsed', this.collapsed); } catch (e) { }
+    this.show();
   },
 
   row(label, inner) {
