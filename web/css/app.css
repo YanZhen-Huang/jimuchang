@@ -195,12 +195,29 @@ body.playing #fps-meter { display: none; }
 .tab-tip { opacity: .45; border-style: dashed; font-size: 11.5px; pointer-events: none; }
 
 /* 元素列表条 */
+#element-bar-wrap {
+  display: flex; align-items: stretch; flex: none;
+  border-top: 1px solid var(--line); position: relative;
+}
 #element-bar {
   display: flex; align-items: center; gap: 6px;
-  padding: 6px 10px; border-top: 1px solid var(--line);
-  flex: none; overflow-x: auto; scrollbar-width: none; min-height: 34px;
+  padding: 6px 10px;
+  flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; min-height: 34px;
+  position: relative;
 }
 #element-bar::-webkit-scrollbar { display: none; }
+/* 溢出时显示左右滚动箭头（元素很多时也能触达后面的元素） */
+.elbar-arrow {
+  display: none; align-items: center; justify-content: center;
+  width: 22px; flex: none; border: none; cursor: pointer;
+  background: var(--panel); color: var(--dim); font-size: 15px; font-family: inherit;
+  transition: background .15s, color .15s;
+}
+#element-bar-wrap.overflow .elbar-arrow { display: flex; }
+.elbar-arrow:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.elbar-arrow:disabled { opacity: .25; cursor: default; }
+#elbar-left { border-right: 1px solid var(--line); }
+#elbar-right { border-left: 1px solid var(--line); }
 .el-chip {
   padding: 3px 10px; border-radius: 7px; background: var(--panel);
   border: 1px solid var(--line); cursor: pointer;
@@ -422,7 +439,7 @@ body.playing .el[data-type="audio"] { display: none !important; }
 body.playing #toolbar,
 body.playing #left,
 body.playing #scene-tabs,
-body.playing #element-bar,
+body.playing #element-bar-wrap,
 body.playing #props { display: none; }
 body.playing #layout { display: block; }
 body.playing #right { width: 100%; max-width: none; border: none; height: 100%; }

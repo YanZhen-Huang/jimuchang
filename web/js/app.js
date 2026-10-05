@@ -371,6 +371,10 @@ const App = {
       await sleep(900);
       this.testLayout();
     }
+    if (params.get('testelbar') === '1') {
+      await sleep(900);
+      this.testElbar();
+    }
     if (params.get('testctabs') === '1') {
       await sleep(700);
       try {
@@ -464,6 +468,7 @@ const App = {
     on('btn-play', () => this.play());
     on('btn-toggle-left', () => this.toggleLeftCollapse());
     this.initLayoutUI();
+    this.initElementBarUI();
     on('btn-demo', () => this.loadDemo());
     on('btn-add-text', () => Editor.addElement('text'));
     on('btn-add-image', () => this.addMediaElement('image'));
@@ -627,9 +632,11 @@ const App = {
   renderElementBar() {
     const box = document.getElementById('element-bar');
     if (!box) return;
+    const prevScroll = box.scrollLeft;
     const sel = Editor.selectedId;
     if (!Project.data.elements.length) {
       box.innerHTML = '<span class="el-bar-note">暂无元素：用工具栏「＋」添加，或从下方属性面板编辑舞台</span>';
+      this.updateElBarArrows();
       return;
     }
     let html = '';
@@ -646,6 +653,15 @@ const App = {
         this.elementMenu(e.clientX, e.clientY, id);
       };
     });
+    // 重渲染不丢滚动位置；选中的元素始终滚入视野（覆盖新建元素追加到尾部的情况）
+    box.scrollLeft = Math.min(prevScroll, Math.max(0, box.scrollWidth - box.clientWidth));
+    const chip = sel ? box.querySelector(`.el-chip[data-id="${sel}"]`) : null;
+    if (chip) {
+      const bl = chip.offsetLeft, br = bl + chip.offsetWidth;
+      if (bl < box.scrollLeft + 4) box.scrollLeft = Math.max(0, bl - 8);
+      else if (br > box.scrollLeft + box.clientWidth - 4) box.scrollLeft = br - box.clientWidth + 8;
+    }
+    this.updateElBarArrows();
   },
 
   // 选中元素（switchScript=true 时同步把积木区切到该元素的脚本）
@@ -1237,6 +1253,62 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     } catch (e) {
       console.log('LAYOUT|error|' + (e.message || e));
       console.log('LAYOUT|FAIL');
+    }
+  },
+
+  // ELBAR 测试：元素条溢出时的滚轮 / 箭头 / 选中滚入视野 / 重渲染保持滚动
+  async testElbar() {
+    const results = [];
+    const check = (name, ok) => { results.push(`${name}=${ok ? 'ok' : 'FAIL'}`); return ok; };
+    try {
+      const box = document.getElementById('element-bar');
+      const wrap = document.getElementById('element-bar-wrap');
+      // 造 24 个画布外的不可见元素（不进舞台，只为把元素条撑到溢出）
+      for (let i = 0; i < 24; i++) {
+        Project.data.elements.push({
+          id: 'elbar_t' + i, type: 'shape', name: '测试元素甲乙丙丁' + i,
+          x: -3000, y: -3000, w: 100, h: 100, z: -99, visible: false,
+          props: { shape: 'rect', fill: '#666' }
+        });
+      }
+      Editor.select(null);
+      this.renderElementBar();
+      await sleep(250);
+      check('overflow-detect', wrap.classList.contains('overflow'));
+      // ① 右箭头滚动
+      const s0 = box.scrollLeft;
+      document.getElementById('elbar-right').click();
+      await sleep(500);
+      const s1 = box.scrollLeft;
+      check('arrow-scroll', s1 > s0 + 40);
+      // ② 滚轮横向滚动
+      box.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }));
+      await sleep(150);
+      check('wheel-scroll', box.scrollLeft > s1 + 60);
+      // ③ 选中最后一个元素 → 自动滚入视野
+      const last = Project.data.elements[Project.data.elements.length - 1];
+      Editor.select(last.id);
+      await sleep(300);
+      const chip = box.querySelector(`.el-chip[data-id="${last.id}"]`);
+      const inView = !!chip && chip.offsetLeft >= box.scrollLeft - 2
+        && chip.offsetLeft + chip.offsetWidth <= box.scrollLeft + box.clientWidth + 2;
+      check('select-into-view', inView);
+      // ④ 重渲染保持滚动位置
+      const s2 = box.scrollLeft;
+      this.renderElementBar();
+      await sleep(150);
+      const s3 = box.scrollLeft;
+      check('rerender-keeps', Math.abs(s3 - s2) < 40);
+      // ⑤ 左箭头回滚
+      document.getElementById('elbar-left').click();
+      await sleep(500);
+      check('arrow-left', box.scrollLeft < s3 - 40);
+      // 保留溢出展示态供截图走查（画布外元素不影响舞台；进程退出即销毁）
+      console.log('ELBAR|' + results.join('|'));
+      console.log(results.every(r => !r.includes('FAIL')) ? 'ELBAR|PASS' : 'ELBAR|FAIL');
+    } catch (e) {
+      console.log('ELBAR|error|' + (e.message || e));
+      console.log('ELBAR|FAIL');
     }
   },
 
@@ -2081,6 +2153,41 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     doIt();
     clearTimeout(this._rszTimer);
     this._rszTimer = setTimeout(doIt, 160);
+  },
+
+  // ---------- 元素条：横向滚动（滚轮 / 箭头）、溢出状态 ----------
+  initElementBarUI() {
+    const box = document.getElementById('element-bar');
+    const wrap = document.getElementById('element-bar-wrap');
+    if (!box || !wrap) return;
+    box.addEventListener('scroll', () => this.updateElBarArrows(), { passive: true });
+    box.addEventListener('wheel', e => {
+      if (box.scrollWidth <= box.clientWidth + 2) return;
+      e.preventDefault();
+      box.scrollLeft += (Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+      this.updateElBarArrows();
+    }, { passive: false });
+    const left = document.getElementById('elbar-left');
+    const right = document.getElementById('elbar-right');
+    if (left) left.onclick = () => box.scrollBy({ left: -box.clientWidth * 0.7, behavior: 'smooth' });
+    if (right) right.onclick = () => box.scrollBy({ left: box.clientWidth * 0.7, behavior: 'smooth' });
+    window.addEventListener('resize', () => this.updateElBarArrows());
+    if (window.ResizeObserver) {
+      try { new ResizeObserver(() => this.updateElBarArrows()).observe(box); } catch (e) { }
+    }
+    this.updateElBarArrows();
+  },
+
+  updateElBarArrows() {
+    const box = document.getElementById('element-bar');
+    const wrap = document.getElementById('element-bar-wrap');
+    if (!box || !wrap) return;
+    const over = box.scrollWidth > box.clientWidth + 2;
+    wrap.classList.toggle('overflow', over);
+    const left = document.getElementById('elbar-left');
+    const right = document.getElementById('elbar-right');
+    if (left) left.disabled = !over || box.scrollLeft <= 1;
+    if (right) right.disabled = !over || box.scrollLeft >= box.scrollWidth - box.clientWidth - 1;
   },
 
   setupAutosave() {

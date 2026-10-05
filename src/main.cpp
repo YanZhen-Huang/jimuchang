@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.4"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.5"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -572,6 +572,10 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-layout"))) {
             q.addQueryItem(QStringLiteral("testlayout"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-elbar"))) {
+            q.addQueryItem(QStringLiteral("testelbar"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (args.contains(QStringLiteral("--test-hotkeys"))) {

@@ -12,6 +12,7 @@ declare -A TESTS=(
   [canvaszoom]="--test-canvaszoom"
   [playview]="--test-playview"
   [layout]="--test-layout"
+  [elbar]="--test-elbar"
   [hotkeys]="--test-hotkeys"
   [play]="--test-play"
   [save2]="--test-save2"
@@ -22,7 +23,7 @@ declare -A TESTS=(
   [ppt]="--test-ppt"
   [pack]="--test-pack"
 )
-ORDER=(canvaszoom playview layout hotkeys play save2 fx uiscale ctabs templates)
+ORDER=(canvaszoom playview layout elbar hotkeys play save2 fx uiscale ctabs templates)
 if [ "$#" -gt 0 ]; then ORDER=("$@"); fi
 
 fail=0
