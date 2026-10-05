@@ -2,145 +2,230 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>积木剧场 · 宣传片（代码化渲染）</title>
+<title>积木剧场 · 宣传片 v2（黑箱剧场 × 积木底板）</title>
 <style>
-  html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0B0D11; }
-  #stage {
-    position: relative; width: 1920px; height: 1080px; overflow: hidden;
-    color: #E6E9EF;
-    font-family: "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
-    background: radial-gradient(1250px 820px at 960px 470px, #141B2A 0%, #0B0D11 62%);
+  /* ============ 设计 tokens ============
+     主题：剧场黑箱 + 积木底板。主强调=琥珀金；积木三原色只出现在积木/产品卡上。
+     签名元素：2×2 凸点标记（stud）+ 聚光扫光。 */
+  :root {
+    --bg: #0A0C12;
+    --ink: #F4F1E9;
+    --dim: #9B958A;
+    --gold: #E8B84B;
+    --gold-hi: #F5D077;
+    --red: #E4573D;
+    --yellow: #F2B531;
+    --blue: #4C7EF3;
+    --line: rgba(244, 241, 233, .14);
+    --fd: "Source Han Mono SC", "Noto Sans Mono CJK SC", "Noto Sans CJK SC", monospace;
+    --fb: "Noto Sans CJK SC", sans-serif;
   }
+  html, body { margin: 0; padding: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; color: var(--ink); font-family: var(--fb);
+    background:
+      radial-gradient(1150px 760px at 78% -10%, rgba(232,184,75,.085), transparent 60%),
+      radial-gradient(950px 720px at 8% 110%, rgba(228,87,61,.07), transparent 62%),
+      radial-gradient(1400px 900px at 50% 45%, #131017 0%, #0A0C12 66%);
+  }
+  /* 积木底板：暗格网 + 每格中心一个微凸点 */
+  #bggrid { position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle, rgba(244,241,233,.075) 1.4px, rgba(244,241,233,0) 2px),
+      linear-gradient(rgba(244,241,233,.032) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(244,241,233,.032) 1px, transparent 1px);
+    background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(1250px 830px at 50% 46%, #000 52%, transparent 100%);
+    mask-image: radial-gradient(1250px 830px at 50% 46%, #000 52%, transparent 100%);
+  }
+  #bgvig { position: absolute; inset: 0;
+    background: radial-gradient(1500px 1000px at 50% 44%, transparent 56%, rgba(0,0,0,.6) 100%); }
   #fx { position: absolute; left: 0; top: 0; }
   .abs { position: absolute; }
-  .mono { font-family: "Source Han Mono SC", "Noto Sans Mono CJK SC", monospace; }
+
+  /* 品牌角标（右下 · 2×2 凸点 + 字标） */
+  #brand { position: absolute; right: 58px; bottom: 46px; display: flex; align-items: center; gap: 13px;
+    font-family: var(--fd); font-size: 17px; letter-spacing: .44em; color: rgba(244,241,233,.40); opacity: 0; }
+  #brand svg circle { fill: var(--gold); opacity: .8; }
+
+  /* eyebrow：金色凸点 + 大写英文 + 中文 */
+  .eb { display: flex; align-items: center; gap: 15px; font-family: var(--fd); font-size: 22px;
+    letter-spacing: .36em; color: var(--gold); }
+  .eb i { width: 10px; height: 10px; border-radius: 50%; background: var(--gold);
+    box-shadow: 0 0 16px rgba(232,184,75,.85); flex: none; }
 
   /* 灯笼 */
-  .lantern { font-size: 112px; line-height: 1; transform-origin: 50% 0%; filter: drop-shadow(0 10px 26px rgba(226,58,46,.45)); }
+  .lantern { font-size: 104px; line-height: 1; transform-origin: 50% 0%;
+    filter: drop-shadow(0 12px 30px rgba(228,87,61,.5)); }
 
-  /* S1 开场 */
-  #title1 { left: 0; top: 400px; width: 1920px; text-align: center; font-size: 158px; font-weight: 800; letter-spacing: 14px;
-    text-shadow: 0 0 46px rgba(108,140,255,.5), 0 0 120px rgba(108,140,255,.25); }
-  #line1 { left: 960px; top: 606px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, rgba(108,140,255,0), #6C8CFF, rgba(108,140,255,0));
-    transform-origin: 50% 50%; }
-  #sub1 { left: 0; top: 668px; width: 1920px; text-align: center; font-size: 44px; color: #9AA4B8; letter-spacing: 6px; }
+  /* ---- S1 开场 ---- */
+  #beam { position: absolute; left: -560px; top: -300px; width: 330px; height: 1750px;
+    transform: rotate(22deg); background: linear-gradient(90deg, transparent, rgba(232,184,75,.16), rgba(245,208,119,.05), transparent);
+    filter: blur(1.5px); }
+  #eb1 { left: 0; top: 344px; width: 1920px; justify-content: center; }
+  #title1 { left: 0; top: 396px; width: 1920px; text-align: center;
+    font-family: var(--fd); font-weight: 700; font-size: 148px; letter-spacing: .10em;
+    color: #F7F4EC; text-shadow: 0 0 54px rgba(232,184,75,.34), 0 2px 0 rgba(0,0,0,.5); }
+  #line1 { left: 960px; top: 604px; height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(232,184,75,0), var(--gold), rgba(232,184,75,0)); transform-origin: 50% 50%; }
+  #sub1 { left: 0; top: 664px; width: 1920px; text-align: center; font-size: 42px; color: var(--dim); letter-spacing: .22em; }
 
-  /* S2 拖积木 */
-  #t2 { left: 200px; top: 400px; font-size: 92px; font-weight: 800; letter-spacing: 4px; }
-  #d2a { left: 206px; top: 590px; font-size: 35px; color: #9AA4B8; }
-  #d2b { left: 206px; top: 650px; font-size: 35px; color: #9AA4B8; }
-  .brick { width: 280px; height: 170px; border-radius: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    box-shadow: 0 26px 60px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.35); }
-  .brick .ico { font-size: 60px; line-height: 1; }
-  .brick .lbl { font-size: 30px; font-weight: 700; color: rgba(11,13,17,.82); }
-  .brick .knob { position: absolute; left: -14px; top: 50%; margin-top: -14px; width: 28px; height: 28px; border-radius: 50%; }
-  .brick .slot { position: absolute; right: -13px; top: 50%; margin-top: -13px; width: 26px; height: 26px; border-radius: 50%;
-    background: #0C0F16; box-shadow: inset 0 2px 6px rgba(0,0,0,.6); }
-  #play2 { left: 1234px; top: 812px; width: 262px; height: 84px; border-radius: 999px; background: linear-gradient(135deg, #7C99FF, #5B7BF0);
-    display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; color: #fff;
-    box-shadow: 0 20px 50px rgba(108,140,255,.42); }
-  #arrow2 { left: 1352px; top: 742px; font-size: 42px; color: #6C8CFF; }
+  /* ---- S2 拖积木 ---- */
+  #eb2 { left: 202px; top: 322px; }
+  #t2 { left: 200px; top: 384px; font-family: var(--fd); font-weight: 700; font-size: 92px; letter-spacing: .06em; color: #F7F4EC; }
+  .dline { display: flex; align-items: center; gap: 16px; font-size: 34px; color: var(--dim); }
+  .dline i { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); opacity: .85; flex: none; }
+  #d2a { left: 206px; top: 584px; }
+  #d2b { left: 206px; top: 646px; }
+  /* 积木块：乐高式顶部凸点 */
+  .brick { width: 280px; height: 170px; border-radius: 26px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px; background: var(--g);
+    box-shadow: 0 32px 72px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.30), inset 0 -12px 32px rgba(0,0,0,.20); }
+  .brick::before, .brick::after { content: ''; position: absolute; top: -10px; width: 64px; height: 22px;
+    border-radius: 12px; background: var(--g); box-shadow: inset 0 2px 0 rgba(255,255,255,.32); }
+  .brick::before { left: 38px; }
+  .brick::after { left: 178px; }
+  .brick .ico { font-size: 56px; line-height: 1; filter: drop-shadow(0 3px 8px rgba(0,0,0,.28)); }
+  .brick .lbl { font-size: 29px; font-weight: 700; color: rgba(12,13,18,.86); letter-spacing: .1em; }
+  #arrow2 { left: 1354px; top: 748px; font-size: 38px; color: var(--gold); }
+  #play2 { left: 1234px; top: 812px; width: 262px; height: 84px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; letter-spacing: .08em;
+    color: #14100A; background: linear-gradient(135deg, var(--gold-hi), var(--gold));
+    box-shadow: 0 22px 54px rgba(232,184,75,.40), inset 0 2px 0 rgba(255,255,255,.45); }
 
-  /* S3 能力 */
-  #t3 { left: 0; top: 122px; width: 1920px; text-align: center; font-size: 86px; font-weight: 800; letter-spacing: 6px; }
-  .shot { width: 840px; height: 480px; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,.14);
-    box-shadow: 0 40px 90px rgba(0,0,0,.6), 0 0 0 6px rgba(255,255,255,.03); background: #0E1218; }
-  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  #shotA { left: 170px; top: 320px; }
-  #shotB { left: 910px; top: 430px; z-index: 3; }
-  .pill { height: 68px; padding: 0 34px; border-radius: 999px; display: flex; align-items: center; gap: 12px;
-    font-size: 31px; color: #D6DCE8; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.12); }
+  /* ---- S3 能力 ---- */
+  #eb3 { left: 0; top: 96px; width: 1920px; justify-content: center; }
+  #t3 { left: 0; top: 156px; width: 1920px; text-align: center;
+    font-family: var(--fd); font-weight: 700; font-size: 80px; letter-spacing: .08em; color: #F7F4EC; }
+  .shot { width: 840px; border-radius: 18px; overflow: hidden; background: #12151D;
+    border: 1px solid rgba(244,241,233,.14);
+    box-shadow: 0 54px 120px rgba(0,0,0,.66), 0 0 0 8px rgba(244,241,233,.03); }
+  .shot .bar { height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 18px;
+    background: #171B25; border-bottom: 1px solid rgba(244,241,233,.09); }
+  .shot .bar i { width: 12px; height: 12px; border-radius: 50%; }
+  .shot .bar i:nth-child(1) { background: var(--red); }
+  .shot .bar i:nth-child(2) { background: var(--yellow); }
+  .shot .bar i:nth-child(3) { background: #4CC38A; }
+  .shot img { width: 100%; height: 440px; object-fit: cover; display: block; }
+  #shotA { left: 170px; top: 330px; }
+  #shotB { left: 910px; top: 436px; z-index: 3; }
+  .pill { height: 66px; padding: 0 34px; border-radius: 999px; display: flex; align-items: center; gap: 13px;
+    font-size: 30px; color: #E3DECF; background: rgba(244,241,233,.05);
+    border: 1px solid rgba(244,241,233,.15); box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+  .pill b { color: var(--gold); font-weight: 700; }
+  #pwrap { position: absolute; left: 0; top: 946px; width: 1920px; display: flex; justify-content: center; gap: 38px; }
 
-  /* S4 导出 */
-  #t4 { left: 0; top: 122px; width: 1920px; text-align: center; font-size: 86px; font-weight: 800; letter-spacing: 6px; }
-  .exp { width: 380px; height: 240px; border-radius: 26px; background: linear-gradient(165deg, rgba(255,255,255,.09), rgba(255,255,255,.035)); border: 1px solid rgba(255,255,255,.17);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-    box-shadow: 0 26px 60px rgba(0,0,0,.45); }
-  .exp .e-ico { font-size: 68px; line-height: 1; }
-  .exp .e-name { font-size: 34px; font-weight: 700; }
-  .exp .e-desc { font-size: 23px; color: #8A93A6; }
+  /* ---- S4 导出 ---- */
+  #eb4 { left: 0; top: 96px; width: 1920px; justify-content: center; }
+  #t4 { left: 0; top: 156px; width: 1920px; text-align: center;
+    font-family: var(--fd); font-weight: 700; font-size: 80px; letter-spacing: .08em; color: #F7F4EC; }
+  .exp { width: 380px; height: 240px; border-radius: 26px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px;
+    background: linear-gradient(165deg, rgba(244,241,233,.085), rgba(244,241,233,.028));
+    border: 1px solid rgba(244,241,233,.17); box-shadow: 0 30px 70px rgba(0,0,0,.5); }
+  .exp .e-ico { font-size: 66px; line-height: 1; }
+  .exp .e-name { font-size: 33px; font-weight: 700; letter-spacing: .04em; }
+  .exp .e-desc { font-size: 22px; color: var(--dim); }
 
-  /* S5 结尾 */
-  #title5 { left: 0; top: 396px; width: 1920px; text-align: center; font-size: 138px; font-weight: 800; letter-spacing: 12px;
-    text-shadow: 0 0 44px rgba(108,140,255,.5); }
-  #sub5 { left: 0; top: 596px; width: 1920px; text-align: center; font-size: 38px; color: #9AA4B8; letter-spacing: 8px; }
-  #gh5 { left: 0; top: 716px; width: 1920px; text-align: center; font-size: 44px; color: #7C99FF; letter-spacing: 2px; }
-
-  .cap { position: absolute; width: 1920px; left: 0; text-align: center; color: #5E6878; font-size: 26px; letter-spacing: 4px; }
+  /* ---- S5 结尾 ---- */
+  #sweep { position: absolute; left: 0; top: 540px; width: 1920px; height: 2px; transform-origin: 0 50%;
+    background: linear-gradient(90deg, transparent, rgba(232,184,75,.95), transparent); }
+  #title5 { left: 0; top: 388px; width: 1920px; text-align: center;
+    font-family: var(--fd); font-weight: 700; font-size: 136px; letter-spacing: .10em; color: #F7F4EC;
+    text-shadow: 0 0 58px rgba(232,184,75,.36); }
+  #line5 { left: 960px; top: 596px; height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(232,184,75,0), var(--gold), rgba(232,184,75,0)); transform-origin: 50% 50%; }
+  #sub5 { left: 0; top: 640px; width: 1920px; text-align: center; font-size: 36px; color: var(--dim); letter-spacing: .3em; }
+  #gh5 { left: 0; top: 742px; width: 1920px; text-align: center;
+    font-family: var(--fd); font-size: 42px; color: var(--gold-hi); letter-spacing: .04em; }
+  #ghline { left: 960px; top: 812px; height: 2px; border-radius: 1px; background: var(--gold); opacity: .5; transform-origin: 50% 50%; }
 </style>
 </head>
 <body>
 <div id="stage">
+  <div id="bggrid"></div>
+  <div id="bgvig"></div>
   <canvas id="fx" width="1920" height="1080"></canvas>
 
-  <!-- S1 -->
-  <div class="abs lantern" id="lan1" style="left:760px; top:-26px;">🏮</div>
-  <div class="abs lantern" id="lan2" style="left:1060px; top:-26px;">🏮</div>
+  <div id="brand">
+    <svg width="20" height="20" viewBox="0 0 20 20"><circle cx="5.5" cy="5.5" r="3.1"/><circle cx="14.5" cy="5.5" r="3.1"/><circle cx="5.5" cy="14.5" r="3.1"/><circle cx="14.5" cy="14.5" r="3.1"/></svg>
+    <span>JIMUCHANG</span>
+  </div>
+
+  <!-- S1 开场 -->
+  <div class="abs" id="beam"></div>
+  <div class="abs lantern" id="lan1" style="left:766px; top:-24px;">🏮</div>
+  <div class="abs lantern" id="lan2" style="left:1052px; top:-24px;">🏮</div>
+  <div class="abs eb" id="eb1"><i></i>JIMUCHANG · 积木剧场<i></i></div>
   <div class="abs" id="title1">积木剧场</div>
   <div class="abs" id="line1"></div>
   <div class="abs" id="sub1">拖积木，做演示的动画工具</div>
 
-  <!-- S2 -->
+  <!-- S2 拖积木 -->
+  <div class="abs eb" id="eb2"><i></i>BUILD · 拖积木</div>
   <div class="abs" id="t2">拖积木 · 拼动画</div>
-  <div class="abs" id="d2a">157 块中文积木，像搭积木一样编排演示</div>
-  <div class="abs" id="d2b">每个元素都有独立脚本，各演各的</div>
-  <div class="abs brick" id="br1" style="left:920px; top:560px; background:linear-gradient(140deg,#8FA8FF,#6C8CFF 60%,#5573E0);">
-    <i class="knob" style="background:#6C8CFF;"></i><span class="ico">⚡</span><span class="lbl">事件</span><i class="slot"></i>
-  </div>
-  <div class="abs brick" id="br2" style="left:1224px; top:560px; background:linear-gradient(140deg,#6FD7A8,#4CC38A 60%,#37A672);">
-    <i class="knob" style="background:#4CC38A;"></i><span class="ico">🎬</span><span class="lbl">动画</span><i class="slot"></i>
-  </div>
-  <div class="abs brick" id="br3" style="left:1528px; top:560px; background:linear-gradient(140deg,#FFC56E,#F5A623 60%,#D98B12);">
-    <i class="knob" style="background:#F5A623;"></i><span class="ico">🔊</span><span class="lbl">声音</span>
-  </div>
+  <div class="abs dline" id="d2a"><i></i>157 块中文积木，像搭积木一样编排演示</div>
+  <div class="abs dline" id="d2b"><i></i>每个元素都有独立脚本，各演各的</div>
+  <div class="abs brick" id="br1" style="--g:linear-gradient(150deg,#F08A73,#E4573D 58%,#C4422B); left:920px; top:560px;">
+    <span class="ico">⚡</span><span class="lbl">事件</span></div>
+  <div class="abs brick" id="br2" style="--g:linear-gradient(150deg,#FFD469,#F2B531 58%,#D69A1D); left:1224px; top:560px;">
+    <span class="ico">🎬</span><span class="lbl">动画</span></div>
+  <div class="abs brick" id="br3" style="--g:linear-gradient(150deg,#7FA5FF,#4C7EF3 58%,#3A63CC); left:1528px; top:560px;">
+    <span class="ico">🔊</span><span class="lbl">声音</span></div>
   <div class="abs" id="arrow2">▼</div>
   <div class="abs" id="play2">▶ 播放</div>
 
-  <!-- S3 -->
+  <!-- S3 能力 -->
+  <div class="abs eb" id="eb3"><i></i>CREATE · 2D / 3D / 特效</div>
   <div class="abs" id="t3">2D · 3D · 特效，全都要</div>
-  <div class="abs shot" id="shotA"><img src="../docs/screenshots/3d-showcase.png" alt=""></div>
-  <div class="abs shot" id="shotB"><img src="../docs/screenshots/charts-effects.png" alt=""></div>
-  <div class="abs pill" id="p3a" style="left:560px; top:940px;">🧊 WebGL 3D</div>
-  <div class="abs pill" id="p3b" style="left:846px; top:940px;">📊 数据图表</div>
-  <div class="abs pill" id="p3c" style="left:1128px; top:940px;">✨ 粒子特效</div>
+  <div class="abs shot" id="shotA"><div class="bar"><i></i><i></i><i></i></div><img src="../docs/screenshots/3d-showcase.png" alt=""></div>
+  <div class="abs shot" id="shotB"><div class="bar"><i></i><i></i><i></i></div><img src="../docs/screenshots/charts-effects.png" alt=""></div>
+  <div id="pwrap">
+    <div class="pill" id="p3a">🧊 <b>WebGL</b> 3D 模型</div>
+    <div class="pill" id="p3b">📊 <b>实时</b> 数据图表</div>
+    <div class="pill" id="p3c">✨ <b>粒子</b> 特效系统</div>
+  </div>
 
-  <!-- S4 -->
+  <!-- S4 导出 -->
+  <div class="abs eb" id="eb4"><i></i>SHARE · 一键导出</div>
   <div class="abs" id="t4">做完，一键导出</div>
   <div class="abs exp" id="x1" style="left:420px; top:330px;"><span class="e-ico">🌐</span><span class="e-name">网页放映包</span><span class="e-desc">单文件 HTML · 双击即放</span></div>
   <div class="abs exp" id="x2" style="left:1120px; top:330px;"><span class="e-ico">🎥</span><span class="e-name">视频 MP4</span><span class="e-desc">1080p · 自动录制导出</span></div>
   <div class="abs exp" id="x3" style="left:420px; top:618px;"><span class="e-ico">📊</span><span class="e-name">PPT 演示文稿</span><span class="e-desc">可编辑 · 高保真两模式</span></div>
   <div class="abs exp" id="x4" style="left:1120px; top:618px;"><span class="e-ico">💻</span><span class="e-name">Windows 程序</span><span class="e-desc">.exe 双击全屏播放</span></div>
 
-  <!-- S5 -->
-  <div class="abs lantern" id="lan3" style="left:760px; top:-26px;">🏮</div>
-  <div class="abs lantern" id="lan4" style="left:1060px; top:-26px;">🏮</div>
+  <!-- S5 结尾 -->
+  <div class="abs" id="sweep"></div>
+  <div class="abs lantern" id="lan3" style="left:766px; top:-24px;">🏮</div>
+  <div class="abs lantern" id="lan4" style="left:1052px; top:-24px;">🏮</div>
   <div class="abs" id="title5">积木剧场</div>
+  <div class="abs" id="line5"></div>
   <div class="abs" id="sub5">开源 · 免费 · MIT License</div>
-  <div class="abs mono" id="gh5">github.com/YanZhen-Huang/jimuchang</div>
+  <div class="abs" id="gh5">github.com/YanZhen-Huang/jimuchang</div>
+  <div class="abs" id="ghline"></div>
 </div>
 
 <script>
-// ================= 时间轴渲染引擎（确定性：setTime(t) 渲染任意时刻） =================
+// ================= 时间轴渲染引擎（确定性：帧 = f(t)） =================
 const E = id => document.getElementById(id);
 const clamp01 = v => Math.min(1, Math.max(0, v));
 const seg = (t, a, b) => clamp01((t - a) / Math.max(1e-6, b - a));
 const eOutCubic = p => 1 - Math.pow(1 - p, 3);
 const eInCubic = p => p * p * p;
-const eOutBack = p => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
 const eInOutCubic = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const eOutBack = p => { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
 
-// 确定性随机（种子固定 → 每次渲染完全一致）
+// 确定性随机
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rnd = mulberry32(20261005);
 
-// 星点（常驻）+ 结尾爆发粒子（预生成，确定性）
-const stars = Array.from({ length: 92 }, () => ({ x: rnd() * 1920, y: rnd() * 1080, r: .6 + rnd() * 1.7, ph: rnd() * 6.283, sp: .4 + rnd() * 1.1, vy: 6 + rnd() * 16 }));
-const burst = Array.from({ length: 260 }, () => ({ a: rnd() * 6.283, v: 180 + rnd() * 820, life: 1.3 + rnd() * 1.5, r: 2 + rnd() * 3.4,
-  c: ['#6C8CFF', '#8FB0FF', '#F5C445', '#E23A2E', '#4CC38A', '#FFFFFF'][Math.floor(rnd() * 6)] }));
+// 结尾礼花：金色系为主 + 少量红蓝点缀（预生成，确定性）
+const burst = Array.from({ length: 300 }, () => ({
+  a: rnd() * 6.283, v: 170 + rnd() * 860, life: 1.3 + rnd() * 1.6, r: 1.8 + rnd() * 3.2,
+  c: (() => { const p = rnd(); return p < .62 ? ['#E8B84B', '#F5D077', '#FFF2C9'][Math.floor(rnd() * 3)] : (p < .82 ? '#E4573D' : '#4C7EF3'); })()
+}));
 
 const cv = E('fx'), cx2 = cv.getContext('2d');
 
-// 通用：设置元素视觉状态（每帧从 t 重新计算，无 CSS 过渡）
 function set(id, o, x = 0, y = 0, s = 1, r = 0, extra = {}) {
   const el = E(id);
   el.style.opacity = o;
@@ -150,131 +235,133 @@ function set(id, o, x = 0, y = 0, s = 1, r = 0, extra = {}) {
 
 function drawFx(t) {
   cx2.clearRect(0, 0, 1920, 1080);
-  // 星点
-  for (const s of stars) {
-    const y = ((s.y - s.vy * t) % 1140 + 1140) % 1140 - 30;
-    const a = .1 + .42 * (.5 + .5 * Math.sin(t * s.sp + s.ph));
-    cx2.globalAlpha = a;
-    cx2.fillStyle = '#C6D2F0';
-    cx2.beginPath(); cx2.arc(s.x, y, s.r, 0, 6.283); cx2.fill();
+  const bt = t - 26.0;
+  if (bt <= 0) return;
+  for (const b of burst) {
+    const e = bt / b.life;
+    if (e >= 1) continue;
+    const d = b.v * bt * (1 - .42 * e);
+    const x = 960 + Math.cos(b.a) * d;
+    const y = 470 + Math.sin(b.a) * d + .5 * 430 * bt * bt;
+    const al = 1 - eInCubic(e);
+    cx2.globalAlpha = al * .16;
+    cx2.fillStyle = b.c;
+    cx2.beginPath(); cx2.arc(x, y, b.r * 3.1, 0, 6.283); cx2.fill();
+    cx2.globalAlpha = al * .95;
+    cx2.beginPath(); cx2.arc(x, y, b.r * (1 - .35 * e), 0, 6.283); cx2.fill();
   }
-  // 开场 / 结尾标题后的柔光
-  const glow1 = seg(t, .5, 1.4) * (1 - seg(t, 4.2, 4.7));
-  const glow5 = seg(t, 24.4, 25.2);
-  const glow = Math.max(glow1, glow5 * .8);
-  if (glow > 0.01) {
-    const g = cx2.createRadialGradient(960, 500, 60, 960, 500, 620);
-    g.addColorStop(0, `rgba(108,140,255,${.16 * glow})`);
-    g.addColorStop(1, 'rgba(108,140,255,0)');
-    cx2.globalAlpha = 1; cx2.fillStyle = g;
-    cx2.fillRect(0, 0, 1920, 1080);
-  }
-  // 结尾粒子爆发
-  const bt = t - 26.2;
-  if (bt > 0) {
-    cx2.globalAlpha = 1;
-    for (const b of burst) {
-      const e = bt / b.life;
-      if (e >= 1) continue;
-      const dec = 1 - .42 * e;
-      const d = b.v * bt * dec;
-      const x = 960 + Math.cos(b.a) * d;
-      const y = 540 + Math.sin(b.a) * d + .5 * 420 * bt * bt;
-      cx2.globalAlpha = (1 - eInCubic(e)) * .95;
-      cx2.fillStyle = b.c;
-      cx2.beginPath(); cx2.arc(x, y, b.r * (1 - .35 * e), 0, 6.283); cx2.fill();
-    }
-    cx2.globalAlpha = 1;
-  }
+  cx2.globalAlpha = 1;
 }
 
 function apply(t) {
-  // ---------- 场景总控 ----------
-  const out1 = seg(t, 4.25, 4.75);        // S1 退场
+  const out1 = seg(t, 4.25, 4.75);
   const s1 = 1 - out1;
   const s2 = seg(t, 4.6, 5.2) * (1 - seg(t, 10.5, 11.05));
   const s3 = seg(t, 11.1, 11.7) * (1 - seg(t, 16.95, 17.55));
   const s4 = seg(t, 17.7, 18.3) * (1 - seg(t, 23.25, 23.85));
   const s5 = seg(t, 24.3, 24.95);
 
-  // ---------- 灯笼（S1 / S5 出现，轻微摆动） ----------
+  // 品牌角标：开场出现，S4 末尾轻退，结尾回归
+  const brandO = .9 * Math.max(seg(t, .6, 1.4) * (1 - seg(t, 23.4, 23.9)), seg(t, 24.6, 25.2));
+  E('brand').style.opacity = brandO;
+
+  // 聚光扫光（S1 一次性）
+  const bp = seg(t, .85, 2.15);
+  E('beam').style.opacity = Math.sin(Math.PI * bp) * (1 - out1);
+  E('beam').style.transform = `translate(${-520 + 3250 * eInOutCubic(bp)}px, 0) rotate(22deg)`;
+
+  // 灯笼（S1 / S5）
   const sway = Math.sin(t * 1.5) * 4.5;
-  const l1 = s1 * seg(t, .2, 1) + s5 * seg(t, 24.2, 24.9) * (1 - s1);   // S1 与 S5 共用，均为同一位置
-  const lanternIn = Math.max(s1 * seg(t, .2, 1.0), s5 * seg(t, 24.2, 24.9));
-  const lanternOut = out1 * 0; // S1 退场时灯笼跟随 s1 淡出
-  set('lan1', lanternIn * (1 - out1), 0, 0, 1, -sway);
-  set('lan2', lanternIn * (1 - out1), 0, 0, 1, sway);
-  set('lan3', s5 * seg(t, 24.2, 24.9), 0, 0, 1, -sway * .8);
-  set('lan4', s5 * seg(t, 24.2, 24.9), 0, 0, 1, sway * .8);
+  const lin = Math.max(s1 * seg(t, .2, 1), s5 * seg(t, 24.2, 24.85));
+  set('lan1', lin * (1 - out1), 0, 0, 1, -sway);
+  set('lan2', lin * (1 - out1), 0, 0, 1, sway);
+  set('lan3', s5 * seg(t, 24.2, 24.85), 0, 0, 1, -sway * .8);
+  set('lan4', s5 * seg(t, 24.2, 24.85), 0, 0, 1, sway * .8);
 
   // ---------- S1 ----------
-  const t1p = seg(t, .4, 1.35);
-  set('title1', t1p * (1 - out1), 0, (1 - t1p) * 40 + out1 * -60, .66 + .34 * eOutBack(t1p), 0);
-  const l1p = seg(t, 1.5, 2.15);
-  E('line1').style.width = (240 * eOutCubic(l1p)) + 'px';
-  E('line1').style.marginLeft = (-120 * eOutCubic(l1p)) + 'px';
+  const eb1 = seg(t, .5, 1.1);
+  set('eb1', s1 * eb1, 0, (1 - eOutCubic(eb1)) * 16, 1, 0);
+  const t1p = seg(t, .62, 1.5);
+  set('title1', s1 * t1p, 0, (1 - eOutCubic(t1p)) * 34 + out1 * -56, .965 + .035 * eOutCubic(t1p), 0);
+  const l1p = seg(t, 1.7, 2.3);
+  E('line1').style.width = (250 * eInOutCubic(l1p)) + 'px';
+  E('line1').style.marginLeft = (-125 * eInOutCubic(l1p)) + 'px';
   E('line1').style.opacity = l1p * (1 - out1);
-  const sub1p = seg(t, 1.85, 2.5);
-  set('sub1', sub1p * (1 - out1), 0, (1 - sub1p) * 26 + out1 * -40, 1, 0);
+  const sub1p = seg(t, 2.0, 2.65);
+  set('sub1', s1 * sub1p, 0, (1 - eOutCubic(sub1p)) * 24 + out1 * -38, 1, 0);
 
   // ---------- S2 ----------
-  const s2o = s2;
-  const t2p = seg(t, 4.65, 5.25);
-  set('t2', s2o * t2p, (1 - eOutCubic(t2p)) * -70, 0, 1, 0);
-  const da = seg(t, 4.95, 5.45), db = seg(t, 5.25, 5.75);
-  set('d2a', s2o * da, (1 - eOutCubic(da)) * -50, 0, 1, 0);
-  set('d2b', s2o * db, (1 - eOutCubic(db)) * -50, 0, 1, 0);
-  // 三块积木依次飞入落位 + 6.5s 轻弹
-  const brickIn = [seg(t, 5.05, 5.6), seg(t, 5.4, 5.95), seg(t, 5.75, 6.3)];
-  const bounce = Math.sin(seg(t, 6.5, 6.9) * Math.PI) * 10;
+  const eb2 = seg(t, 4.6, 5.1);
+  set('eb2', s2 * eb2, (1 - eOutCubic(eb2)) * -44, 0, 1, 0);
+  const t2p = seg(t, 4.72, 5.3);
+  set('t2', s2 * t2p, (1 - eOutCubic(t2p)) * -64, 0, 1, 0);
+  const da = seg(t, 5.0, 5.5), db = seg(t, 5.28, 5.78);
+  set('d2a', s2 * da, (1 - eOutCubic(da)) * -48, 0, 1, 0);
+  set('d2b', s2 * db, (1 - eOutCubic(db)) * -48, 0, 1, 0);
+  const brickIn = [seg(t, 5.05, 5.62), seg(t, 5.4, 5.97), seg(t, 5.75, 6.32)];
+  const bounce = Math.sin(seg(t, 6.6, 7.0) * Math.PI) * 9;
   ['br1', 'br2', 'br3'].forEach((id, i) => {
     const p = brickIn[i];
     const e = eOutBack(p);
-    const xx = (1 - e) * 150;
-    const ss = .72 + .28 * e;
-    set(id, s2o * Math.min(1, p * 1.6), xx, -bounce * (i === 1 ? 1.3 : 1), ss, (1 - e) * 6);
+    set(id, s2 * Math.min(1, p * 1.6), (1 - e) * 150, -bounce * (i === 1 ? 1.35 : 1), .74 + .26 * e, (1 - e) * 5);
   });
-  const pl = seg(t, 7.3, 7.9);
-  set('play2', s2o * pl, 0, (1 - eOutBack(pl)) * 26, .6 + .4 * eOutBack(pl), 0);
-  const ar = seg(t, 8.1, 8.5) * (0.6 + 0.4 * Math.sin(t * 3.2));
-  set('arrow2', s2o * ar, 0, 0, 1, 0);
+  const pl = seg(t, 7.35, 7.95);
+  set('play2', s2 * pl, 0, (1 - eOutBack(pl)) * 26, .62 + .38 * eOutBack(pl), 0);
+  const ar = seg(t, 8.15, 8.55) * (.6 + .4 * Math.sin(t * 3.2));
+  set('arrow2', s2 * ar, 0, 0, 1, 0);
 
   // ---------- S3 ----------
-  const t3p = seg(t, 11.15, 11.75);
-  set('t3', s3 * t3p, 0, (1 - eOutCubic(t3p)) * -46, 1, 0);
-  const sa = seg(t, 11.65, 12.45), sb = seg(t, 12.15, 12.95);
+  const eb3 = seg(t, 11.12, 11.6);
+  set('eb3', s3 * eb3, 0, (1 - eOutCubic(eb3)) * -18, 1, 0);
+  const t3p = seg(t, 11.28, 11.85);
+  set('t3', s3 * t3p, 0, (1 - eOutCubic(t3p)) * -42, 1, 0);
+  const sa = seg(t, 11.7, 12.5), sb = seg(t, 12.2, 13.0);
   const floatY = Math.sin(t * 1.7) * 6;
-  set('shotA', s3 * sa, (1 - eOutCubic(sa)) * -560, floatY, .94 + .06 * eOutCubic(sa), (1 - eOutCubic(sa)) * -4);
-  set('shotB', s3 * sb, (1 - eOutCubic(sb)) * 560, -floatY, .94 + .06 * eOutCubic(sb), (1 - eOutCubic(sb)) * 4);
-  const pills = [seg(t, 13.6, 14.0), seg(t, 13.9, 14.3), seg(t, 14.2, 14.6)];
+  set('shotA', s3 * sa, (1 - eOutCubic(sa)) * -560, floatY, .94 + .06 * eOutCubic(sa), (1 - eOutCubic(sa)) * -3.5);
+  set('shotB', s3 * sb, (1 - eOutCubic(sb)) * 560, -floatY, .94 + .06 * eOutCubic(sb), (1 - eOutCubic(sb)) * 3.5);
+  const pills = [seg(t, 13.6, 14.05), seg(t, 13.92, 14.37), seg(t, 14.24, 14.69)];
   ['p3a', 'p3b', 'p3c'].forEach((id, i) => {
     const p = pills[i];
     set(id, s3 * p, 0, (1 - eOutBack(p)) * 22, .8 + .2 * eOutBack(p), 0);
   });
 
   // ---------- S4 ----------
-  const t4p = seg(t, 17.75, 18.35);
-  set('t4', s4 * t4p, 0, (1 - eOutCubic(t4p)) * -46, 1, 0);
-  const cardIn = [seg(t, 17.95, 18.45), seg(t, 18.3, 18.8), seg(t, 18.65, 19.15), seg(t, 19.0, 19.5)];
+  const eb4 = seg(t, 17.72, 18.2);
+  set('eb4', s4 * eb4, 0, (1 - eOutCubic(eb4)) * -18, 1, 0);
+  const t4p = seg(t, 17.88, 18.45);
+  set('t4', s4 * t4p, 0, (1 - eOutCubic(t4p)) * -42, 1, 0);
+  const cardIn = [seg(t, 17.98, 18.5), seg(t, 18.33, 18.85), seg(t, 18.68, 19.2), seg(t, 19.03, 19.55)];
   ['x1', 'x2', 'x3', 'x4'].forEach((id, i) => {
     const p = cardIn[i];
-    const glow = seg(t, 20.7 + i * .22, 21.15 + i * .22) * (1 - seg(t, 21.15 + i * .22, 21.6 + i * .22));
+    const gl = seg(t, 20.65 + i * .22, 21.1 + i * .22) * (1 - seg(t, 21.1 + i * .22, 21.55 + i * .22));
     set(id, s4 * p, 0, (1 - eOutBack(p)) * 40, .92 + .08 * eOutBack(p), 0, {
-      boxShadow: glow > .02
-        ? `0 26px 60px rgba(0,0,0,.45), 0 0 0 2px rgba(108,140,255,${.75 * glow}), 0 0 46px rgba(108,140,255,${.5 * glow})`
+      boxShadow: gl > .02
+        ? `0 30px 70px rgba(0,0,0,.5), 0 0 0 2px rgba(232,184,75,${.8 * gl}), 0 0 52px rgba(232,184,75,${.5 * gl})`
         : ''
     });
   });
 
-  // ---------- S5 ----------
-  const t5p = seg(t, 24.35, 25.05);
-  set('title5', s5 * t5p, 0, (1 - eOutBack(t5p)) * 30, .84 + .16 * eOutBack(t5p), 0);
-  const u5 = seg(t, 24.95, 25.45);
-  set('sub5', s5 * u5, 0, (1 - eOutCubic(u5)) * 22, 1, 0);
-  const g5 = seg(t, 25.55, 26.05);
-  E('gh5').style.opacity = s5 * g5;
-  E('gh5').style.clipPath = `inset(0 ${(1 - g5) * 100}% 0 0)`;
+  // 转场：金线扫过（进入结尾的仪式感）
+  const sw = seg(t, 23.95, 24.55);
+  E('sweep').style.transform = `scaleX(${eInOutCubic(sw)})`;
+  E('sweep').style.opacity = Math.sin(Math.PI * Math.min(1, sw)) * .9;
 
+  // ---------- S5 ----------
+  const t5p = seg(t, 24.4, 25.1);
+  set('title5', s5 * t5p, 0, (1 - eOutCubic(t5p)) * 28, .95 + .05 * eOutCubic(t5p), 0);
+  const l5 = seg(t, 24.95, 25.45);
+  E('line5').style.width = (210 * eInOutCubic(l5)) + 'px';
+  E('line5').style.marginLeft = (-105 * eInOutCubic(l5)) + 'px';
+  E('line5').style.opacity = l5;
+  const u5 = seg(t, 25.1, 25.6);
+  set('sub5', s5 * u5, 0, (1 - eOutCubic(u5)) * 20, 1, 0);
+  const g5 = seg(t, 25.62, 26.15);
+  set('gh5', s5 * g5, 0, (1 - eOutCubic(g5)) * 16, 1, 0);
+  const gl5 = seg(t, 25.95, 26.45);
+  E('ghline').style.transform = `scaleX(${eOutCubic(gl5)})`;
+  E('ghline').style.opacity = gl5 * .55;
+
+  // ---------- 结尾礼花（金） ----------
   drawFx(t);
 }
 

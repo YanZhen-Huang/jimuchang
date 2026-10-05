@@ -5,13 +5,23 @@
 ```
 promo.html      1920×1080 动画（window.setTime(t) 确定性渲染任意时刻）
 render.js       Playwright(系统 Edge headless) 逐帧 setTime → JPEG → ffmpeg 合成 MP4
+snap.js         静帧预览（只截指定时间点，秒级出图，审美迭代用）
 ```
+
+## 设计方向（v2 · 黑箱剧场 × 积木底板）
+
+- **主题**：剧场黑箱 + 积木底板。主强调 = 琥珀金 `#E8B84B`；积木三原色（红 `#E4573D` / 黄 `#F2B531` / 蓝 `#4C7EF3`）只出现在积木块与产品卡上
+- **背景**：积木底板抽象——72px 暗格网 + 每格一个微凸点高光 + 暖调聚光光斑 + 暗角
+- **字体**：标题用**思源等宽**（工程气质、方正有力），正文 Noto Sans CJK SC
+- **签名元素**：2×2 凸点标记（品牌角标 / 每个场景的金色 eyebrow）+ 开场聚光扫光 + 结尾金线扫过
+- **克制原则**：每场景只有一个叙事动作；结尾金色礼花是全片唯一"大特效"
 
 ## 重新渲染
 
 ```bash
 cd promo
 node render.js 30 ~/Desktop/积木剧场-宣传片.mp4   # 30 = 时长（秒）
+node snap.js 1.3 6 9.5 14.5 20.5 27               # 静帧预览 → /tmp/snap-*.png
 ```
 
 - 依赖：系统 Edge（`microsoft-edge`）、Node、ffmpeg（系统自带）、npx 缓存里的 playwright
