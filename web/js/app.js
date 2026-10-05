@@ -375,6 +375,10 @@ const App = {
       await sleep(900);
       this.testElbar();
     }
+    if (params.get('testrecord') === '1') {
+      await sleep(900);
+      this.testRecord();
+    }
     if (params.get('testctabs') === '1') {
       await sleep(700);
       try {
@@ -485,6 +489,8 @@ const App = {
     on('card-export-html', () => { this.closeExportPanel(); this.exportPlayer(); });
     on('card-export-exe', () => { this.closeExportPanel(); this.exportExe(); });
     on('card-export-ppt', () => { this.closeExportPanel(); this.showPptDialog(); });
+    on('card-export-video', () => { this.closeExportPanel(); this.openVideoDialog(); });
+    on('btn-video-start', () => this.startVideoRecord());
     on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
     on('btn-help', () => this.toggleHelp());
@@ -1041,6 +1047,13 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   // ---------- 播放 ----------
   async play() {
     if (this.playing) return;
+    await this.enterPlayMode();
+    await this.runPlayScripts();
+  },
+
+  // 进入播放态（数据快照 + 全屏 + 视图隔离），不启动脚本——录制视频时先把这些就绪再开录
+  async enterPlayMode() {
+    if (this.playing) return;
     JimuBlocks.save();
     this.playing = true;
     // 播放使用数据快照：脚本运行时的修改（文字/位置/显隐）不会污染项目原数据
@@ -1057,6 +1070,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     await sleep(120);
     Stage.fit();
     Editor.select(null);
+  },
+
+  async runPlayScripts() {
     try {
       await Executor.start();
       const n = Executor.scripts.orphans || 0;
@@ -1064,6 +1080,99 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     } catch (e) {
       console.error('播放出错', e);
     }
+  },
+
+  // ---------- 视频录制（自动录制演示 → MP4；含真实时间戳与黑帧跳过） ----------
+  openVideoDialog() {
+    const ov = document.getElementById('video-overlay');
+    if (ov) ov.classList.remove('hidden');
+  },
+
+  async startVideoRecord() {
+    if (!this.host || !this.host.recordStart) { toast('当前环境不支持录制'); return; }
+    if (this.playing) { toast('正在播放中，无法开始录制'); return; }
+    const fps = parseInt(document.getElementById('video-fps').value, 10) || 24;
+    const res = document.getElementById('video-res').value === '1080' ? [1920, 1080] : [1280, 720];
+    document.getElementById('video-overlay').classList.add('hidden');
+    await this.enterPlayMode();
+    const first = Project.data.chapters[0];
+    if (first) await Stage.goChapter(first.id, { instant: true });
+    await sleep(260);
+    const r = Stage.rootEl.getBoundingClientRect();
+    const ok = await this.host.recordStart(fps, res[0], res[1],
+      Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height));
+    if (!ok) { toast('录制启动失败'); this.stop(); return; }
+    this.recording = { fps, w: res[0], h: res[1], t0: Date.now() };
+    this.showRecHint();
+    toast('录制中——演示播完后按 Esc 结束');
+    await this.runPlayScripts();
+  },
+
+  showRecHint() {
+    const el = document.getElementById('rec-hint');
+    if (!el) return;
+    el.classList.add('show');
+    this.positionRecHint();
+    clearInterval(this._recTimer);
+    this._recTimer = setInterval(() => {
+      const t = document.getElementById('rec-time');
+      if (t && this.recording) {
+        const s = Math.floor((Date.now() - this.recording.t0) / 1000);
+        t.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      }
+      this.positionRecHint();
+    }, 400);
+  },
+
+  // 把录制 HUD 放到舞台矩形之外的黑边里（避免被录进视频）；四周都放不下时缩成小圆点
+  positionRecHint() {
+    const el = document.getElementById('rec-hint');
+    if (!el || !el.classList.contains('show') || !Stage.rootEl) return;
+    el.classList.remove('mini');
+    const r = Stage.rootEl.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const W = el.offsetWidth || 150, H = el.offsetHeight || 30, gap = 6;
+    const sTop = r.top, sBottom = vh - r.bottom, sLeft = r.left, sRight = vw - r.right;
+    if (sTop >= H + gap) {
+      el.style.left = Math.round(r.left + r.width / 2 - W / 2) + 'px';
+      el.style.top = Math.round(Math.max(2, (sTop - H) / 2)) + 'px';
+    } else if (sBottom >= H + gap) {
+      el.style.left = Math.round(r.left + r.width / 2 - W / 2) + 'px';
+      el.style.top = Math.round(r.bottom + (sBottom - H) / 2) + 'px';
+    } else if (sLeft >= W + gap) {
+      el.style.left = Math.round(Math.max(2, (sLeft - W) / 2)) + 'px';
+      el.style.top = Math.round(vh / 2 - H / 2) + 'px';
+    } else if (sRight >= W + gap) {
+      el.style.left = Math.round(r.right + (sRight - W) / 2) + 'px';
+      el.style.top = Math.round(vh / 2 - H / 2) + 'px';
+    } else {
+      el.classList.add('mini');   // 舞台几乎满屏：只留一个小红点（尽量少占画面）
+      el.style.left = '4px';
+      el.style.top = '4px';
+    }
+  },
+
+  hideRecHint() {
+    clearInterval(this._recTimer);
+    const el = document.getElementById('rec-hint');
+    if (el) el.classList.remove('show');
+  },
+
+  // 结束录制：停帧 → 退出播放 → 选路径 → ffmpeg 合成
+  async stopVideoRecord() {
+    if (!this.recording) return;
+    this.recording = null;
+    this.hideRecHint();
+    const frames = await this.host.recordStop();
+    this.stop();
+    if (!frames || frames < 3) { toast('录制太短，未生成视频'); return; }
+    const defName = (Project.data.name || '演示') + '.mp4';
+    const path = await this.host.recordSaveDialog(defName);
+    if (!path) { toast('已取消导出（录制内容已丢弃）'); return; }
+    toast('正在合成视频（' + frames + ' 帧）…');
+    const out = await this.host.recordFinish(path);
+    if (out) toast('视频已导出：' + out.split('/').pop());
+    else toast('视频合成失败（逐帧临时文件保留在 ~/.cache/jimuchang/rec）');
   },
 
   cloneForPlayback(data) {
@@ -1119,7 +1228,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       wrap.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, clientX: ax, clientY: ay, bubbles: true, cancelable: true }));
       await sleep(160);
       const wb = Stage.screenToWorld(ax, ay);
-      check('anchor', Math.abs(wa.x - wb.x) < 2 && Math.abs(wa.y - wb.y) < 2);
+      const dx = Math.abs(wa.x - wb.x), dy = Math.abs(wa.y - wb.y);
+      console.log(`ZOOM|anchor|dx=${dx.toFixed(2)}|dy=${dy.toFixed(2)}|scale=${Stage.scale.toFixed(4)}|fit=${Stage.fitScale.toFixed(4)}|pan=${Stage.panX.toFixed(1)},${Stage.panY.toFixed(1)}|wrap=${wrap.clientWidth}x${wrap.clientHeight}`);
+      check('anchor', dx < 2 && dy < 2);
       // ③ Ctrl+0 → 适应窗口
       document.dispatchEvent(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true, cancelable: true }));
       await sleep(160);
@@ -1309,6 +1420,38 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     } catch (e) {
       console.log('ELBAR|error|' + (e.message || e));
       console.log('ELBAR|FAIL');
+    }
+  },
+
+  // RECORD 测试：自动录制 4 秒 → 合成 MP4（帧数 / 文件落盘 / 由外部 ffprobe 复核）
+  async testRecord() {
+    try {
+      const dur = 4;
+      await this.enterPlayMode();
+      const first = Project.data.chapters[0];
+      if (first) await Stage.goChapter(first.id, { instant: true });
+      await sleep(250);
+      const r = Stage.rootEl.getBoundingClientRect();
+      const ok = await this.host.recordStart(24, 1280, 720,
+        Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height));
+      console.log('RECORD|start=' + ok);
+      this.recording = { fps: 24, w: 1280, h: 720, t0: Date.now() };
+      this.showRecHint();                    // 与真实路径一致：检验 HUD 是否会混入画面
+      this.runPlayScripts();
+      await sleep(2000);
+      this.nextScene();                      // 模拟用户按键推进：检验章节切换被录到
+      await sleep(dur * 1000 - 2000);
+      const frames = await this.host.recordStop();
+      this.recording = null;
+      this.hideRecHint();
+      this.stop();
+      await sleep(200);
+      const out = await this.host.recordFinish('/tmp/积木剧场-录制测试.mp4');   // 中文路径也要能用
+      console.log(`RECORD|frames=${frames}|out=${out}`);
+      console.log(ok && out && frames >= dur * 8 ? 'RECORD|PASS' : 'RECORD|FAIL');
+    } catch (e) {
+      console.log('RECORD|error|' + (e.message || e));
+      console.log('RECORD|FAIL');
     }
   },
 
@@ -2627,7 +2770,10 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
     if (e.key === 'F12') { e.preventDefault(); return; }
     if (this.playing) {
-      if (e.key === 'Escape') { this.stop(); return; }
+      if (e.key === 'Escape') {
+        if (this.recording) { this.stopVideoRecord(); return; }
+        this.stop(); return;
+      }
       if (e.key === ' ') {
         e.preventDefault();
         Executor.trigger('onKey', 'Space').then(n => { if (!n) this.nextScene(); });

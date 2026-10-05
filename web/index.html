@@ -161,6 +161,11 @@
           <span class="ec-title">PPT 演示文稿</span>
           <span class="ec-desc">.pptx · 可编辑（近似动画）/ 高保真（截图留档）两种模式</span>
         </button>
+        <button class="export-card" id="card-export-video">
+          <b>🎥</b>
+          <span class="ec-title">视频（MP4）</span>
+          <span class="ec-desc">自动录制整场演示 · 720p / 1080p · 可发微信、传视频号（无声）</span>
+        </button>
       </div>
     </div>
   </div>
@@ -267,7 +272,37 @@
     </div>
   </div>
 
+  <div id="video-overlay" class="hidden">
+    <div class="help-panel video-panel">
+      <div class="help-head">
+        <span>🎥 录制视频（MP4）</span>
+        <button class="p-btn" onclick="document.getElementById('video-overlay').classList.add('hidden')">关闭</button>
+      </div>
+      <div class="video-body">
+        <div class="ppt-group">
+          <h4>输出设置</h4>
+          <label class="ppt-radio">分辨率
+            <select id="video-res">
+              <option value="720" selected>1280 × 720（默认 · 文件小）</option>
+              <option value="1080">1920 × 1080（高清 · 文件大）</option>
+            </select>
+          </label>
+          <label class="ppt-radio" style="margin-left:18px">帧率
+            <select id="video-fps">
+              <option value="24" selected>24 fps（电影感）</option>
+              <option value="30">30 fps（更顺滑）</option>
+            </select>
+          </label>
+        </div>
+        <div class="video-tip">点「开始录制」后自动全屏、从第一章开始播放演示；按 <b>Esc</b> 结束并选择保存位置。<br>
+          视频为<b>无声</b>（背景音乐与音效暂不录入）；录制期间请勿最小化或遮挡窗口。</div>
+        <div class="video-actions"><button class="p-btn primary" id="btn-video-start">● 开始录制</button></div>
+      </div>
+    </div>
+  </div>
+
   <div id="play-hint">空格 推进 · ← → 切场景 · Esc 退出</div>
+  <div id="rec-hint"><i></i><span id="rec-time">00:00</span><em>Esc 结束</em></div>
   <div id="toast"></div>
 
   <script src="js/easing.js"></script>

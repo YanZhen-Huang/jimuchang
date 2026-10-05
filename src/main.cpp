@@ -6,6 +6,7 @@
 #include <QCloseEvent>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -16,12 +17,14 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTextStream>
 #include <QTimer>
 #include <QUrlQuery>
 #include <QVariantMap>
@@ -341,6 +344,84 @@ public slots:
 
     void quitApp() { QCoreApplication::quit(); }
 
+    // ---------- 视频录制：逐帧抓取舞台 → ffmpeg 合成 MP4 ----------
+    bool recordStart(int fps, int width, int height, int cropX, int cropY, int cropW, int cropH) {
+        if (!m_view || m_recTimer) return false;
+        m_recDir = QDir::homePath() + QStringLiteral("/.cache/jimuchang/rec");
+        QDir(m_recDir).removeRecursively();
+        if (!QDir().mkpath(m_recDir)) return false;
+        m_recFrames.clear();
+        m_recFps = qBound(1, fps, 60);
+        m_recW = qBound(160, width, 3840);
+        m_recH = qBound(90, height, 2160);
+        m_recCrop = QRect(cropX, cropY, qMax(1, cropW), qMax(1, cropH));
+        m_recClock.start();
+        if (!m_recTimer) {
+            m_recTimer = new QTimer(this);
+            connect(m_recTimer, &QTimer::timeout, this, [this] { recordTick(); });
+        }
+        m_recTimer->start(qMax(5, 1000 / m_recFps));
+        std::fprintf(stdout, "[REC] start fps=%d %dx%d crop=(%d,%d %dx%d)\n",
+                     m_recFps, m_recW, m_recH, cropX, cropY, cropW, cropH);
+        std::fflush(stdout);
+        return true;
+    }
+
+    int recordStop() {
+        if (m_recTimer) m_recTimer->stop();
+        const int n = int(m_recFrames.size());
+        std::fprintf(stdout, "[REC] stop frames=%d\n", n);
+        std::fflush(stdout);
+        return n;
+    }
+
+    QString recordSaveDialog(const QString &suggestedName) {
+        if (!m_win) return QString();
+        return QFileDialog::getSaveFileName(
+            m_win, QStringLiteral("导出视频"),
+            QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("演示.mp4") : suggestedName),
+            QStringLiteral("MP4 视频 (*.mp4)"));
+    }
+
+    // 用 ffmpeg concat 合成（每帧带真实时间戳，抓帧变慢也不会变速）
+    QString recordFinish(const QString &outPath) {
+        if (m_recFrames.size() < 2 || outPath.isEmpty() || m_recDir.isEmpty()) return QString();
+        QFile list(m_recDir + QStringLiteral("/frames.txt"));
+        if (!list.open(QIODevice::WriteOnly | QIODevice::Text)) return QString();
+        {
+            QTextStream ts(&list);
+            for (int i = 0; i < m_recFrames.size(); ++i) {
+                const QString name = QStringLiteral("frame_%1.jpg").arg(i + 1, 5, 10, QLatin1Char('0'));
+                const double dur = (i + 1 < m_recFrames.size())
+                    ? double(m_recFrames[i + 1] - m_recFrames[i]) / 1000.0
+                    : qMax(0.02, 1.0 / m_recFps);
+                ts << "file '" << name << "'\nduration " << QString::number(dur, 'f', 4) << "\n";
+            }
+            // concat demuxer 需要末帧重复一次才能保证最后一帧的时长生效
+            ts << "file '" << QStringLiteral("frame_%1.jpg").arg(m_recFrames.size(), 5, 10, QLatin1Char('0')) << "'\n";
+        }
+        list.close();
+        QProcess ff;
+        ff.setWorkingDirectory(m_recDir);
+        const QStringList args{QStringLiteral("-y"), QStringLiteral("-f"), QStringLiteral("concat"),
+                               QStringLiteral("-safe"), QStringLiteral("0"), QStringLiteral("-i"), QStringLiteral("frames.txt"),
+                               QStringLiteral("-vsync"), QStringLiteral("vfr"),
+                               QStringLiteral("-c:v"), QStringLiteral("libx264"), QStringLiteral("-preset"), QStringLiteral("medium"),
+                               QStringLiteral("-crf"), QStringLiteral("20"), QStringLiteral("-pix_fmt"), QStringLiteral("yuv420p"),
+                               QStringLiteral("-movflags"), QStringLiteral("+faststart"), outPath};
+        ff.start(QStringLiteral("ffmpeg"), args);
+        if (!ff.waitForStarted(5000)) return QString();
+        if (!ff.waitForFinished(15 * 60 * 1000)) { ff.kill(); ff.waitForFinished(3000); return QString(); }
+        QFileInfo fi(outPath);
+        const bool ok = ff.exitStatus() == QProcess::NormalExit && ff.exitCode() == 0
+            && fi.exists() && fi.size() > 1024;
+        std::fprintf(stdout, "[REC] finish ok=%d size=%lld path=%s\n", ok ? 1 : 0,
+                     static_cast<long long>(fi.size()), outPath.toUtf8().constData());
+        std::fflush(stdout);
+        if (ok) QDir(m_recDir).removeRecursively();   // 成功即清理逐帧临时文件；失败保留供排查
+        return ok ? outPath : QString();
+    }
+
 public:
     void setApiServer(ApiServer *api) { m_api = api; }
     void setView(QWebEngineView *v) { m_view = v; }
@@ -349,6 +430,44 @@ public:
     bool isDirty() const { return m_dirty; }
 
 private:
+    // 抓一帧：裁剪舞台区域 → 缩放到输出分辨率 → JPEG 落盘（时间戳相对录制开始）
+    void recordTick() {
+        if (!m_view || m_recDir.isEmpty()) return;
+        const QPixmap pm = m_view->grab();
+        if (pm.isNull()) return;
+        const QImage img = pm.toImage();
+        const double dpr = double(img.width()) / qMax(1, m_view->width());   // 逻辑 → 物理像素
+        QRect crop(qRound(m_recCrop.x() * dpr), qRound(m_recCrop.y() * dpr),
+                   qRound(m_recCrop.width() * dpr), qRound(m_recCrop.height() * dpr));
+        crop = crop.intersected(img.rect());
+        if (crop.width() < 8 || crop.height() < 8) return;
+        const QImage stage = img.copy(crop).scaled(m_recW, m_recH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        // 全黑帧（窗口被遮挡/最小化时的 grab 结果）跳过，避免黑屏混入视频；首帧放行
+        if (!m_recFrames.isEmpty()) {
+            bool black = true;
+            const QImage g = stage.convertToFormat(QImage::Format_Grayscale8);
+            for (int y = 0; y < g.height() && black; y += 23) {
+                const uchar *line = g.constScanLine(y);
+                for (int x = 0; x < g.width(); x += 31) {
+                    if (line[x] > 10) { black = false; break; }
+                }
+            }
+            if (black) return;
+        }
+        const QString path = m_recDir + QStringLiteral("/frame_%1.jpg").arg(m_recFrames.size() + 1, 5, 10, QLatin1Char('0'));
+        if (!stage.save(path, "JPG", 90)) return;
+        m_recFrames.append(m_recClock.elapsed());
+    }
+
+    QTimer *m_recTimer = nullptr;
+    QString m_recDir;
+    QVector<qint64> m_recFrames;   // 每帧时间戳（相对录制开始，ms）
+    QElapsedTimer m_recClock;
+    QRect m_recCrop;
+    int m_recFps = 24;
+    int m_recW = 1280;
+    int m_recH = 720;
+
     QWidget *m_win = nullptr;
     QWebEngineView *m_view = nullptr;
     ApiServer *m_api = nullptr;
@@ -411,7 +530,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.5"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.6"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -576,6 +695,10 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-elbar"))) {
             q.addQueryItem(QStringLiteral("testelbar"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-record"))) {
+            q.addQueryItem(QStringLiteral("testrecord"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (args.contains(QStringLiteral("--test-hotkeys"))) {
