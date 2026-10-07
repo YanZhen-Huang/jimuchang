@@ -479,9 +479,11 @@ class MainWindow : public QMainWindow {
 public:
     using QMainWindow::QMainWindow;
     void setBridge(HostBridge *b) { m_bridge = b; }
+    void setTestMode(bool t) { m_testMode = t; }
 protected:
     void closeEvent(QCloseEvent *e) override {
-        if (m_bridge && m_bridge->isDirty()) {
+        // 自动化测试模式不弹"未保存确认"（无人点击会卡住退出）
+        if (!m_testMode && m_bridge && m_bridge->isDirty()) {
             QMessageBox box(this);
             box.setWindowTitle(QStringLiteral("退出积木剧场"));
             box.setText(QStringLiteral("有未保存的修改，仍要退出吗？"));
@@ -505,6 +507,7 @@ protected:
 
 private:
     HostBridge *m_bridge = nullptr;
+    bool m_testMode = false;
 };
 
 int main(int argc, char *argv[]) {
@@ -530,7 +533,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.0.6"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.1.0"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -555,6 +558,14 @@ int main(int argc, char *argv[]) {
     view->load(QUrl(QStringLiteral("qrc:///index.html")));
     // 自动化测试参数：--test-save / --test-open / --test-play / --test-kf / --test-url
     const QStringList args = QCoreApplication::arguments();
+    // 自动化测试模式（--test-* 参数或 P0_SHOT 截图钩子）：退出时不弹"保存确认"对话框
+    {
+        bool testMode = !qEnvironmentVariable("P0_SHOT").isEmpty();
+        for (const QString &a : args) {
+            if (a.startsWith(QStringLiteral("--test-"))) { testMode = true; break; }
+        }
+        win.setTestMode(testMode);
+    }
     QUrl url(QStringLiteral("qrc:///index.html"));
     QUrlQuery q;
     bool hasQuery = false;
@@ -705,6 +716,27 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testhotkeys"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-interactive"))) {
+            q.addQueryItem(QStringLiteral("testinteract"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-playtpl"))) {
+            q.addQueryItem(QStringLiteral("testplaytpl"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        const int tsi = args.indexOf(QStringLiteral("--test-tplshot"));
+        if (tsi >= 0 && tsi + 1 < args.size()) {
+            q.addQueryItem(QStringLiteral("testtplshot"), args.at(tsi + 1));
+            if (args.contains(QStringLiteral("--play"))) {
+                q.addQueryItem(QStringLiteral("testtplplay"), QStringLiteral("1"));
+            }
+            hasQuery = true;
+        }
+        const int pei = args.indexOf(QStringLiteral("--test-pexport"));
+        if (pei >= 0 && pei + 1 < args.size()) {
+            q.addQueryItem(QStringLiteral("testpexport"), args.at(pei + 1));
+            hasQuery = true;
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);
@@ -729,7 +761,11 @@ int main(int argc, char *argv[]) {
 
     const QString shotPath = qEnvironmentVariable("P0_SHOT");
     if (!shotPath.isEmpty()) {
-        QTimer::singleShot(8000, &app, [&]() {
+        // 截图延时可按测试需要调节：P0_SHOT_MS（默认 8000）
+        bool msOk = false;
+        const int shotMs = qEnvironmentVariableIntValue("P0_SHOT_MS", &msOk);
+        const int delayMs = (msOk && shotMs > 0) ? shotMs : 8000;
+        QTimer::singleShot(delayMs, &app, [&]() {
             QPixmap pm = view->grab();
             bool ok1 = pm.save(shotPath);
             std::fprintf(stdout, "[P0] view->grab() -> %s (%dx%d)\n",

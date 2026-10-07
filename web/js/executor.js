@@ -7,6 +7,7 @@ const Executor = {
   hooks: {},   // onSceneEnter(sceneId)
   mouse: { x: 0, y: 0, down: false },   // 舞台坐标（S2 侦测）
   lastAnswer: '',                        // 询问回答
+  lastChart: null,                       // 最近一次图表点击信息（交互三件套）
   lists: {},                             // 数据列表（S2）
   _ctxs: [],                             // 运行中脚本上下文（停止全部用）
 
@@ -54,6 +55,8 @@ const Executor = {
     this.cloneCount = 0;
     this._ctxs = [];
     this.lastAnswer = '';
+    this.lastChart = null;
+    this._sliderTh = {};
     this.lists = {};
     // 放映机模式：脚本已由导出时预编译注入，跳过 Blockly 编译
     if (!this.presetScripts) {
@@ -121,9 +124,10 @@ const Executor = {
     (this.scripts.global || []).forEach(s => {
       if (s.kind === 'onMessage' && s.message === message) list.push({ s, self: null });
     });
-    Object.entries(this.scripts.elements || {}).forEach(([elId, arr]) => {
-      (arr || []).forEach(s => {
-        if (s.kind === 'onMessage' && s.message === message) list.push({ s, self: elId });
+    // 每个元素实例各执行一次（含克隆体/副本：回退到模板脚本，self=实例自身）
+    (Project.data.elements || []).forEach(el => {
+      this.scriptsFor(el.id).forEach(s => {
+        if (s.kind === 'onMessage' && s.message === message) list.push({ s, self: el.id });
       });
     });
     list.forEach(({ s, self }) => {
@@ -144,7 +148,7 @@ const Executor = {
       this.run(s.body, c);
     });
     // v2：模板元素的"当克隆体启动"脚本（self=克隆体）
-    const elList = templateElId ? ((this.scripts.elements || {})[templateElId] || []).filter(s => s.kind === 'onCloneStart') : [];
+    const elList = templateElId ? this.scriptsFor(templateElId).filter(s => s.kind === 'onCloneStart') : [];
     elList.forEach(s => {
       const c = this.newCtx();
       c.selfElId = cloneId;
@@ -153,23 +157,71 @@ const Executor = {
     return list.length + elList.length;
   },
 
+  // 元素脚本查找：克隆体/副本回退到模板元素的脚本（交互在克隆体上同样生效）
+  scriptsFor(elId) {
+    const map = (this.scripts && this.scripts.elements) || {};
+    if (map[elId]) return map[elId];
+    const el = Project.getElement(elId);
+    if (el && el._templateId && map[el._templateId]) return map[el._templateId];
+    return [];
+  },
+
+  // ---------- 交互命中检测 ----------
+  // 场景：按钮图形上盖着文字元素（两者平级），真实点击命中的是最上面的文字——
+  // 需要"穿透"到下方有交互脚本的元素，否则用户点按钮中心没反应。
+  _hasScript(elId, kinds) {
+    const hit = s => kinds.indexOf(s.kind) >= 0 && s.elId === elId;
+    if ((this.scripts.global || []).some(hit)) return true;
+    if (((this.scripts.scenes || {})[Stage.currentSceneId] || []).some(hit)) return true;
+    return this.scriptsFor(elId).some(s => kinds.indexOf(s.kind) >= 0);
+  },
+
+  // 屏幕坐标命中的元素栈（从上到下）
+  elsAt(x, y) {
+    try {
+      return (document.elementsFromPoint(x, y) || []).filter(n => n.classList && n.classList.contains('el'));
+    } catch (e) {
+      return [];
+    }
+  },
+
+  // 点击穿透：返回命中的"最上面有点击脚本的元素"；都没有脚本时取最上面元素（保持原行为）
+  pickClickTarget(x, y) {
+    const els = this.elsAt(x, y);
+    if (!els.length) return null;
+    for (const n of els) {
+      if (n.dataset.id && this._hasScript(n.dataset.id, ['onElementClick'])) return n.dataset.id;
+    }
+    return els[0].dataset.id;
+  },
+
+  // 悬停穿透：只跟踪"有悬停脚本"的元素（无脚本元素在悬停视角完全透明）
+  pickHoverTarget(x, y) {
+    const els = this.elsAt(x, y);
+    for (const n of els) {
+      if (n.dataset.id && this._hasScript(n.dataset.id, ['onMouseEnter', 'onMouseLeave'])) return n.dataset.id;
+    }
+    return null;
+  },
+
   async trigger(kind, value, payload) {
     if (!this.playing) return 0;
     if (payload !== undefined) this.lastMessage = payload;
     const list = [];
+    // 带元素引用的事件类型：全局/章节脚本按 elId 匹配，元素脚本直接归属该元素
+    const elKinds = ['onElementClick', 'onWebappMessage', 'onSliderChange', 'onMouseEnter', 'onMouseLeave', 'onChartClick'];
     const match = s => {
       if (kind === 'onKey') return s.key === value;
-      if (kind === 'onElementClick') return s.elId === value;
-      if (kind === 'onWebappMessage') return s.elId === value;
+      if (elKinds.indexOf(kind) >= 0) return s.elId === value;
       return false;
     };
     this.scripts.global.forEach(s => { if (s.kind === kind && match(s)) list.push(s); });
     (this.scripts.scenes[Stage.currentSceneId] || []).forEach(s => { if (s.kind === kind && match(s)) list.push(s); });
     let count = list.length;
     list.forEach(s => this.run(s.body, this.newCtx()));
-    // v2：元素脚本的"当点击我 / 当收到本元素的小程序消息"（self=该元素）
-    if ((kind === 'onElementClick' || kind === 'onWebappMessage') && value) {
-      const elList = ((this.scripts.elements || {})[value] || []).filter(s => s.kind === kind);
+    // v2：元素脚本的"当点击我 / 收到消息 / 滑块值改变 / 移入移出 / 图表被点击"（self=该元素）
+    if (elKinds.indexOf(kind) >= 0 && value) {
+      const elList = this.scriptsFor(value).filter(s => s.kind === kind);
       elList.forEach(s => {
         const c = this.newCtx();
         c.selfElId = value;
@@ -178,6 +230,25 @@ const Executor = {
       count += elList.length;
     }
     return count;
+  },
+
+  // 滑块拖动：节流 80ms 触发（保留最后一次值，防止脚本风暴）
+  sliderInput(elId, value) {
+    if (!this.playing) return;
+    const st = this._sliderTh || (this._sliderTh = {});
+    let s = st[elId];
+    if (!s) s = st[elId] = { last: 0, timer: 0, pending: null };
+    s.pending = value;
+    const fire = () => {
+      s.timer = 0;
+      s.last = performance.now();
+      const v = s.pending;
+      s.pending = null;
+      this.trigger('onSliderChange', elId, v);
+    };
+    const now = performance.now();
+    if (!s.timer && now - s.last > 80) fire();
+    else if (!s.timer) s.timer = setTimeout(fire, 80);
   },
 
   // ---------- 解释执行 ----------
@@ -325,6 +396,7 @@ const Executor = {
         copy2.id = Project.uid('el');
         copy2.name = fcs.element.name + '·克隆';
         copy2._clone = true;
+        copy2._templateId = fcs.element._templateId || fcs.element.id;
         copy2.z = Math.max(...Project.data.elements.map(x => x.z || 0)) + 1;
         Project.data.elements.push(copy2);
         if (Stage.elsEl) Stage.elsEl.appendChild(Elements.render(copy2));
@@ -641,6 +713,27 @@ const Executor = {
       case 'chart.refresh':
         Stage.refresh(instr.elId);
         break;
+      case 'chart.set': {
+        const fcs = Project.findElementById(instr.elId);
+        if (!fcs) break;
+        fcs.element.props.values = this.parseNumList(await this.evalExpr(instr.value, ctx));
+        Elements.updateChart(instr.elId);
+        break;
+      }
+      case 'chart.cats': {
+        const fcc = Project.findElementById(instr.elId);
+        if (!fcc) break;
+        fcc.element.props.categories = this.parseStrList(await this.evalExpr(instr.value, ctx));
+        Elements.updateChart(instr.elId);
+        break;
+      }
+      case 'slider.set': {
+        const fsd = Project.findElementById(instr.elId);
+        if (!fsd) break;
+        const sv = Number(await this.evalExpr(instr.value, ctx)) || 0;
+        Elements.setSliderRuntime(instr.elId, sv, true);
+        break;
+      }
       case 'sprite.ctrl':
         Sprites.control(instr.elId, instr.action);
         break;
@@ -753,6 +846,19 @@ const Executor = {
     if (!this.lists) this.lists = {};
     if (!Array.isArray(this.lists[name])) this.lists[name] = [];
     return this.lists[name];
+  },
+
+  // 图表数据解析：接受数组 / 逗号分隔字符串（中英文逗号均可）
+  parseNumList(raw) {
+    if (Array.isArray(raw)) return raw.map(x => Number(x) || 0);
+    return String(raw === undefined || raw === null ? '' : raw)
+      .split(/[,，]/).map(s => s.trim()).filter(s => s !== '').map(s => Number(s) || 0);
+  },
+
+  parseStrList(raw) {
+    if (Array.isArray(raw)) return raw.map(x => String(x));
+    return String(raw === undefined || raw === null ? '' : raw)
+      .split(/[,，]/).map(s => s.trim()).filter(s => s !== '');
   },
 
   boxOf(id) {
@@ -936,6 +1042,18 @@ const Executor = {
         return this.checkTouch(aId, e.b);
       }
       case 'answer': return this.lastAnswer || '';
+      case 'slider': {
+        const sId = e.el === '@self' ? ctx.selfElId : e.el;
+        if (!sId) return 0;
+        return Elements.sliderValue(sId);
+      }
+      case 'chartclick': {
+        const lc = this.lastChart || {};
+        if (e.what === 'value') return lc.value !== undefined ? lc.value : 0;
+        if (e.what === 'index') return (lc.dataIndex !== undefined ? lc.dataIndex : 0) + 1;
+        if (e.what === 'series') return lc.seriesName || '';
+        return lc.name !== undefined ? lc.name : '';
+      }
       case 'argv': return (ctx.args && ctx.args[e.name] !== undefined) ? ctx.args[e.name] : 0;
       case 'datetime': {
         const d = new Date();

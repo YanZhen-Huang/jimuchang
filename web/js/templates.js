@@ -21,6 +21,20 @@ const Templates = (() => {
     props: Object.assign({ text, size, color, align: 'center' }, extra || {})
   });
 
+  // ---- 交互模板辅助（表达式树 / 滑块 / 图表）----
+  const num = v => ({ type: 'math_number', fields: { NUM: v } });
+  const txt = s => ({ type: 'text', fields: { TEXT: s } });
+  const bx = n => ({ block: n });
+  const aop = (o, a, b) => ({ type: 'math_arithmetic', fields: { OP: o }, inputs: { A: bx(a), B: bx(b) } });
+  const slv = id => ({ type: 'jimu_slider_value', fields: { ELEMENT: id } });
+  const trig = (op, v) => ({ type: 'math_trig', fields: { OP: op }, inputs: { NUM: bx(v) } });
+  const tmr = () => ({ type: 'jimu_timer' });
+  const jn = parts => ({
+    type: 'text_join', extraState: { itemCount: parts.length },
+    inputs: parts.reduce((o, p, i) => { o['ADD' + i] = bx(p); return o; }, {})
+  });
+  const setText = (elId, node) => blk('jimu_el_text', { ELEMENT: elId }, null, { TEXT: bx(node) });
+
   // ① 自我介绍
   function intro() {
     const d = Project.data;
@@ -138,6 +152,219 @@ const Templates = (() => {
     finish(bg);
   }
 
+  // ⑤ 报价单（销售演示：点卡片切换方案 + 悬停上浮）
+  function quote() {
+    const d = Project.data;
+    const s1 = Project.getChapter(d.chapters[0].id);
+    s1.name = '报价单';
+    const bg = grad(160, '#0E1420', '#141A2E');
+    s1.preset.background = bg;
+
+    const title = T('选择适合你的方案', 560, 70, 800, 90, 60, '#E6E9EF', { bold: true });
+    const sub = T('放映模式下点卡片切换价格 · 鼠标悬停有反馈', 510, 168, 900, 50, 28, '#8A93A6');
+
+    const plans = [
+      { name: '基础版', price: '¥99', feat: '单人使用\n10 个项目\n基础模板', desc: '基础版 · 适合个人起步' },
+      { name: '专业版', price: '¥299', feat: '团队 5 人\n无限项目\n全部模板', desc: '专业版 · 团队首选' },
+      { name: '旗舰版', price: '¥899', feat: '不限人数\n私有部署\n专属支持', desc: '旗舰版 · 企业级' }
+    ];
+    const cards = [], cardTexts = [];
+    plans.forEach((pl, i) => {
+      const x = 170 + i * 540;
+      const card = Project.createElement('shape', {
+        name: '卡片·' + pl.name, x, y: 275, w: 460, h: 520,
+        props: { shape: 'rect', fill: i === 0 ? '#243050' : '#1A2030', stroke: '#2E3A54', strokeWidth: 2, radius: 26 }
+      });
+      cardTexts.push(
+        T(pl.name, x + 40, 330, 380, 64, 40, '#C9D1E0', { align: 'left' }),
+        T(pl.price, x + 40, 415, 380, 90, 72, '#E8B84B', { align: 'left', bold: true }),
+        T(pl.feat, x + 40, 555, 380, 200, 28, '#8A93A6', { align: 'left' })
+      );
+      cards.push(card);
+    });
+
+    const big = T('¥99', 560, 840, 800, 120, 92, '#E8B84B', { bold: true });
+    const desc = T('基础版 · 适合个人起步', 560, 970, 800, 54, 32, '#8A93A6');
+    setVis(s1, [title.id, sub.id, big.id, desc.id]
+      .concat(cards.map(c => c.id), cardTexts.map(t => t.id)));
+
+    // 卡片交互：点击高亮 + 更新底部价格；悬停上浮 / 移出还原
+    const allIds = cards.map(c => c.id);
+    cards.forEach((card, i) => {
+      card.blocks = { blocks: { languageVersion: 0, blocks: [
+        link([
+          blk('jimu_self_on_click'),
+          ...allIds.map(id => blk('jimu_el_color', { ELEMENT: id, COLOR: '#1A2030' })),
+          blk('jimu_self_el_color', { COLOR: '#243050' }),
+          setText(big.id, txt(plans[i].price)),
+          setText(desc.id, txt(plans[i].desc)),
+          anim(big.id, 'zoomIn', 0.45, 0, 'easeOutBack')
+        ]),
+        link([
+          blk('jimu_self_on_hover'),
+          blk('jimu_self_change', { PROP: 'y' }, null, { DELTA: { shadow: { type: 'math_number', fields: { NUM: -10 } } } })
+        ]),
+        link([
+          blk('jimu_self_on_hover_out'),
+          blk('jimu_self_change', { PROP: 'y' }, null, { DELTA: { shadow: { type: 'math_number', fields: { NUM: 10 } } } })
+        ])
+      ] } };
+    });
+
+    s1.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_on_scene', { SCENE: s1.id }),
+      anim(title.id, 'flyInTop', 0.5),
+      ...cards.map(c => anim(c.id, 'bounceIn', 0.5, 0, 'easeOutBack')),
+      anim(big.id, 'fadeIn', 0.5)
+    ])] } };
+    finish(bg);
+  }
+
+  // ⑥ 抛体实验（教学：滑块调参数 + 点击发射看轨迹）
+  function physics() {
+    const d = Project.data;
+    const s1 = Project.getChapter(d.chapters[0].id);
+    s1.name = '抛体实验';
+    const bg = grad(180, '#0D1117', '#101A2A');
+    s1.preset.background = bg;
+
+    const title = T('抛体实验', 660, 55, 600, 80, 56, '#E6E9EF', { bold: true });
+    const readout = T('角度 45° · 速度 50', 660, 150, 600, 58, 36, '#E8B84B');
+    const tip = T('拖动滑块调参数，点「发射」看轨迹', 560, 985, 800, 50, 28, '#5C6577');
+
+    const ground = Project.createElement('shape', {
+      name: '地面', x: 100, y: 872, w: 1720, h: 6,
+      props: { shape: 'rect', fill: '#2A3140', radius: 3 }
+    });
+    const ball = Project.createElement('shape', {
+      name: '小球', x: 280, y: 816, w: 56, h: 56,
+      props: { shape: 'circle', fill: '#F0824C', stroke: '#F0824C', strokeWidth: 0 }
+    });
+    const btn = Project.createElement('shape', {
+      name: '发射按钮', x: 838, y: 655, w: 244, h: 96,
+      props: { shape: 'rect', fill: '#E4573D', stroke: '#E4573D', strokeWidth: 0, radius: 48 }
+    });
+    const btnTxt = T('🚀 发射', 838, 655, 244, 96, 40, '#FFFFFF', { bold: true });
+    const sAngle = Project.createElement('slider', {
+      name: '角度滑块', x: 130, y: 720, w: 560, h: 130,
+      props: { min: 15, max: 90, value: 45, step: 1, label: '发射角度 (°)', color: '#E8B84B' }
+    });
+    const sSpeed = Project.createElement('slider', {
+      name: '速度滑块', x: 1230, y: 720, w: 560, h: 130,
+      props: { min: 10, max: 80, value: 50, step: 1, label: '初速度', color: '#6C8CFF' }
+    });
+
+    setVis(s1, [title.id, readout.id, tip.id, ground.id, ball.id, btn.id, btnTxt.id, sAngle.id, sSpeed.id]);
+
+    // 滑块 → 实时读数
+    const readoutExpr = () => jn([txt('角度 '), slv(sAngle.id), txt('° · 速度 '), slv(sSpeed.id)]);
+    sAngle.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_on_slider', { ELEMENT: sAngle.id }),
+      setText(readout.id, readoutExpr())
+    ])] } };
+    sSpeed.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_on_slider', { ELEMENT: sSpeed.id }),
+      setText(readout.id, readoutExpr())
+    ])] } };
+
+    // 发射：计时器当时间 t，逐帧按公式计算位置
+    //   x = 280 + 6·v·cosθ·t ；y = 816 − 6·v·sinθ·t + 90·t²
+    const v6c = aop('MULTIPLY', num(6), aop('MULTIPLY', slv(sSpeed.id), trig('COS', slv(sAngle.id))));
+    const v6s = aop('MULTIPLY', num(6), aop('MULTIPLY', slv(sSpeed.id), trig('SIN', slv(sAngle.id))));
+    const xExpr = aop('ADD', num(280), aop('MULTIPLY', v6c, tmr()));
+    const yExpr = aop('ADD', aop('MINUS', num(816), aop('MULTIPLY', v6s, tmr())),
+      aop('MULTIPLY', num(90), aop('MULTIPLY', tmr(), tmr())));
+    const moveStmt = blk('jimu_el_move', { ELEMENT: ball.id }, null, { X: bx(xExpr), Y: bx(yExpr) });
+    const waitStmt = blk('jimu_wait', null, null, { SEC: { shadow: { type: 'math_number', fields: { NUM: 0.03 } } } });
+    const loop = {
+      type: 'controls_repeat_ext',
+      inputs: {
+        TIMES: { shadow: { type: 'math_number', fields: { NUM: 160 } } },
+        DO: { block: link([moveStmt, waitStmt]) }
+      }
+    };
+    btn.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_self_on_click'),
+      blk('jimu_timer_reset'),
+      loop
+    ])] } };
+
+    s1.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_on_scene', { SCENE: s1.id }),
+      anim(title.id, 'flyInTop', 0.5),
+      anim(ball.id, 'bounceIn', 0.45, 0, 'easeOutBounce'),
+      anim(btn.id, 'zoomIn', 0.45, 0, 'easeOutBack'),
+      anim(sAngle.id, 'flyInLeft', 0.5),
+      anim(sSpeed.id, 'flyInRight', 0.5)
+    ])] } };
+    finish(bg);
+  }
+
+  // ⑦ 数据看板（点按钮切区域 + 点柱条看详情）
+  function dashboard() {
+    const d = Project.data;
+    const s1 = Project.getChapter(d.chapters[0].id);
+    s1.name = '数据看板';
+    const bg = { type: 'color', value: '#0F1115' };
+    s1.preset.background = bg;
+
+    const title = T('区域销售看板', 640, 55, 640, 80, 56, '#E6E9EF', { bold: true });
+    const sub = T('点下方按钮切换区域 · 点图表里的柱条查看详情', 510, 148, 900, 50, 28, '#8A93A6');
+    const chartEl = Project.createElement('chart', {
+      name: '销售图表', x: 340, y: 235, w: 1240, h: 560,
+      props: { chartType: 'bar', categories: ['Q1', 'Q2', 'Q3', 'Q4'], values: [120, 200, 150, 260], seriesName: '销售额' }
+    });
+    const detail = T('点击图表上的柱条查看详情', 560, 928, 800, 56, 32, '#E8B84B');
+
+    const regions = [
+      { name: '华东', values: '120,200,150,260', total: 730 },
+      { name: '华南', values: '90,140,210,180', total: 620 },
+      { name: '华北', values: '160,120,170,200', total: 650 }
+    ];
+    const btns = [], btnTxts = [];
+    regions.forEach((rg, i) => {
+      const x = 430 + i * 400;
+      btns.push(Project.createElement('shape', {
+        name: '按钮·' + rg.name, x, y: 830, w: 260, h: 78,
+        props: { shape: 'rect', fill: i === 0 ? '#6C8CFF' : '#1A2030', stroke: '#2E3A54', strokeWidth: 2, radius: 18 }
+      }));
+      btnTxts.push(T(rg.name, x, 830, 260, 78, 32, i === 0 ? '#FFFFFF' : '#C9D1E0'));
+    });
+
+    setVis(s1, [title.id, sub.id, chartEl.id, detail.id]
+      .concat(btns.map(b => b.id), btnTxts.map(t => t.id)));
+
+    // 按钮点击：重置三个按钮颜色 → 自己高亮 → 换图表数据 → 更新说明
+    btns.forEach((b, i) => {
+      b.blocks = { blocks: { languageVersion: 0, blocks: [link([
+        blk('jimu_self_on_click'),
+        ...btns.map(bb => blk('jimu_el_color', { ELEMENT: bb.id, COLOR: '#1A2030' })),
+        blk('jimu_self_el_color', { COLOR: '#6C8CFF' }),
+        blk('jimu_chart_set', { ELEMENT: chartEl.id }, null, { VALUE: { shadow: { type: 'text', fields: { TEXT: regions[i].values } } } }),
+        setText(detail.id, txt(regions[i].name + '区 · 全年合计 ' + regions[i].total))
+      ])] } };
+    });
+
+    // 点图表柱条 → 详情读出类别与数值
+    chartEl.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_self_on_chart_click'),
+      setText(detail.id, jn([
+        txt('你点了 '),
+        { type: 'jimu_chart_click', fields: { WHAT: 'name' } },
+        txt(' 季度：'),
+        { type: 'jimu_chart_click', fields: { WHAT: 'value' } }
+      ]))
+    ])] } };
+
+    s1.blocks = { blocks: { languageVersion: 0, blocks: [link([
+      blk('jimu_on_scene', { SCENE: s1.id }),
+      anim(title.id, 'flyInTop', 0.5),
+      anim(chartEl.id, 'zoomIn', 0.55, 0, 'easeOutBack'),
+      ...btns.map(b => anim(b.id, 'fadeIn', 0.4))
+    ])] } };
+    finish(bg);
+  }
+
   // ④ 数据图表
   function chart() {
     const d = Project.data;
@@ -171,7 +398,10 @@ const Templates = (() => {
     { key: 'intro', name: '自我介绍', icon: '🙋', desc: '姓名 / 特长 / 联系方式', build: intro },
     { key: 'lesson', name: '课堂演示', icon: '📚', desc: '课题 + 三个要点卡片', build: lesson },
     { key: 'card', name: '节日贺卡', icon: '🎂', desc: '祝福语 + 动画', build: card },
-    { key: 'chart', name: '数据图表', icon: '📊', desc: '柱状图 + 标题说明', build: chart }
+    { key: 'chart', name: '数据图表', icon: '📊', desc: '柱状图 + 标题说明', build: chart },
+    { key: 'quote', name: '报价单', icon: '💰', desc: '点卡片切换方案（可交互）', build: quote },
+    { key: 'physics', name: '抛体实验', icon: '🧪', desc: '拖滑块调参数 + 发射（可交互）', build: physics },
+    { key: 'dashboard', name: '数据看板', icon: '📈', desc: '切区域 + 点柱条看详情（可交互）', build: dashboard }
   ];
 
   return {

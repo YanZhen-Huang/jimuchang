@@ -50,6 +50,7 @@ const Editor = {
         { label: '插入形状', action: () => this.addElement('shape') },
         { label: '插入图标', action: () => this.addElement('icon') },
         { label: '插入图表', action: () => this.addElement('chart') },
+        { label: '插入滑块', action: () => this.addElement('slider') },
         { label: '插入 3D 模型', action: () => this.addElement('model3d') },
         { type: 'sep' },
         { label: '插入图片…', action: () => App.addMediaElement('image') },
@@ -445,6 +446,17 @@ const Panel = {
         ${this.row('速度', `<input type="number" data-prop="props.fps" value="${p.fps || 12}" min="1" max="60"> 帧/秒`)}
         ${this.row('循环', `<input type="checkbox" data-prop="props.loop" ${p.loop !== false ? 'checked' : ''}>`)}
       `;
+    } else if (el.type === 'slider') {
+      typeFields = `
+        ${this.row('标签', `<input data-prop="props.label" value="${esc(p.label || '')}" placeholder="显示在滑块上方（可留空）">`)}
+        ${this.row('范围', `<input type="number" data-prop="props.min" value="${p.min !== undefined ? p.min : 0}" step="any">
+          <input type="number" data-prop="props.max" value="${p.max !== undefined ? p.max : 100}" step="any">`)}
+        ${this.row('步长', `<input type="number" data-prop="props.step" value="${p.step || 1}" min="0.001" step="any">`)}
+        ${this.row('初始值', `<input type="number" data-prop="props.value" value="${p.value !== undefined ? p.value : 50}" step="any">`)}
+        ${this.row('颜色', `<input type="color" data-prop="props.color" value="${p.color || '#6C8CFF'}">`)}
+        ${this.row('选项', `<label class="p-chk"><input type="checkbox" data-prop="props.showValue" ${p.showValue !== false ? 'checked' : ''}>显示数值</label>`)}
+        <div class="p-hint">放映时观众可以拖动滑块；用"当滑块值改变"事件积木响应用户操作，用"滑块的值"读取当前值。</div>
+      `;
     }
 
     const ent = el.entrance || { type: 'none', duration: 0.6, delay: 0, easing: 'easeOutCubic' };
@@ -584,7 +596,7 @@ const Panel = {
 };
 
 function typeLabel(type) {
-  return { text: '文字', image: '图片', shape: '形状', icon: '图标', video: '视频', audio: '音频', chart: '图表', sprite: '帧动画', model3d: '3D 模型', webapp: '小程序' }[type] || type;
+  return { text: '文字', image: '图片', shape: '形状', icon: '图标', video: '视频', audio: '音频', chart: '图表', sprite: '帧动画', model3d: '3D 模型', webapp: '小程序', slider: '滑块' }[type] || type;
 }
 
 function fxLabel(t) {

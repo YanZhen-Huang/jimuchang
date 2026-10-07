@@ -65,6 +65,7 @@ const Stage = {
       // 触屏拖拽（播放态可拖动元素）
       Stage.rootEl.addEventListener('touchstart', e => {
         if (typeof App === 'undefined' || !App.playing) return;
+        if (e.target.closest && e.target.closest('.c-slider input')) return;   // 滑块控件优先，不启动元素拖拽
         const elDom = e.target.closest('.el');
         if (!elDom) return;
         const id = elDom.dataset.id;
@@ -93,6 +94,7 @@ const Stage = {
       // 播放态拖拽：元素被"设为可拖动"后，观众可以拖着它走
       Stage.rootEl.addEventListener('mousedown', e => {
         if (typeof App === 'undefined' || !App.playing) return;
+        if (e.target.closest && e.target.closest('.c-slider input')) return;   // 滑块控件优先，不启动元素拖拽
         const elDom = e.target.closest('.el');
         if (!elDom) return;
         const id = elDom.dataset.id;
@@ -115,6 +117,24 @@ const Stage = {
         };
         window.addEventListener('mousemove', move);
         window.addEventListener('mouseup', up);
+      });
+      // 悬停事件（交互三件套）：委托到舞台根节点，进出元素时通知执行器（仅播放态生效）
+      const hoverLeave = id => {
+        if (id && typeof Executor !== 'undefined') Executor.trigger('onMouseLeave', id);
+      };
+      Stage.rootEl.addEventListener('mouseover', e => {
+        const id = (typeof Executor !== 'undefined' && Executor.pickHoverTarget)
+          ? Executor.pickHoverTarget(e.clientX, e.clientY) : null;
+        if (id === Stage._hoverId) return;
+        const prev = Stage._hoverId;
+        Stage._hoverId = id;
+        hoverLeave(prev);
+        if (id && typeof Executor !== 'undefined') Executor.trigger('onMouseEnter', id);
+      });
+      Stage.rootEl.addEventListener('mouseleave', () => {
+        const prev = Stage._hoverId;
+        Stage._hoverId = null;
+        hoverLeave(prev);
       });
     }
     this._bindZoomUI();
@@ -324,6 +344,13 @@ const Stage = {
 
   // ---------- 渲染（一次性全部元素；章节跳转不重建） ----------
   renderAll() {
+    // 清理上一轮渲染的图表/精灵实例（防止 ECharts 实例与 canvas 引用泄漏）
+    this.elsEl.querySelectorAll('.c-chart').forEach(c => {
+      if (c._chart) { try { c._chart.dispose(); } catch (e) { } c._chart = null; }
+    });
+    if (typeof Sprites !== 'undefined') {
+      this.elsEl.querySelectorAll('canvas.c-sprite').forEach(c => { try { Sprites.unmount(c); } catch (e) { } });
+    }
     this.elsEl.innerHTML = '';
     const els = [...Project.data.elements].sort((a, b) => (a.z || 0) - (b.z || 0));
     els.forEach(el => {

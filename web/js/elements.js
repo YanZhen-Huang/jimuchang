@@ -102,8 +102,84 @@ const Elements = {
       case 'sprite': return this.buildSprite(el);
       case 'model3d': return this.buildModel3d(el);
       case 'webapp': return this.buildWebapp(el);
+      case 'slider': return this.buildSlider(el);
       default: return document.createTextNode('');
     }
+  },
+
+  // ---------- 滑块控件（交互三件套） ----------
+  buildSlider(el) {
+    const p = el.props || {};
+    const wrap = document.createElement('div');
+    wrap.className = 'c-slider';
+    const label = document.createElement('div');
+    label.className = 'c-slider-label';
+    label.textContent = p.label || '';
+    if (!p.label) label.style.display = 'none';
+    const row = document.createElement('div');
+    row.className = 'c-slider-row';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.className = 'c-slider-input';
+    input.min = p.min !== undefined ? p.min : 0;
+    input.max = p.max !== undefined ? p.max : 100;
+    input.step = p.step || 1;
+    input.value = p.value !== undefined ? p.value : input.min;
+    const val = document.createElement('span');
+    val.className = 'c-slider-value';
+    val.textContent = this.sliderText(input.value);
+    if (p.showValue === false) val.style.display = 'none';
+    input.addEventListener('input', () => {
+      val.textContent = this.sliderText(input.value);
+      this.updateSliderTrack(el.id);
+      if (typeof Executor !== 'undefined') Executor.sliderInput(el.id, Number(input.value));
+    });
+    row.appendChild(input);
+    row.appendChild(val);
+    wrap.appendChild(label);
+    wrap.appendChild(row);
+    setTimeout(() => this.updateSliderTrack(el.id), 0);
+    return wrap;
+  },
+
+  // 已填充轨道 = 滑块色进度（自绘 thumb 后 accent-color 不再生效）
+  updateSliderTrack(elId) {
+    const dom = Stage.elDom(elId);
+    const inp = dom && dom.querySelector('.c-slider input');
+    if (!inp) return;
+    const f = Project.findElementById(elId);
+    const color = (f && f.element.props && f.element.props.color) || '#6C8CFF';
+    const min = Number(inp.min) || 0, max = Number(inp.max);
+    const pct = max > min ? Math.max(0, Math.min(100, ((Number(inp.value) - min) / (max - min)) * 100)) : 0;
+    inp.style.background = `linear-gradient(to right, ${color} ${pct}%, rgba(128,128,128,.28) ${pct}%)`;
+  },
+
+  sliderText(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    return String(Math.round(n * 1000) / 1000);
+  },
+
+  // 运行时设置滑块值（改 DOM 显示，不写 props）
+  setSliderRuntime(elId, value, writeProps) {
+    const f = Project.findElementById(elId);
+    if (f && writeProps) f.element.props.value = value;
+    const dom = Stage.elDom(elId);
+    const inp = dom && dom.querySelector('.c-slider input');
+    if (!inp) return;
+    inp.value = String(value);
+    const val = dom.querySelector('.c-slider-value');
+    if (val) val.textContent = this.sliderText(value);
+    this.updateSliderTrack(elId);
+  },
+
+  // 读取滑块当前值（DOM 优先，回退 props）
+  sliderValue(elId) {
+    const dom = Stage.elDom(elId);
+    const inp = dom && dom.querySelector('.c-slider input');
+    if (inp) return Number(inp.value) || 0;
+    const f = Project.findElementById(elId);
+    return f && f.element.props ? (Number(f.element.props.value) || 0) : 0;
   },
 
   buildVideo(el) {
@@ -140,11 +216,42 @@ const Elements = {
       if (dom._chart) { dom._chart.dispose(); dom._chart = null; }
       const chart = echarts.init(dom, null, { renderer: 'canvas' });
       chart.setOption(this.chartOption(el.props));
+      // 图表点击事件（交互三件套）：转发给执行器（仅播放态生效）
+      chart.on('click', params => this.onChartClick(el.id, params));
       dom._chart = chart;
       if (dom._ro) dom._ro.disconnect();
       dom._ro = new ResizeObserver(() => { try { chart.resize(); } catch (e) { } });
       dom._ro.observe(dom);
     } catch (e) { console.warn('图表初始化失败', e); }
+  },
+
+  onChartClick(elId, params) {
+    if (typeof Executor === 'undefined' || !Executor.playing) return;
+    Executor.lastChart = {
+      elId,
+      name: params.name !== undefined && params.name !== null ? params.name : '',
+      value: params.value,
+      dataIndex: params.dataIndex !== undefined ? params.dataIndex : 0,
+      seriesName: params.seriesName || ''
+    };
+    Executor.trigger('onChartClick', elId);
+  },
+
+  // 图表数据变更后原地刷新（不做 DOM 重建，保留动画过渡）
+  updateChart(elId) {
+    const f = Project.findElementById(elId);
+    if (!f) return false;
+    const dom = Stage.elDom(elId);
+    const chartDom = dom && dom.querySelector('.c-chart');
+    if (chartDom && chartDom._chart) {
+      try {
+        chartDom._chart.setOption(this.chartOption(f.element.props), true);
+        return true;
+      } catch (e) { }
+    }
+    // 实例未就绪时退回重建
+    if (dom) { this.refreshContent(f.element, dom); return true; }
+    return false;
   },
 
   chartOption(p) {

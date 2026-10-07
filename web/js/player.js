@@ -27,8 +27,8 @@ const Player = {
 
     Stage.init(document.getElementById('stage-wrap'));
     Stage.rootEl.addEventListener('click', e => {
-      const elDom = e.target.closest('.el');
-      if (elDom) Executor.trigger('onElementClick', elDom.dataset.id);
+      const id = Executor.pickClickTarget(e.clientX, e.clientY);
+      if (id) Executor.trigger('onElementClick', id);
     });
     Executor.hooks.onSceneEnter = id => this.playEntrances(id);
     document.addEventListener('keydown', e => this.onKey(e));

@@ -19,7 +19,7 @@ const blk = (type, fields, next, inputs) => {
 // 元素类型图标（脚本切换栏 / 元素列表条）
 const ELEMENT_ICONS = {
   text: '🅣', image: '🖼', shape: '🔷', icon: '⭐', video: '🎬',
-  audio: '🎵', chart: '📊', sprite: '🎞', model3d: '🧊', webapp: '🧩'
+  audio: '🎵', chart: '📊', sprite: '🎞', model3d: '🧊', webapp: '🧩', slider: '🎚'
 };
 
 // 设置面板配置
@@ -111,8 +111,8 @@ const App = {
 
     Editor.rootEl.addEventListener('click', e => {
       if (!this.playing) return;
-      const elDom = e.target.closest('.el');
-      if (elDom) Executor.trigger('onElementClick', elDom.dataset.id);
+      const id = Executor.pickClickTarget(e.clientX, e.clientY);
+      if (id) Executor.trigger('onElementClick', id);
     });
     Executor.hooks.onSceneEnter = id => this.playEntrances(id);
 
@@ -408,11 +408,28 @@ const App = {
       await sleep(800);
       try {
         const results = Templates.list.map(t => {
+          JimuBlocks.ws.clear();
+          JimuBlocks.current = null;
           Project.newProject(t.name);
           Templates.build(t.key);
-          const ok = Project.data.elements.length > 0 && Project.data.chapters.length > 0;
-          return `${t.key}=${ok ? 'ok' : 'FAIL'}(${Project.data.elements.length}el/${Project.data.chapters.length}ch)`;
+          const elOk = Project.data.elements.length > 0 && Project.data.chapters.length > 0;
+          // 真实编译链路：孤儿积木必须为 0，且至少有一段脚本
+          let info = '', compOk = false;
+          try {
+            const c = Executor.compileAll();
+            const total = (c.global || []).length
+              + Object.keys(c.elements || {}).length
+              + Object.values(c.scenes || {}).reduce((n, l) => n + (l ? l.length : 0), 0);
+            compOk = (c.orphans === 0) && total > 0;
+            info = `o=${c.orphans} s=${total}`;
+          } catch (e) { info = 'err:' + (e.message || e).slice(0, 60); }
+          const ok = elOk && compOk;
+          return `${t.key}=${ok ? 'ok' : 'FAIL'}(${Project.data.elements.length}el/${Project.data.chapters.length}ch/${info})`;
         });
+        JimuBlocks.ws.clear();
+        JimuBlocks.current = null;
+        Project.newProject('测试收尾');
+        Stage.renderAll();
         console.log('TPL|' + results.join('|'));
         console.log(results.every(r => !r.includes('FAIL')) ? 'TPL|PASS' : 'TPL|FAIL');
       } catch (e) {
@@ -422,6 +439,56 @@ const App = {
     if (params.get('testfx') === '1') {
       await sleep(900);
       this.testFx();
+    }
+    if (params.get('testinteract') === '1') {
+      await sleep(900);
+      this.testInteractive();
+    }
+    if (params.get('testplaytpl') === '1') {
+      await sleep(900);
+      this.testPlayTemplates();
+    }
+    if (params.get('testtplshot')) {
+      await sleep(500);
+      const key = params.get('testtplshot');
+      JimuBlocks.ws.clear();
+      JimuBlocks.current = null;
+      Project.newProject(key);
+      Templates.build(key);
+      Stage.renderAll();
+      Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+      this.activeTab = 'global';
+      JimuBlocks.switchTo('global');
+      this.renderTabs();
+      this.renderScriptTabs();
+      this.renderElementBar();
+      Panel.show();
+      console.log('TPLSHOT|loaded|' + key);
+    if (params.get('testtplplay') === '1') {
+        await sleep(700);
+        await this.play();
+        console.log('TPLSHOT|playing');
+      }
+    }
+    if (params.get('testpexport')) {
+      // 导出指定模板的放映包 HTML（供 --test-url 打开验证交互链路）
+      await sleep(600);
+      const key = params.get('testpexport');
+      JimuBlocks.ws.clear();
+      JimuBlocks.current = null;
+      Project.newProject(key);
+      Templates.build(key);
+      Stage.renderAll();
+      Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+      try {
+        const html = await this.buildPlayerHtml();
+        const b64 = btoa(unescape(encodeURIComponent(html)));
+        const out = '/tmp/jimuchang-regress/' + key + '-player.html';
+        const ok = await this.host.saveProjectDirect(out, b64);
+        console.log('PEXP|' + (ok ? 'saved' : 'fail') + '|' + out + '|' + b64.length);
+      } catch (e) {
+        console.log('PEXP|error|' + (e.message || e));
+      }
     }
     if (params.get('testblocks2') === '1') {
       await sleep(900);
@@ -481,6 +548,7 @@ const App = {
     on('btn-add-shape', () => Editor.addElement('shape'));
     on('btn-add-icon', () => Editor.addElement('icon'));
     on('btn-add-chart', () => Editor.addElement('chart'));
+    on('btn-add-slider', () => Editor.addElement('slider'));
     on('btn-add-sprite', () => Editor.addElement('sprite'));
     on('btn-add-model3d', () => Editor.addElement('model3d'));
     on('btn-add-webapp', () => Editor.addElement('webapp'));
@@ -1181,7 +1249,263 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     return clone;
   },
 
-  // ELBLK 测试：元素脚本的保存/切回恢复链路
+  // INTTEST 测试：交互三件套（滑块 / 图表读写+点击 / 悬停）+ 克隆体交互回退
+  async testInteractive() {
+    const check = (name, ok) => console.log(`INTTEST|${name}|${ok ? 'ok' : 'FAIL'}`);
+    const results = [];
+    const eq = (name, ok) => { results.push(ok); check(name, ok); return ok; };
+    try {
+      Project.newProject('交互测试');
+      Project.data.elements.length = 0;
+      const slider = Project.createElement('slider', { name: '测试滑块' });
+      const chart = Project.createElement('chart', { name: '测试图表' });
+      const box = Project.createElement('shape', { name: '测试方块', x: 300, y: 200, w: 200, h: 200 });
+      Stage.renderAll();
+      await sleep(400);   // 等图表 setTimeout 初始化
+
+      // 1. 滑块渲染（min/max/value 正确）
+      const sDom = Stage.elDom(slider.id);
+      const inp = sDom && sDom.querySelector('input[type=range]');
+      eq('slider-render', !!(inp && inp.min === '0' && inp.max === '100' && inp.value === '50'));
+
+      // 2. slider.set 指令写值（DOM + props）
+      await Executor.exec({ op: 'slider.set', elId: slider.id, value: { k: 'num', v: 80 } }, { vars: Executor.vars });
+      await sleep(30);
+      eq('slider-set', !!(inp && inp.value === '80' && slider.props.value === 80));
+
+      // 3. 滑块事件 + 读取值（模拟播放态拖动）
+      Executor.playing = true;
+      Executor.scripts = {
+        global: [{ kind: 'onSliderChange', elId: slider.id, body: [
+          { op: 'var.set', name: 'sv', value: { k: 'slider', el: slider.id } }] }],
+        scenes: {}, elements: {}
+      };
+      inp.value = '37';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(140);
+      eq('slider-event', Executor.vars.sv === 37);
+
+      // 4. 图表数据写入（props + ECharts 实例同步）
+      const cDom = Stage.elDom(chart.id);
+      const cInst = cDom && cDom.querySelector('.c-chart');
+      await Executor.exec({ op: 'chart.set', elId: chart.id, value: { k: 'str', v: '10,20,30' } }, { vars: Executor.vars });
+      await Executor.exec({ op: 'chart.cats', elId: chart.id, value: { k: 'str', v: '甲,乙,丙' } }, { vars: Executor.vars });
+      await sleep(80);
+      const opt = cInst && cInst._chart ? cInst._chart.getOption() : null;
+      const vals = opt && opt.series && opt.series[0] ? opt.series[0].data : null;
+      const cats = opt && opt.xAxis && opt.xAxis[0] ? opt.xAxis[0].data : null;
+      eq('chart-data', !!(chart.props.values.join() === '10,20,30' && chart.props.categories.join() === '甲,乙,丙'
+        && vals && vals.join() === '10,20,30' && cats && cats.join() === '甲,乙,丙'));
+
+      // 5. 图表点击（类别 / 数值 / 序号）
+      Executor.scripts.global.push({ kind: 'onChartClick', elId: chart.id, body: [
+        { op: 'var.set', name: 'ck', value: { k: 'chartclick', what: 'name' } },
+        { op: 'var.set', name: 'cv', value: { k: 'chartclick', what: 'value' } },
+        { op: 'var.set', name: 'ci', value: { k: 'chartclick', what: 'index' } }
+      ] });
+      Elements.onChartClick(chart.id, { name: '甲', value: 10, dataIndex: 0, seriesName: '数据' });
+      await sleep(140);
+      eq('chart-click', Executor.vars.ck === '甲' && Executor.vars.cv === 10 && Executor.vars.ci === 1);
+
+      // 6. 悬停进入 / 离开
+      Executor.scripts.global.push({ kind: 'onMouseEnter', elId: box.id, body: [{ op: 'var.set', name: 'hov', value: { k: 'num', v: 1 } }] });
+      Executor.scripts.global.push({ kind: 'onMouseLeave', elId: box.id, body: [{ op: 'var.set', name: 'hov', value: { k: 'num', v: 2 } }] });
+      const br6 = Stage.elDom(box.id).getBoundingClientRect();
+      Stage.rootEl.dispatchEvent(new MouseEvent('mouseover', {
+        bubbles: true, clientX: br6.left + br6.width / 2, clientY: br6.top + br6.height / 2
+      }));
+      await sleep(60);
+      const inOk = Executor.vars.hov === 1;
+      Stage.rootEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 5, clientY: 5 }));
+      await sleep(60);
+      eq('hover', inOk && Executor.vars.hov === 2);
+
+      // 7. 克隆体交互回退（点克隆体 → 执行模板脚本，self=克隆体）
+      const tmpl = Project.createElement('icon', { name: '克隆模板', x: 500, y: 500 });
+      Stage.renderAll();
+      Executor.scripts.elements[tmpl.id] = [{ kind: 'onElementClick', elId: '@self', body: [
+        { op: 'var.set', name: 'selfHit', value: { k: 'num', v: 1 } },
+        { op: 'el.change', elId: '@self', prop: 'x', delta: { k: 'num', v: 5 } }
+      ] }];
+      const before = Project.data.elements.length;
+      await Executor.exec({ op: 'el.clone.start', elId: tmpl.id }, { vars: Executor.vars });
+      await sleep(100);
+      const clone = Project.data.elements.find(e => e._templateId === tmpl.id);
+      Executor.trigger('onElementClick', clone ? clone.id : 'none');
+      await sleep(140);
+      eq('clone-interact', !!(clone && Project.data.elements.length === before + 1
+        && Executor.vars.selfHit === 1 && clone.x === tmpl.x + 5));
+
+      // 8. 元素脚本引用其他元素（自我版=@self；普通块=下拉选定元素）
+      {
+        const w1 = new Blockly.Workspace();
+        Blockly.serialization.workspaces.load({ blocks: { languageVersion: 0, blocks: [{
+          type: 'jimu_self_on_click', next: { block: {
+            type: 'jimu_el_text', fields: { ELEMENT: box.id },
+            inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: 'hi' } } } }
+          } }
+        }] } }, w1);
+        const ir1 = IRCompiler.compileWorkspace(w1, { selfMode: true });
+        w1.dispose();
+        const ins1 = ir1[0] && ir1[0].body && ir1[0].body[0];
+        const w2 = new Blockly.Workspace();
+        Blockly.serialization.workspaces.load({ blocks: { languageVersion: 0, blocks: [{ type: 'jimu_self_slider_value' }] } }, w2);
+        const ex2 = IRCompiler.exprOf(w2.getTopBlocks(false)[0]);
+        w2.dispose();
+        eq('self-other-el', !!(ins1 && ins1.op === 'el.text' && ins1.elId === box.id
+          && ex2 && ex2.k === 'slider' && ex2.el === '@self'));
+      }
+
+      // 9. .bdp 保存往返（滑块属性 / 克隆引用字段保真）
+      {
+        const b64 = await Project.pack();
+        const sliderN = Project.data.elements.filter(e => e.type === 'slider').length;
+        const cloneN = Project.data.elements.filter(e => e._clone).length;
+        await Project.unpack(b64);
+        const s3 = Project.data.elements.find(e => e.type === 'slider');
+        const c3 = Project.data.elements.filter(e => e._clone);
+        eq('bdp-roundtrip', !!s3
+          && Project.data.elements.filter(e => e.type === 'slider').length === sliderN
+          && s3.props.min === 0 && s3.props.max === 100 && s3.props.value === 80
+          && c3.length === cloneN && c3.every(e => !!e._templateId));
+      }
+
+      Executor.playing = false;
+      console.log(results.every(Boolean) ? 'INTTEST|PASS' : 'INTTEST|FAIL');
+    } catch (e) {
+      console.log('INTTEST|error|' + (e.message || e));
+      console.log('INTTEST|FAIL');
+    }
+  },
+
+  // PLAYTPL 测试：交互模板的真实播放链路（加载 → 播放 → 模拟用户操作 → 校验响应）
+  // 说明：测试期间屏蔽真实全屏，避免干扰用户；播放/快照/脚本链路完整执行。
+  async testPlayTemplates() {
+    const eq = (name, ok) => console.log(`PLAYTPL|${name}|${ok ? 'ok' : 'FAIL'}`);
+    const results = [];
+    const css = (elId) => {
+      const d = Stage.elDom(elId);
+      const t = d && d.querySelector('.c-text');
+      return t ? t.textContent : '';
+    };
+    const findByName = n => (Project.data.elements || []).find(e => e.name === n);
+    // 元素逻辑坐标（比例 0-1）→ 屏幕坐标（动态缩放/动画不影响）
+    const screenAt = (el, fx, fy) => {
+      const r = Stage.rootEl.getBoundingClientRect();
+      return { x: r.left + (el.x + el.w * fx) * Stage.scale, y: r.top + (el.y + el.h * fy) * Stage.scale };
+    };
+    let fsOrig = null;
+    try {
+      if (this.host && this.host.setFullscreen) {
+        try { fsOrig = this.host.setFullscreen; this.host.setFullscreen = () => Promise.resolve(); } catch (e) { fsOrig = null; }
+      }
+      // ---- ① 数据看板：点按钮切区域 + 点柱条看详情 ----
+      console.log('PLAYTPL|stage|dash');
+      JimuBlocks.ws.clear(); JimuBlocks.current = null;
+      Project.newProject('看板测试');
+      Templates.build('dashboard');
+      Stage.renderAll();
+      await this.enterPlayMode();
+      this.runPlayScripts();   // 不等待进场链，模拟用户在动画播放中途交互
+      await sleep(1700);
+      const btnHn = findByName('按钮·华南');
+      const chartEl = (Project.data.elements || []).find(e => e.type === 'chart');
+      const detailEl = (Project.data.elements || []).find(e => e.type === 'text' && /点击图表上的柱条/.test(e.props.text));
+      // 真实命中链路：点按钮文字中心 → 应穿透到按钮（图形）触发其点击脚本
+      const txtHn = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text === '华南');
+      const ptB = screenAt(txtHn, 0.5, 0.5);
+      const pidB = Executor.pickClickTarget(ptB.x, ptB.y);
+      results.push(pidB === btnHn.id);
+      eq('dash-hit-through', results[results.length - 1]);
+      Executor.trigger('onElementClick', pidB);
+      await sleep(400);
+      const cNow = (Project.data.elements || []).find(e => e.type === 'chart');
+      results.push(cNow.props.values.join() === '90,140,210,180' && css(detailEl.id).indexOf('华南区') === 0);
+      eq('dash-btn', results[results.length - 1]);
+      Elements.onChartClick(chartEl.id, { name: 'Q2', value: 140, dataIndex: 1, seriesName: '销售额' });
+      await sleep(300);
+      results.push(css(detailEl.id) === '你点了 Q2 季度：140');
+      eq('dash-chart-click', results[results.length - 1]);
+      this.stop();
+      await sleep(300);
+
+      // ---- ② 报价单：点卡片切换价格 + 悬停上浮还原 ----
+      console.log('PLAYTPL|stage|quote');
+      Project.newProject('报价测试');
+      Templates.build('quote');
+      Stage.renderAll();
+      await this.enterPlayMode();
+      this.runPlayScripts();
+      await sleep(1700);
+      const card2 = findByName('卡片·专业版');
+      const bigEl = (Project.data.elements || []).find(e => e.type === 'text' && e.props.size === 92);
+      const price2 = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text === '¥299');
+      const pt2 = screenAt(price2, 0.5, 0.5);
+      const pid2 = Executor.pickClickTarget(pt2.x, pt2.y);
+      results.push(pid2 === card2.id);
+      eq('quote-hit-through', results[results.length - 1]);
+      Executor.trigger('onElementClick', pid2);
+      await sleep(400);
+      const card2Now = findByName('卡片·专业版');
+      results.push(card2Now.props.fill === '#243050' && css(bigEl.id) === '¥299');
+      if (!results[results.length - 1]) {
+        const textsNow = (Project.data.elements || []).filter(e => e.type === 'text').map(e => e.props.text).join(' / ');
+        console.log(`PLAYTPL|quote-debug|fill=${card2Now.props.fill}|big=${css(bigEl.id)}|texts=${textsNow}`);
+      }
+      eq('quote-click', results[results.length - 1]);
+      const card3 = findByName('卡片·旗舰版');
+      const y0 = card3.y;
+      // 悬停穿透：把鼠标"放到卡片里的文字上"，应识别为悬停卡片
+      const hoverTxt = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text && e.props.text.indexOf('不限人数') === 0);
+      const ph = screenAt(hoverTxt, 0.5, 0.5);
+      Stage.rootEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: ph.x, clientY: ph.y }));
+      await sleep(250);
+      const yHover = findByName('卡片·旗舰版').y;
+      Stage.rootEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 5, clientY: 5 }));
+      await sleep(250);
+      const yOut = findByName('卡片·旗舰版').y;
+      results.push(yHover === y0 - 10 && yOut === y0);
+      if (!results[results.length - 1]) {
+        const kinds = (Executor.scriptsFor(card3.id) || []).map(s => s.kind).join(',');
+        console.log(`PLAYTPL|hover-debug|y0=${y0}|yHover=${yHover}|yOut=${yOut}|kinds=${kinds}|hoverId=${Stage._hoverId}`);
+      }
+      eq('quote-hover', results[results.length - 1]);
+      this.stop();
+      await sleep(300);
+
+      // ---- ③ 抛体实验：点发射后小球按轨迹运动 ----
+      console.log('PLAYTPL|stage|physics');
+      Project.newProject('抛体测试');
+      Templates.build('physics');
+      Stage.renderAll();
+      await this.enterPlayMode();
+      this.runPlayScripts();
+      await sleep(1700);
+      const launch = findByName('发射按钮');
+      const x0 = findByName('小球').x;
+      const btnTxtEl = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text === '🚀 发射');
+      const ptL = screenAt(btnTxtEl, 0.5, 0.5);
+      const pidL = Executor.pickClickTarget(ptL.x, ptL.y);
+      results.push(pidL === launch.id);
+      eq('physics-hit-through', results[results.length - 1]);
+      Executor.trigger('onElementClick', pidL);
+      await sleep(800);
+      const ballNow = findByName('小球');
+      results.push(ballNow.x > x0 + 50 && ballNow.y < 828 + 60);
+      if (!results[results.length - 1]) console.log(`PLAYTPL|physics-debug|x0=${x0}|x=${ballNow.x}|y=${ballNow.y}|playing=${Executor.playing}`);
+      eq('physics-launch', results[results.length - 1]);
+      this.stop();
+      await sleep(300);
+
+      console.log(results.every(Boolean) ? 'PLAYTPL|PASS' : 'PLAYTPL|FAIL');
+    } catch (e) {
+      console.log('PLAYTPL|error|' + (e.message || e));
+      console.log('PLAYTPL|FAIL');
+    } finally {
+      if (fsOrig && this.host) { try { this.host.setFullscreen = fsOrig; } catch (e) { } }
+    }
+  },
+
   // FX 测试：属性面板"背景特效"应写入舞台级 stage.fx 并渲染（回归 2026-10-05 fx 面板失效修复）
   async testFx() {
     try {

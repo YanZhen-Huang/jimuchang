@@ -23,8 +23,10 @@ declare -A TESTS=(
   [templates]="--test-templates"
   [ppt]="--test-ppt"
   [pack]="--test-pack"
+  [interactive]="--test-interactive"
+  [playtpl]="--test-playtpl"
 )
-ORDER=(canvaszoom playview layout elbar record hotkeys play save2 fx uiscale ctabs templates)
+ORDER=(canvaszoom playview layout elbar record hotkeys play save2 fx uiscale ctabs templates interactive playtpl)
 if [ "$#" -gt 0 ]; then ORDER=("$@"); fi
 
 fail=0
@@ -32,7 +34,9 @@ for name in "${ORDER[@]}"; do
   arg="${TESTS[$name]:-}"
   if [ -z "$arg" ]; then echo "[$name] 未知测试（可选：${!TESTS[*]}）"; fail=1; continue; fi
   logfile="$OUT/$name.log"
-  P0_SHOT="$OUT/$name.png" timeout 45 "$BIN" "$arg" --no-api >"$logfile" 2>&1
+  shot_ms=8000
+  [ "$name" = "playtpl" ] && shot_ms=16000
+  P0_SHOT="$OUT/$name.png" P0_SHOT_MS=$shot_ms timeout 60 "$BIN" "$arg" --no-api >"$logfile" 2>&1
   code=$?
   passes=$(grep -c '|PASS' "$logfile")
   fails=$(grep -c '|FAIL' "$logfile")

@@ -12,7 +12,11 @@ global.Project = {
     format: 'jimuchang-project', version: 2,
     stage: { background: { type: 'color', value: '#0F1115' } },
     chapters: [{ id: 'ch1', name: '自检', preset: {}, blocks: null }],
-    elements: [{ id: 'e1', name: '测试', type: 'text', props: {} }],
+    elements: [
+      { id: 'e1', name: '测试', type: 'text', props: {} },
+      { id: 'e2', name: '滑块', type: 'slider', props: {} },
+      { id: 'e3', name: '图表', type: 'chart', props: {} }
+    ],
     resources: []
   },
   getElement(id) { return (this.data.elements || []).find(e => e.id === id) || null; },
@@ -59,6 +63,34 @@ for (const type of toolTypes) {
     }
   } catch (e) {
     fails.push(`${type}: ${e.message}`);
+  }
+}
+
+// ---- 序列化加载测试：验证块经 workspaces.load 还原后字段值不丢（动态下拉/元素引用）----
+// 背景：S3 曾发生"动态下拉序列化加载时选项未生成 → 字段值被重置为空"，此测试做长期防护。
+const serCases = [
+  ['jimu_on_slider', { ELEMENT: 'e2' }, 'ELEMENT'],
+  ['jimu_slider_value', { ELEMENT: 'e2' }, 'ELEMENT'],
+  ['jimu_slider_set', { ELEMENT: 'e2' }, 'ELEMENT'],
+  ['jimu_chart_set', { ELEMENT: 'e3' }, 'ELEMENT'],
+  ['jimu_chart_cats', { ELEMENT: 'e3' }, 'ELEMENT'],
+  ['jimu_on_chart_click', { ELEMENT: 'e3' }, 'ELEMENT'],
+  ['jimu_on_hover', { ELEMENT: 'e1' }, 'ELEMENT'],
+  ['jimu_on_hover_out', { ELEMENT: 'e1' }, 'ELEMENT'],
+  ['jimu_on_click', { ELEMENT: 'e1' }, 'ELEMENT'],
+  ['jimu_chart_click', { WHAT: 'value' }, 'WHAT']
+];
+for (const [type, fields, key] of serCases) {
+  try {
+    const w2 = new Blockly.Workspace();
+    Blockly.serialization.workspaces.load({
+      blocks: { languageVersion: 0, blocks: [{ type, fields }], variables: [] }
+    }, w2);
+    const b2 = w2.getTopBlocks(false)[0];
+    const got = b2.getFieldValue(key);
+    if (got !== fields[key]) fails.push(`${type}: 序列化后字段 ${key} 丢失（${fields[key]} → ${got}）`);
+  } catch (e) {
+    fails.push(`${type}: 序列化加载失败 ${e.message}`);
   }
 }
 console.log(`积木自检：${ok} 正常 / ${fails.length} 失败（其中自我版 ${selfCount} 块）`);

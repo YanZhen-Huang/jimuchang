@@ -74,7 +74,8 @@ const Project = {
       chart: { name: '图表', w: 820, h: 500, x: 550, y: 290, props: { chartType: 'bar', categories: ['一月', '二月', '三月', '四月'], values: [120, 200, 150, 260], seriesName: '数据' } },
       sprite: { name: '帧动画', w: 320, h: 320, x: 800, y: 380, props: { kind: 'sheet', resourceId: null, frames: [], cols: 4, rows: 4, fps: 12, loop: true } },
       model3d: { name: '3D 模型', w: 640, h: 560, x: 640, y: 260, props: { resourceId: 'builtin:robot', animation: { name: 'Idle' }, lights: { preset: 'soft' }, autoRotate: false } },
-      webapp: { name: '小程序', w: 400, h: 300, x: 760, y: 390, props: { resourceId: null, inline: null, sandbox: true } }
+      webapp: { name: '小程序', w: 400, h: 300, x: 760, y: 390, props: { resourceId: null, inline: null, sandbox: true } },
+      slider: { name: '滑块', w: 560, h: 100, x: 680, y: 490, props: { min: 0, max: 100, value: 50, step: 1, label: '', color: '#6C8CFF', showValue: true } }
     };
     const d = defaults[type] || defaults.shape;
     const maxZ = this.data.elements.reduce((m, e) => Math.max(m, e.z || 0), 0);

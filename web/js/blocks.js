@@ -36,6 +36,10 @@
     const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'sprite').map(e => [e.name, e.id]);
     return list.length ? list : [['（无帧动画元素）', '']];
   };
+  const sliderElementOptions = () => {
+    const list = (Project.data && Project.data.elements || []).filter(e => e.type === 'slider').map(e => [e.name, e.id]);
+    return list.length ? list : [['（无滑块元素）', '']];
+  };
 
   const ANIM_TYPES = [
     ['淡入', 'fadeIn'], ['从左侧飞入', 'flyInLeft'], ['从右侧飞入', 'flyInRight'],
@@ -126,6 +130,40 @@
     init() {
       this.appendDummyInput().appendField('当点击')
         .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  // ---- 交互三件套：滑块 / 悬停 / 图表点击（事件帽子）----
+  defs['jimu_on_slider'] = {
+    init() {
+      this.appendDummyInput().appendField('当滑块')
+        .appendField(new Blockly.FieldDropdown(sliderElementOptions), 'ELEMENT')
+        .appendField('的值改变');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_on_hover'] = {
+    init() {
+      this.appendDummyInput().appendField('当鼠标移入')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_on_hover_out'] = {
+    init() {
+      this.appendDummyInput().appendField('当鼠标移出')
+        .appendField(new Blockly.FieldDropdown(elementOptions), 'ELEMENT');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_on_chart_click'] = {
+    init() {
+      this.appendDummyInput().appendField('当点击图表')
+        .appendField(new Blockly.FieldDropdown(chartElementOptions), 'ELEMENT');
       this.setStyle('jimu_hat');
       this.setNextStatement(true);
     }
@@ -799,6 +837,62 @@
       this.setStyle('jimu_media');
     }
   };
+  // ---- 交互三件套：图表数据读写 + 滑块读写 ----
+  defs['jimu_chart_set'] = {
+    init() {
+      this.appendDummyInput().appendField('设置图表')
+        .appendField(new Blockly.FieldDropdown(chartElementOptions), 'ELEMENT')
+        .appendField('的数值为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_chart_cats'] = {
+    init() {
+      this.appendDummyInput().appendField('设置图表')
+        .appendField(new Blockly.FieldDropdown(chartElementOptions), 'ELEMENT')
+        .appendField('的分类为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_slider_set'] = {
+    init() {
+      this.appendDummyInput().appendField('设置滑块')
+        .appendField(new Blockly.FieldDropdown(sliderElementOptions), 'ELEMENT')
+        .appendField('的值为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_slider_value'] = {
+    init() {
+      this.appendDummyInput().appendField('滑块')
+        .appendField(new Blockly.FieldDropdown(sliderElementOptions), 'ELEMENT')
+        .appendField('的值');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_chart_click'] = {
+    init() {
+      this.appendDummyInput().appendField('图表点击的')
+        .appendField(new Blockly.FieldDropdown([
+          ['类别', 'name'], ['数值', 'value'], ['序号', 'index'], ['系列名', 'series']
+        ]), 'WHAT');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
+    }
+  };
   defs['jimu_sprite_ctrl'] = {
     init() {
       this.appendDummyInput().appendField('帧动画')
@@ -854,6 +948,35 @@
   defs['jimu_self_on_clone'] = {
     init() {
       this.appendDummyInput().appendField('当克隆体启动时');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  // ---- 自我版：交互三件套事件 ----
+  defs['jimu_self_on_slider'] = {
+    init() {
+      this.appendDummyInput().appendField('当我的滑块值改变');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_hover'] = {
+    init() {
+      this.appendDummyInput().appendField('当鼠标移入我');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_hover_out'] = {
+    init() {
+      this.appendDummyInput().appendField('当鼠标移出我');
+      this.setStyle('jimu_hat');
+      this.setNextStatement(true);
+    }
+  };
+  defs['jimu_self_on_chart_click'] = {
+    init() {
+      this.appendDummyInput().appendField('当我的图表被点击');
       this.setStyle('jimu_hat');
       this.setNextStatement(true);
     }
@@ -1114,6 +1237,43 @@
       this.setPreviousStatement(true);
       this.setNextStatement(true);
       this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_chart_set'] = {
+    init() {
+      this.appendDummyInput().appendField('设置我的图表数值为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_chart_cats'] = {
+    init() {
+      this.appendDummyInput().appendField('设置我的图表分类为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_media');
+    }
+  };
+  defs['jimu_self_slider_set'] = {
+    init() {
+      this.appendDummyInput().appendField('设置我的滑块值为');
+      this.appendValueInput('VALUE');
+      this.setInputsInline(true);
+      this.setPreviousStatement(true);
+      this.setNextStatement(true);
+      this.setStyle('jimu_sense');
+    }
+  };
+  defs['jimu_self_slider_value'] = {
+    init() {
+      this.appendDummyInput().appendField('我的滑块值');
+      this.setOutput(true);
+      this.setStyle('jimu_sense');
     }
   };
 
@@ -1760,6 +1920,10 @@
               { kind: 'block', type: 'jimu_on_scene' },
               { kind: 'block', type: 'jimu_on_key' },
               { kind: 'block', type: 'jimu_on_click' },
+              { kind: 'block', type: 'jimu_on_slider' },
+              { kind: 'block', type: 'jimu_on_hover' },
+              { kind: 'block', type: 'jimu_on_hover_out' },
+              { kind: 'block', type: 'jimu_on_chart_click' },
               { kind: 'block', type: 'jimu_on_broadcast' }
             ]
           },
@@ -1825,6 +1989,8 @@
               { kind: 'block', type: 'jimu_sprite_ctrl' },
               { kind: 'block', type: 'jimu_sprite_speed' },
               { kind: 'block', type: 'jimu_chart_refresh' },
+              { kind: 'block', type: 'jimu_chart_set', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '120,200,150' } } } } },
+              { kind: 'block', type: 'jimu_chart_cats', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '一月,二月,三月' } } } } },
               { kind: 'block', type: 'jimu_play_note', inputs: { NOTE: { shadow: { type: 'math_number', fields: { NUM: 60 } } }, DUR: { shadow: { type: 'math_number', fields: { NUM: 0.5 } } } } }
             ]
           },
@@ -1839,6 +2005,9 @@
               { kind: 'block', type: 'jimu_mouse' },
               { kind: 'block', type: 'jimu_mouse_down' },
               { kind: 'block', type: 'jimu_touch' },
+              { kind: 'block', type: 'jimu_slider_value' },
+              { kind: 'block', type: 'jimu_slider_set', inputs: { VALUE: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
+              { kind: 'block', type: 'jimu_chart_click' },
               { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
               { kind: 'block', type: 'jimu_answer' },
               { kind: 'block', type: 'jimu_datetime' }
@@ -1973,7 +2142,11 @@
               { kind: 'block', type: 'jimu_self_on_start' },
               { kind: 'block', type: 'jimu_self_on_click' },
               { kind: 'block', type: 'jimu_self_on_message' },
-              { kind: 'block', type: 'jimu_self_on_clone' }
+              { kind: 'block', type: 'jimu_self_on_clone' },
+              { kind: 'block', type: 'jimu_self_on_slider' },
+              { kind: 'block', type: 'jimu_self_on_hover' },
+              { kind: 'block', type: 'jimu_self_on_hover_out' },
+              { kind: 'block', type: 'jimu_self_on_chart_click' }
             ]
           },
           {
@@ -2016,6 +2189,17 @@
             ]
           },
           {
+            kind: 'category', name: '其他元素', colour: C.element,
+            contents: [
+              { kind: 'block', type: 'jimu_el_text', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你好' } } } } },
+              { kind: 'block', type: 'jimu_el_show' },
+              { kind: 'block', type: 'jimu_el_hide' },
+              { kind: 'block', type: 'jimu_anim' },
+              { kind: 'block', type: 'jimu_el_move', inputs: { X: { shadow: { type: 'math_number', fields: { NUM: 100 } } }, Y: { shadow: { type: 'math_number', fields: { NUM: 100 } } } } },
+              { kind: 'block', type: 'jimu_el_color' }
+            ]
+          },
+          {
             kind: 'category', name: '动画', colour: C.anim,
             contents: [
               { kind: 'block', type: 'jimu_self_anim' },
@@ -2037,6 +2221,8 @@
               { kind: 'block', type: 'jimu_self_sprite_ctrl' },
               { kind: 'block', type: 'jimu_self_sprite_speed' },
               { kind: 'block', type: 'jimu_self_chart_refresh' },
+              { kind: 'block', type: 'jimu_self_chart_set', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '120,200,150' } } } } },
+              { kind: 'block', type: 'jimu_self_chart_cats', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '一月,二月,三月' } } } } },
               { kind: 'block', type: 'jimu_music_play' },
               { kind: 'block', type: 'jimu_music_stop' },
               { kind: 'block', type: 'jimu_volume' },
@@ -2055,6 +2241,9 @@
               { kind: 'block', type: 'jimu_mouse' },
               { kind: 'block', type: 'jimu_mouse_down' },
               { kind: 'block', type: 'jimu_self_touch' },
+              { kind: 'block', type: 'jimu_self_slider_value' },
+              { kind: 'block', type: 'jimu_self_slider_set', inputs: { VALUE: { shadow: { type: 'math_number', fields: { NUM: 50 } } } } },
+              { kind: 'block', type: 'jimu_chart_click' },
               { kind: 'block', type: 'jimu_ask', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '你叫什么名字？' } } } } },
               { kind: 'block', type: 'jimu_answer' },
               { kind: 'block', type: 'jimu_datetime' }
@@ -2270,9 +2459,11 @@ const IRCompiler = {
     return scripts;
   },
 
-  // 元素引用：元素脚本模式（selfMode）下一律为"自己"
+  // 元素引用：自我版块（jimu_self_*）= 自己；普通块（带元素下拉）= 下拉选定元素
+  // （此前 selfMode 会强制所有块指向 @self，导致元素脚本无法操作其他元素；现按块类型精确判断）
   EL(b) {
-    return this._selfMode ? '@self' : b.getFieldValue('ELEMENT');
+    if (b.type && b.type.indexOf('jimu_self_') === 0) return '@self';
+    return b.getFieldValue('ELEMENT');
   },
 
   // 参数字符串解析（"x, y" → ['x','y']；带参函数用）
@@ -2287,6 +2478,10 @@ const IRCompiler = {
       case 'jimu_self_on_click': return { kind: 'onElementClick', elId: '@self' };
       case 'jimu_self_on_message': return { kind: 'onMessage', message: String(b.getFieldValue('MSG') || '') };
       case 'jimu_self_on_clone': return { kind: 'onCloneStart' };
+      case 'jimu_self_on_slider': return { kind: 'onSliderChange', elId: '@self' };
+      case 'jimu_self_on_hover': return { kind: 'onMouseEnter', elId: '@self' };
+      case 'jimu_self_on_hover_out': return { kind: 'onMouseLeave', elId: '@self' };
+      case 'jimu_self_on_chart_click': return { kind: 'onChartClick', elId: '@self' };
     }
     switch (b.type) {
       case 'jimu_on_start': return { kind: 'onStart' };
@@ -2297,6 +2492,10 @@ const IRCompiler = {
       case 'jimu_on_click': return { kind: 'onElementClick', elId: this.EL(b) };
       case 'jimu_on_message': return { kind: 'onWebappMessage', elId: this.EL(b) };
       case 'jimu_on_clone': return { kind: 'onCloneStart' };
+      case 'jimu_on_slider': return { kind: 'onSliderChange', elId: this.EL(b) };
+      case 'jimu_on_hover': return { kind: 'onMouseEnter', elId: this.EL(b) };
+      case 'jimu_on_hover_out': return { kind: 'onMouseLeave', elId: this.EL(b) };
+      case 'jimu_on_chart_click': return { kind: 'onChartClick', elId: this.EL(b) };
       default: return null;
     }
   },
@@ -2477,6 +2676,15 @@ const IRCompiler = {
         op: 'fx.burst', elId: this.EL(b), fxType: b.getFieldValue('FX')
       };
       case 'jimu_chart_refresh': return { op: 'chart.refresh', elId: this.EL(b) };
+      case 'jimu_chart_set': return {
+        op: 'chart.set', elId: this.EL(b), value: this.expr(b, 'VALUE')
+      };
+      case 'jimu_chart_cats': return {
+        op: 'chart.cats', elId: this.EL(b), value: this.expr(b, 'VALUE')
+      };
+      case 'jimu_slider_set': return {
+        op: 'slider.set', elId: this.EL(b), value: this.expr(b, 'VALUE')
+      };
       case 'jimu_sprite_ctrl': return {
         op: 'sprite.ctrl', elId: this.EL(b), action: b.getFieldValue('ACTION')
       };
@@ -2540,6 +2748,8 @@ const IRCompiler = {
       case 'jimu_get_prop': return {
         k: 'prop', el: this.EL(b), prop: b.getFieldValue('PROP')
       };
+      case 'jimu_slider_value': return { k: 'slider', el: this.EL(b) };
+      case 'jimu_chart_click': return { k: 'chartclick', what: b.getFieldValue('WHAT') };
       case 'jimu_scene_name': return { k: 'scenename' };
       case 'jimu_timer': return { k: 'timer' };
       case 'jimu_rand_color': return { k: 'randcolor' };
