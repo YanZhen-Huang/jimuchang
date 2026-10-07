@@ -201,11 +201,11 @@ const App = {
       console.log('P7TEST|home|recent=' + n);
     }
     if (params.get('testtheme') === 'national') {
-      this.applyTheme('national');
+      this.applyTheme('national', false);
       console.log('THEME|national|' + document.body.classList.contains('national'));
     }
     if (params.get('testtheme') === 'light') {
-      this.applyTheme('light');
+      this.applyTheme('light', false);
       console.log('P7TEST|theme|light');
     }
     if (params.get('testppt') === '1') {
@@ -307,10 +307,11 @@ const App = {
         const before = { bc: Settings.get('blockCount'), fps: Settings.get('showFps') };
         console.log(`SETTEST|before|blockCount=${before.bc}|showFps=${before.fps}`);
         if (before.bc === true) {
-          // 上次写入的值被持久化恢复 → 验证成功 → 清理回默认（不污染用户环境）
-          Settings.reset();
+          // 上次写入的值被持久化恢复 → 验证成功 → 只清理测试写入的两项（绝不 reset 用户全部设置）
+          Settings.set('blockCount', false);
+          Settings.set('showFps', false);
           await sleep(300);
-          console.log('SETTEST|persist|PASS（已清理回默认）');
+          console.log('SETTEST|persist|PASS（已清理测试项）');
         } else {
           Settings.set('blockCount', true);
           Settings.set('showFps', true);
@@ -447,6 +448,12 @@ const App = {
     if (params.get('testplaytpl') === '1') {
       await sleep(900);
       this.testPlayTemplates();
+    }
+    if (params.get('testclosedlg') === '1') {
+      // 配合 --test-closedlg：标记未保存修改，验证关闭确认对话框（保存并退出 / 直接退出 / 取消）
+      await sleep(1200);
+      this.markDirty();
+      console.log('CLOSEDLG|dirty-set');
     }
     if (params.get('testtplshot')) {
       await sleep(500);
@@ -610,7 +617,7 @@ const App = {
     });
   },
 
-  applyTheme(mode) {
+  applyTheme(mode, persist) {
     this.themeMode = mode;
     document.body.classList.toggle('light', mode === 'light');
     document.body.classList.toggle('national', mode === 'national');
@@ -623,7 +630,7 @@ const App = {
     const btn = document.getElementById('btn-theme');
     if (btn) btn.textContent = mode === 'light' ? '🌙' : (mode === 'national' ? '🎉' : '☀');
     JimuBlocks.setTheme(mode);
-    Settings.set('theme', mode);
+    if (persist !== false) Settings.set('theme', mode);   // 测试演示主题时不写用户设置
   },
 
   toggleTheme() {
@@ -669,7 +676,7 @@ const App = {
       html += `<div class="tab${on ? ' active' : ''}" id="tab-el" data-key="el:${show.id}" title="${on ? '正在编辑：' : '点击编辑：'}${esc(show.name)} 的脚本">`
         + `<span class="el-ico">${ELEMENT_ICONS[show.type] || '◻'}</span>${esc(show.name)}</div>`;
     } else {
-      html += `<div class="tab tab-tip" title="在舞台上点选元素，或点击下方元素条">选中元素编辑脚本</div>`;
+      html += `<div class="tab tab-tip" title="在舞台上点选元素，或点击下方元素条">未选中元素</div>`;
     }
     box.innerHTML = html;
     box.querySelector('[data-key="global"]').onclick = () => this.switchTab('global');
@@ -1637,6 +1644,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const results = [];
     const check = (name, ok) => { results.push(`${name}=${ok ? 'ok' : 'FAIL'}`); return ok; };
     try {
+      // 测试前保存用户布局偏好，结束后按原值恢复（不重置用户设置）
+      const layoutOrig = { w: Settings.get('leftWidth'), c: Settings.get('leftCollapsed'), p: Settings.get('propsCollapsed') };
       const left = document.getElementById('left');
       const resizer = document.getElementById('left-resizer');
       const w0 = left.getBoundingClientRect().width;
@@ -1671,9 +1680,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       check('props-collapse', h1 < h0 - 40 && h2 > h1 + 40);
       // 清理：布局偏好复位
       left.style.flex = '';
-      Settings.set('leftWidth', 0);
-      Settings.set('leftCollapsed', false);
-      Settings.set('propsCollapsed', false);
+      Settings.set('leftWidth', layoutOrig.w || 0);
+      Settings.set('leftCollapsed', !!layoutOrig.c);
+      Settings.set('propsCollapsed', !!layoutOrig.p);
       Panel.collapsed = false; Panel.show();
       this.leftCollapsed = false;
       document.body.classList.remove('left-collapsed');
@@ -2723,7 +2732,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   // ---------- 存取 ----------
   async save() {
     JimuBlocks.save();
-    if (!this.host) { toast('浏览器预览模式无法保存'); return; }
+    if (!this.host) { toast('浏览器预览模式无法保存'); return false; }
     await this.hostReady;
     const base64 = await Project.pack();
     // 已保存过 → 直接覆盖原文件；首次保存 → 走"另存为"选路径
@@ -2732,18 +2741,26 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       if (ok) {
         this.clearDirty();
         toast('已保存：' + Project.filePath.split('/').pop());
+        this.notifyCloseSave(true);
+        return true;
       } else {
         toast('保存失败：' + Project.filePath);
       }
-      return;
+      this.notifyCloseSave(false);
+      return false;
     }
-    await this.saveAs();
+    return await this.saveAs();
+  },
+
+  // 保存流程结束通知宿主（供"关闭前保存并退出"等待结果用；平时调用无害）
+  notifyCloseSave(ok) {
+    try { if (this.host && this.host.jsCloseSaveResult) this.host.jsCloseSaveResult(!!ok); } catch (e) { }
   },
 
   // 另存为：总是选择新路径（Ctrl+Shift+S / 「另存为」按钮）
   async saveAs() {
     JimuBlocks.save();
-    if (!this.host) { toast('浏览器预览模式无法保存'); return; }
+    if (!this.host) { toast('浏览器预览模式无法保存'); return false; }
     await this.hostReady;
     const base64 = await Project.pack();
     const path = await this.host.saveProject(base64, (Project.data.name || '未命名演示') + '.bdp');
@@ -2752,7 +2769,11 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.clearDirty();
       try { await this.host.addRecentFile(path); } catch (e) { console.warn("记录最近文件失败:", e.message || e); }
       toast('已另存为：' + path.split('/').pop());
+      this.notifyCloseSave(true);
+      return true;
     }
+    this.notifyCloseSave(false);   // 用户取消
+    return false;
   },
 
   showPptDialog() {
@@ -2847,6 +2868,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   async openRecent(path) {
+    if (this.dirty && !confirm('当前项目有未保存的修改，仍要打开其他文件吗？')) return;
     try {
       const r = await this.host.readProjectFile(path);
       if (!r || !r.base64) { toast('读不到文件：' + path); return; }
@@ -2889,6 +2911,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   async open() {
     if (!this.host) return;
+    if (this.dirty && !confirm('当前项目有未保存的修改，仍要打开其他文件吗？')) return;
     await this.hostReady;
     const r = await this.host.openProject();
     if (!r) return;

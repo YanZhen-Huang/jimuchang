@@ -399,9 +399,9 @@ const Templates = (() => {
     { key: 'lesson', name: '课堂演示', icon: '📚', desc: '课题 + 三个要点卡片', build: lesson },
     { key: 'card', name: '节日贺卡', icon: '🎂', desc: '祝福语 + 动画', build: card },
     { key: 'chart', name: '数据图表', icon: '📊', desc: '柱状图 + 标题说明', build: chart },
-    { key: 'quote', name: '报价单', icon: '💰', desc: '点卡片切换方案（可交互）', build: quote },
-    { key: 'physics', name: '抛体实验', icon: '🧪', desc: '拖滑块调参数 + 发射（可交互）', build: physics },
-    { key: 'dashboard', name: '数据看板', icon: '📈', desc: '切区域 + 点柱条看详情（可交互）', build: dashboard }
+    { key: 'quote', name: '报价单', icon: '💰', desc: '点卡片切换方案', build: quote },
+    { key: 'physics', name: '抛体实验', icon: '🧪', desc: '拖滑块 · 点发射', build: physics },
+    { key: 'dashboard', name: '数据看板', icon: '📈', desc: '切区域 · 点柱条', build: dashboard }
   ];
 
   return {

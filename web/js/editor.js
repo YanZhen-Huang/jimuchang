@@ -338,12 +338,12 @@ const Panel = {
       : (bg.value && bg.value.stops && bg.value.stops[0] ? bg.value.stops[0][0] : '#0F1115');
     const tr = sc.transition || { type: 'fade', duration: 0.6 };
     this.el.innerHTML = `
-      <div class="p-title">舞台与章节</div>
+      <div class="p-title">章节设置</div>
       ${this.row('名称', `<input data-prop="name" value="${esc(sc.name)}">`)}
       ${this.row('背景色', `<input type="color" data-prop="background.value" value="${bgColor}">`)}
       ${this.row('转场', `<select data-prop="transition.type">${this.options(JimuConst.TRANSITIONS, tr.type)}</select>`)}
       ${this.row('转场时长', `<input type="number" step="0.1" min="0" max="10" data-prop="transition.duration" value="${tr.duration}">`)}
-      ${this.row('背景特效', `<select data-prop="fx.type">${this.options([['无', ''], ['星空', 'starfield'], ['飘雪', 'snow'], ['漂浮微粒', 'particles'], ['极光', 'aurora']], (Project.data.stage.fx && Project.data.stage.fx.type) || '')}</select>`)}
+      ${this.row('全片特效', `<select data-prop="fx.type">${this.options([['无', ''], ['星空', 'starfield'], ['飘雪', 'snow'], ['漂浮微粒', 'particles'], ['极光', 'aurora']], (Project.data.stage.fx && Project.data.stage.fx.type) || '')}</select>`)}
       <div class="p-hint">在舞台中拖入元素，或者用工具栏添加文字 / 图片 / 视频 / 音频 / 形状 / 图标</div>
     `;
   },

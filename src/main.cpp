@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -66,9 +67,14 @@ public:
 signals:
     // AI 请求异步结果（JS 侧 host.aiResult.connect(...) 接收）
     void aiResult(const QString &id, bool ok, const QString &content);
+    // "保存并退出"流程：JS 保存结束后回报结果（供 closeEvent 等待）
+    void closeSaveResult(bool ok);
 
 public slots:
     QString ping() { return QStringLiteral("pong-from-cpp"); }
+
+    // 关闭前保存流程的结果回调（JS 调 host.jsCloseSaveResult(true/false)）
+    void jsCloseSaveResult(bool ok) { emit closeSaveResult(ok); }
 
     // AI 助手：代理 DeepSeek Chat Completions（免 CORS；key 存 QSettings.aiKey）
     void aiChat(const QString &id, const QString &messagesJson) {
@@ -482,16 +488,23 @@ public:
     void setTestMode(bool t) { m_testMode = t; }
 protected:
     void closeEvent(QCloseEvent *e) override {
+        if (m_inClose) { e->ignore(); return; }   // 防重入（确认框 / 保存等待期间再次触发关闭）
+        m_inClose = true;
+        struct Reset { bool &f; ~Reset() { f = false; } } reset{m_inClose};
         // 自动化测试模式不弹"未保存确认"（无人点击会卡住退出）
         if (!m_testMode && m_bridge && m_bridge->isDirty()) {
             QMessageBox box(this);
             box.setWindowTitle(QStringLiteral("退出积木剧场"));
-            box.setText(QStringLiteral("有未保存的修改，仍要退出吗？"));
+            box.setText(QStringLiteral("有未保存的修改，要保存吗？"));
             box.setIcon(QMessageBox::Question);
-            QPushButton *quitBtn = box.addButton(QStringLiteral("退出"), QMessageBox::AcceptRole);
+            QPushButton *saveBtn = box.addButton(QStringLiteral("保存并退出"), QMessageBox::AcceptRole);
+            QPushButton *quitBtn = box.addButton(QStringLiteral("直接退出"), QMessageBox::DestructiveRole);
             box.addButton(QStringLiteral("取消"), QMessageBox::RejectRole);
             box.exec();
-            if (box.clickedButton() != quitBtn) {
+            if (box.clickedButton() == saveBtn) {
+                // 交给页面保存；取消或失败则不退出
+                if (!requestCloseSave()) { e->ignore(); return; }
+            } else if (box.clickedButton() != quitBtn) {
                 e->ignore();
                 return;
             }
@@ -505,9 +518,32 @@ protected:
         QMainWindow::closeEvent(e);
     }
 
+    // 触发页面保存并等待结果（true=已保存；false=取消 / 失败）；带超时保护
+    bool requestCloseSave() {
+        auto *view = findChild<QWebEngineView *>();
+        if (!view || !m_bridge) return false;
+        bool done = false, ok = false;
+        auto conn = QObject::connect(m_bridge, &HostBridge::closeSaveResult, this,
+            [&done, &ok](bool r) { done = true; ok = r; }, Qt::DirectConnection);
+        view->page()->runJavaScript(QStringLiteral("(typeof App !== 'undefined' && App.save) ? App.save() : null"));
+        QElapsedTimer timer;
+        timer.start();
+        QEventLoop loop;
+        QTimer poll;
+        QObject::connect(&poll, &QTimer::timeout, &loop, [&done, &timer, &loop]() {
+            if (done || timer.elapsed() > 120000) loop.quit();
+        });
+        poll.start(100);
+        loop.exec();
+        poll.stop();
+        QObject::disconnect(conn);
+        return done && ok;
+    }
+
 private:
     HostBridge *m_bridge = nullptr;
     bool m_testMode = false;
+    bool m_inClose = false;
 };
 
 int main(int argc, char *argv[]) {
@@ -533,7 +569,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("2.1.1"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -564,6 +600,8 @@ int main(int argc, char *argv[]) {
         for (const QString &a : args) {
             if (a.startsWith(QStringLiteral("--test-"))) { testMode = true; break; }
         }
+        // 关闭对话框演示需要真实弹框（不受"测试模式不弹框"约束）
+        if (args.contains(QStringLiteral("--test-closedlg"))) testMode = false;
         win.setTestMode(testMode);
     }
     QUrl url(QStringLiteral("qrc:///index.html"));
@@ -724,6 +762,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testplaytpl"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-closedlg"))) {
+            q.addQueryItem(QStringLiteral("testclosedlg"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         const int tsi = args.indexOf(QStringLiteral("--test-tplshot"));
         if (tsi >= 0 && tsi + 1 < args.size()) {
             q.addQueryItem(QStringLiteral("testtplshot"), args.at(tsi + 1));
@@ -741,6 +783,10 @@ int main(int argc, char *argv[]) {
             url.setQuery(q);
             view->load(url);
         }
+    }
+    if (args.contains(QStringLiteral("--test-closedlg"))) {
+        // 2.5s 后触发关闭（此时页面已 markDirty）→ 弹出"保存并退出 / 直接退出 / 取消"对话框供截图
+        QTimer::singleShot(2500, &win, [&win]() { win.close(); });
     }
     win.show();
 
@@ -771,7 +817,9 @@ int main(int argc, char *argv[]) {
             std::fprintf(stdout, "[P0] view->grab() -> %s (%dx%d)\n",
                          ok1 ? "saved" : "FAILED", pm.width(), pm.height());
             if (QScreen *screen = win.screen()) {
-                QPixmap pm2 = screen->grabWindow(win.winId());
+                // P0_SHOT_FULL=1 时抓整屏（用于验证独立弹窗，如关闭确认框）
+                const bool fullShot = !qEnvironmentVariable("P0_SHOT_FULL").isEmpty();
+                QPixmap pm2 = screen->grabWindow(fullShot ? 0 : win.winId());
                 const QString shot2 = shotPath + QStringLiteral(".screen.png");
                 bool ok2 = pm2.save(shot2);
                 std::fprintf(stdout, "[P0] screen grab -> %s (%dx%d)\n",
