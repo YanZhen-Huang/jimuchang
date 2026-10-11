@@ -4,6 +4,9 @@ project(jimuchang VERSION 0.3.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+if(MSVC)
+    add_compile_options(/utf-8)   # 源码含大量中文，MSVC 必须按 UTF-8 编译
+endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets WebChannel HttpServer Network)
 

@@ -18,14 +18,14 @@ const blk = (type, fields, next, inputs) => {
 
 // 元素类型图标（脚本切换栏 / 元素列表条）
 const ELEMENT_ICONS = {
-  text: '🅣', image: '🖼', shape: '🔷', icon: '⭐', video: '🎬',
-  audio: '🎵', chart: '📊', sprite: '🎞', model3d: '🧊', webapp: '🧩', slider: '🎚'
+  text: '文', image: '图', shape: '形', icon: '星', video: '影',
+  audio: '声', chart: '表', sprite: '帧', model3d: '3D', webapp: '嵌', slider: '滑'
 };
 
 // 设置面板配置
 const SETTING_DEFS = [
   { group: '编辑器', items: [
-    { key: 'theme', label: '界面主题', type: 'select', options: [['dark', '深色'], ['light', '浅色'], ['national', '国庆专属 🎉']] },
+    { key: 'theme', label: '界面主题', type: 'select', options: [['dark', '深色'], ['light', '浅色'], ['national', '国庆专属']] },
     { key: 'autosaveMin', label: '自动保存间隔', type: 'select', hint: '自动保存到缓存，意外退出后可恢复', options: [[0, '关闭'], [1, '1 分钟'], [2, '2 分钟'], [5, '5 分钟']] },
     { key: 'alignGuides', label: '对齐辅助线', type: 'bool', hint: '拖动元素时显示吸附参考线' },
     { key: 'undoLimit', label: '撤销步数上限', type: 'select', options: [[30, '30 步'], [60, '60 步'], [100, '100 步']] },
@@ -56,7 +56,7 @@ const SETTING_DEFS = [
     { key: 'apiEnabled', label: 'AI 接口（HTTP API）（重启生效）', type: 'bool', hint: '供外部 AI 控制的本地接口' }
   ] },
   { group: 'AI 助手（DeepSeek）', items: [
-    { key: 'aiKey', label: 'API Key', type: 'text', placeholder: 'sk-…（仅存本机）', hint: '在 platform.deepseek.com 获取；「✨ AI」按钮用一句话生成演示，按量计费约几分钱/次' },
+    { key: 'aiKey', label: 'API Key', type: 'text', placeholder: 'sk-…（仅存本机）', hint: '在 platform.deepseek.com 获取；「AI」按钮用一句话生成演示，按量计费约几分钱/次' },
     { key: 'aiModel', label: '模型', type: 'select', options: [['deepseek-chat', 'deepseek-chat（快·便宜）'], ['deepseek-reasoner', 'deepseek-reasoner（强·较贵）']] }
   ] }
 ];
@@ -66,7 +66,7 @@ const AI_SYSTEM_PROMPT = `你是"积木剧场"（图形化积木演示工具）�
 用户会用一句话描述想要的演示，你只输出一个 JSON 数组（不要 markdown 代码块、不要任何解释文字），数组元素是命令对象：
 {"cmd":"text","name":"标题","text":"积木剧场","x":460,"y":400,"w":1000,"size":120,"color":"#E6E9EF","bold":true}
 {"cmd":"shape","name":"装饰线","shape":"rect","fill":"#6C8CFF","x":860,"y":560,"w":200,"h":4}
-{"cmd":"icon","name":"图标1","char":"🚀","x":420,"y":380,"size":140,"color":"#6C8CFF"}
+{"cmd":"icon","name":"图标1","char":"★","x":420,"y":380,"size":140,"color":"#6C8CFF"}
 {"cmd":"chapter","name":"封面","show":["标题","装饰线"],"bg":"#12101A"}
 {"cmd":"anim","target":"标题","type":"fadeIn","duration":0.8,"delay":0}
 {"cmd":"wait","sec":2}
@@ -655,7 +655,8 @@ const App = {
       }
     } catch (e) { }
     const btn = document.getElementById('btn-theme');
-    if (btn) btn.textContent = mode === 'light' ? '🌙' : (mode === 'national' ? '🎉' : '☀');
+    if (btn) btn.textContent = '主题';
+    if (btn) btn.title = '当前：' + (mode === 'light' ? '浅色' : (mode === 'national' ? '国庆专属' : '深色')) + '，点击切换';
     JimuBlocks.setTheme(mode);
     if (persist !== false) Settings.set('theme', mode);   // 测试演示主题时不写用户设置
   },
@@ -750,7 +751,7 @@ const App = {
     let html = '';
     Project.data.elements.forEach(el => {
       html += `<div class="el-chip${sel === el.id ? ' active' : ''}" data-id="${el.id}" title="点击选中并编辑其脚本">`
-        + `<span class="el-ico">${ELEMENT_ICONS[el.type] || '◻'}</span>${esc(el.name)}${el.locked ? ' 🔒' : ''}</div>`;
+        + `<span class="el-ico">${ELEMENT_ICONS[el.type] || '◻'}</span>${esc(el.name)}${el.locked ? ' ·锁' : ''}</div>`;
     });
     box.innerHTML = html;
     box.querySelectorAll('.el-chip').forEach(c => {
@@ -837,11 +838,11 @@ const App = {
     const active = this.activeTab;
     const open = this.chapterBarOpen();
     if (!open) {
-      box.innerHTML = `<div class="tab tab-bookmark" id="btn-bookmarks" title="展开章节书签（章节=舞台状态书签：背景+显隐预设+章节脚本，不参与构建）">🔖 书签 ${Project.data.chapters.length}</div>`;
+      box.innerHTML = `<div class="tab tab-bookmark" id="btn-bookmarks" title="展开章节书签（章节=舞台状态书签：背景+显隐预设+章节脚本，不参与构建）">书签 ${Project.data.chapters.length}</div>`;
       box.querySelector('#btn-bookmarks').onclick = () => { this.setChapterBarOpen(true); this.renderTabs(); };
       return;
     }
-    let html = `<div class="tab tab-bookmark" id="btn-bookmarks" title="收起章节书签">🔖</div>`;
+    let html = `<div class="tab tab-bookmark" id="btn-bookmarks" title="收起章节书签">书签</div>`;
     Project.data.chapters.forEach(s => {
       html += `<div class="tab${active === s.id ? ' active' : ''}" data-key="${s.id}" title="点击预览本章节（应用背景/显隐预设）">${esc(s.name)}</div>`;
     });
@@ -1084,7 +1085,7 @@ html, body { height: 100%; overflow: hidden; touch-action: none; -webkit-user-se
 <body class="playing">
 ${echartsSrc ? '<script>' + echartsSrc + '<\/script><!-- 图表运行库（ECharts） -->\n' : ''}${extDataName ? '<script src="' + extDataName + '"><\/script><!-- 可选外部数据文件：修改它即可更新图表数据，缺失时自动用内嵌数据 -->\n' : ''}<div id="stage-wrap"></div>
 <div id="play-hint">空格 推进 · ← → 切章节 · 手机左右滑动切换 · 双击全屏</div>
-<div id="rotate-hint">📱 横屏观看效果更佳</div>
+<div id="rotate-hint">横屏观看效果更佳</div>
 <script>
 ${runtime}
 <\/script>
@@ -1534,7 +1535,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       // ⑥ 结尾卡（停留到录制结束）
       const end = document.createElement('div');
       end.id = 'demo-end';
-      end.innerHTML = '<div class="de-logo">🧩</div><div class="de-title">积木剧场</div>'
+      end.innerHTML = '<div class="de-title">积木剧场</div>'
         + '<div class="de-sub">拖积木 · 做动画 · 一键放映</div>'
         + '<div class="de-sub2">github.com/YanZhen-Huang/jimuchang</div>';
       document.body.appendChild(end);
@@ -1651,7 +1652,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       await sleep(1700);
       const launch = findByName('发射按钮');
       const x0 = findByName('小球').x;
-      const btnTxtEl = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text === '🚀 发射');
+      const btnTxtEl = (Project.data.elements || []).find(e => e.type === 'text' && e.props.text === '发射');
       const ptL = screenAt(btnTxtEl, 0.5, 0.5);
       const pidL = Executor.pickClickTarget(ptL.x, ptL.y);
       results.push(pidL === launch.id);
@@ -2231,7 +2232,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     try {
       const cmds = [
         { cmd: 'text', name: '标题', text: '国庆快乐', x: 460, y: 300, w: 1000, size: 120 },
-        { cmd: 'icon', name: '烟花', char: '🎆', x: 880, y: 620, size: 140 },
+        { cmd: 'icon', name: '烟花', char: '★', x: 880, y: 620, size: 140 },
         { cmd: 'chapter', name: '封面', show: ['标题', '烟花'], bg: '#1A0A0C' },
         { cmd: 'anim', target: '标题', type: 'fadeIn', duration: 0.8 },
         { cmd: 'wait', sec: 1 },
@@ -2488,11 +2489,11 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     this.aiAddMsg('user', text);
     if (inp) inp.value = '';
     if (!Settings.get('aiKey')) {
-      this.aiAddMsg('sys', '⚠️ 请先到「设置 → AI 助手」填写 DeepSeek API Key（platform.deepseek.com 获取，约几分钱/次）');
+      this.aiAddMsg('sys', '请先到「设置 → AI 助手」填写 DeepSeek API Key（platform.deepseek.com 获取，约几分钱/次）');
       return;
     }
     if (!this.host || !this.host.aiChat) {
-      this.aiAddMsg('sys', '⚠️ 需要桌面程序环境');
+      this.aiAddMsg('sys', '需要桌面程序环境');
       return;
     }
     this._aiBusy = true;
@@ -2507,7 +2508,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       this.host.aiChat(id, JSON.stringify({ model: Settings.get('aiModel') || 'deepseek-chat', messages }));
     } catch (e) {
       this._aiBusy = false;
-      if (wait) wait.textContent = '❌ 调用失败：' + (e.message || e);
+      if (wait) wait.textContent = '调用失败：' + (e.message || e);
     }
   },
 
@@ -2515,7 +2516,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (id !== this._aiPending) return;
     this._aiBusy = false;
     if (!ok) {
-      this.aiAddMsg('sys', '❌ ' + content);
+      this.aiAddMsg('sys', content);
       return;
     }
     let cmds = null;
@@ -2528,16 +2529,16 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       cmds = JSON.parse(t.slice(a, b + 1));
       if (!Array.isArray(cmds)) throw new Error('格式不对');
     } catch (e) {
-      this.aiAddMsg('sys', '❌ 解析生成结果失败：' + (e.message || e) + '\n可再试一次，或换个描述方式');
+      this.aiAddMsg('sys', '解析生成结果失败：' + (e.message || e) + '\n可再试一次，或换个描述方式');
       return;
     }
     try {
       this.applyAiCommands(cmds);
       const chs = cmds.filter(c => c && c.cmd === 'chapter').length;
-      this.aiAddMsg('sys', `✅ 已生成 ${chs} 个章节的演示，直接播放看看吧！（不满意可以再描述一次）`);
+      this.aiAddMsg('sys', `已生成 ${chs} 个章节的演示，直接播放看看吧（不满意可以再描述一次）`);
       setTimeout(() => document.getElementById('ai-overlay').classList.add('hidden'), 900);
     } catch (e) {
-      this.aiAddMsg('sys', '❌ 应用失败：' + (e.message || e));
+      this.aiAddMsg('sys', '应用失败：' + (e.message || e));
     }
   },
 
@@ -2571,7 +2572,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
           props: { shape: c.shape || 'rect', fill: c.fill || '#6C8CFF', radius: c.radius } });
       } else if (c.cmd === 'icon') {
         elMap[c.name] = Project.createElement('icon', { name: c.name || '图标', x: c.x, y: c.y, w: c.w, h: c.h,
-          props: { char: c.char || '⭐', size: c.size || 120, color: c.color || '#F5A623' } });
+          props: { char: c.char || '★', size: c.size || 120, color: c.color || '#F5A623' } });
       } else if (c.cmd === 'chapter') {
         const ch = Project.addChapter(c.name || ('章节 ' + (chapters.length + 1)));
         if (c.bg) ch.preset.background = { type: 'color', value: c.bg };
@@ -2667,7 +2668,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       return;
     }
     box.innerHTML = hits.map((h, i) =>
-      `<div class="search-item${i === 0 ? ' active' : ''}" data-i="${i}">🧩 ${esc(h.label || h.b.type)}</div>`
+      `<div class="search-item${i === 0 ? ' active' : ''}" data-i="${i}">${esc(h.label || h.b.type)}</div>`
     ).join('');
     box.querySelectorAll('.search-item').forEach(it => {
       it.onclick = () => this.gotoSearchResult(Number(it.dataset.i));
@@ -3032,11 +3033,12 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     await this.hostReady;
     try {
       const list = await this.host.recentFiles();
-      if (!list || !list.length) {
+      const items = (list || []).map(String).filter(p => p.trim());   // 过滤历史空项（QStringList 尾巴逗号产生的幽灵条目）
+      if (!items.length) {
         box.innerHTML = '<div class="help-dim">还没有最近文件</div>';
         return;
       }
-      box.innerHTML = list.map(p =>
+      box.innerHTML = items.map(p =>
         `<div class="home-recent-item" data-path="${esc(p)}">
           <b>${esc(String(p).split('/').pop())}</b>
           <span>${esc(p)}</span>
@@ -3050,13 +3052,21 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   async openRecent(path) {
+    if (!String(path || '').trim()) return;   // 过滤幽灵空项
     if (this.dirty && !confirm('当前项目有未保存的修改，仍要打开其他文件吗？')) return;
     try {
       await this.loadProjectFromPath(path);
       document.getElementById('home-overlay').classList.add('hidden');
       toast('已打开：' + String(path).split('/').pop());
     } catch (e) {
-      toast('打开失败：' + e.message);
+      // 文件被删除/移动：从最近列表移除，避免留下点不动的死条目
+      if (/读不到文件/.test(e.message || '')) {
+        toast('文件不存在或已移动，已从最近列表移除');
+        try { if (this.host && this.host.removeRecentFile) await this.host.removeRecentFile(path); } catch (e2) { }
+        try { if (!document.getElementById('home-overlay').classList.contains('hidden')) await this.showHome(); } catch (e2) { }
+      } else {
+        toast('打开失败：' + e.message);
+      }
     }
   },
 
@@ -3151,7 +3161,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (!tbox || typeof Templates === 'undefined') return;
     tbox.innerHTML = Templates.list.map(t =>
       `<button class="home-tpl" data-tpl="${t.key}" title="${esc(t.desc)}">
-        <b>${t.icon}</b><span>${t.name}</span><small>${esc(t.desc)}</small>
+        <span>${t.name}</span><small>${esc(t.desc)}</small>
       </button>`).join('');
     tbox.querySelectorAll('.home-tpl').forEach(n => {
       n.onclick = () => {
@@ -3217,7 +3227,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const t2 = Project.createElement('text', { name: '标题2', x: 660, y: 140, w: 600, h: 100,
       props: { text: '能做什么', size: 64, color: '#E6E9EF', bold: true, align: 'center' } });
     const icons = [
-      { char: '🧩', x: 420 }, { char: '🎬', x: 860 }, { char: '🚀', x: 1300 }
+      { char: '★', x: 420 }, { char: '◆', x: 860 }, { char: '●', x: 1300 }
     ].map((cfg, i2) => Project.createElement('icon', { name: '图标' + (i2 + 1), x: cfg.x, y: 380, w: 200, h: 200,
       props: { char: cfg.char, size: 140, color: '#6C8CFF' } }));
     const labels = ['积木编程', '动画放映', '3D 展示'].map((txt, i2) => Project.createElement('text', { name: '标签' + (i2 + 1), x: 370 + i2 * 440, y: 620, w: 300, h: 70,
@@ -3225,7 +3235,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const endText = Project.createElement('text', { name: '结束语', x: 460, y: 460, w: 1000, h: 160,
       props: { text: '开始创作吧！', size: 96, color: '#E6E9EF', bold: true, align: 'center' } });
     const star = Project.createElement('icon', { name: '星星', x: 880, y: 650, w: 160, h: 160,
-      props: { char: '✨', size: 120, color: '#F5A623' } });
+      props: { char: '★', size: 120, color: '#F5A623' } });
 
     // ==== 章节（书签：背景 + 显隐预设） ====
     const s1 = Project.getChapter(d.chapters[0].id);

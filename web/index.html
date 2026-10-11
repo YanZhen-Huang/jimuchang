@@ -51,19 +51,19 @@
     <div class="spacer"></div>
     <div class="tb-group">
       <button id="btn-demo" class="tbtn">示例</button>
-      <button id="btn-ai" class="tbtn" title="AI 生成演示">✨ AI</button>
+      <button id="btn-ai" class="tbtn" title="AI 生成演示">AI</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
       <button id="btn-toggle-left" class="tbtn" title="收起 / 展开积木区 (Ctrl+B)">◧</button>
-      <button id="btn-theme" class="tbtn" title="切换主题">☀</button>
+      <button id="btn-theme" class="tbtn" title="切换界面主题">主题</button>
       <button id="btn-help" class="tbtn" title="帮助">？</button>
-      <button id="btn-settings" class="tbtn" title="设置">⚙</button>
+      <button id="btn-settings" class="tbtn" title="设置">设置</button>
     </div>
     <div class="tb-sep"></div>
     <div class="tb-group">
-      <button id="btn-export-main" class="tbtn export-main" title="导出演示（网页 / Windows 程序 / PPT）">⬆ 导出</button>
-      <button id="btn-play" class="tbtn primary">▶ 播放</button>
+      <button id="btn-export-main" class="tbtn export-main" title="导出演示（网页 / Windows 程序 / PPT）">导出</button>
+      <button id="btn-play" class="tbtn primary">播放</button>
     </div>
   </header>
 
@@ -104,8 +104,8 @@
           <label class="ppt-check"><input type="checkbox" id="ppt-anim" checked>
             <span>转换动画<small>把积木脚本的动画转换为 PPT 动画（淡入 / 飞入 / 缩放，其余效果近似为淡入）</small></span></label>
         </div>
-        <div class="ppt-warn">💡 <b>可编辑模式</b>：3D / 小程序 / 特效 / 帧动画会跳过；动画为近似转换（淡入 / 飞入 / 缩放，其余效果近似为淡入）。<br>
-💡 <b>高保真模式</b>：逐页截图铺满——画面 100% 一致，但 <b>不可编辑、互动全部丢失</b>（点击 / 按键 / 脚本逻辑都不会在 PPT 里生效），仅适合作为静态汇报留档。</div>
+        <div class="ppt-warn"><b>可编辑模式</b>：3D / 小程序 / 特效 / 帧动画会跳过；动画为近似转换（淡入 / 飞入 / 缩放，其余效果近似为淡入）。<br>
+<b>高保真模式</b>：逐页截图铺满——画面 100% 一致，但 <b>不可编辑、互动全部丢失</b>（点击 / 按键 / 脚本逻辑都不会在 PPT 里生效），仅适合作为静态汇报留档。</div>
       </div>
       <div class="ppt-foot">
         <button class="p-btn" onclick="document.getElementById('ppt-overlay').classList.add('hidden')">取消</button>
@@ -122,10 +122,10 @@
       </div>
       <div class="home-body">
         <div class="home-actions">
-          <button id="home-new" class="home-card"><b>＋</b><span>空白项目</span></button>
-          <button id="home-demo" class="home-card"><b>▶</b><span>示例演示</span></button>
-          <button id="home-open" class="home-card"><b>📂</b><span>打开文件…</span></button>
-          <button id="home-ai" class="home-card"><b>✨</b><span>AI 生成</span></button>
+          <button id="home-new" class="home-card"><span>空白项目</span></button>
+          <button id="home-demo" class="home-card"><span>示例演示</span></button>
+          <button id="home-open" class="home-card"><span>打开文件…</span></button>
+          <button id="home-ai" class="home-card"><span>AI 生成</span></button>
         </div>
         <div class="home-tpl-wrap">
           <h4>模板 · 点开就能改</h4>
@@ -148,7 +148,6 @@
       </div>
       <div class="export-cards">
         <button class="export-card" id="card-export-html">
-          <b>🎬</b>
           <span class="ec-title">网页放映包</span>
           <span class="ec-desc">单文件 .html · 浏览器双击即放 · 手机可看（滑动切页）· 可发微信</span>
         </button>
@@ -156,17 +155,14 @@
           <label class="ec-chk"><input type="checkbox" id="pack-ext-data"> 数据外置：另生成 jimuchang-data.js —— 改数据不用改 HTML（适合常更新的数据演示）</label>
         </div>
         <button class="export-card" id="card-export-exe">
-          <b>💻</b>
           <span class="ec-title">Windows 程序</span>
           <span class="ec-desc">单文件 .exe · 双击全屏播放 · 接收方无需安装任何东西（Win10/11 自带 WebView2 即可）</span>
         </button>
         <button class="export-card" id="card-export-ppt">
-          <b>📊</b>
           <span class="ec-title">PPT 演示文稿</span>
           <span class="ec-desc">.pptx · 可编辑（近似动画）/ 高保真（截图留档）两种模式</span>
         </button>
         <button class="export-card" id="card-export-video">
-          <b>🎥</b>
           <span class="ec-title">视频（MP4）</span>
           <span class="ec-desc">自动录制整场演示 · 720p / 1080p · 可发微信、传视频号（无声）</span>
         </button>
@@ -177,7 +173,7 @@
   <div id="ai-overlay" class="hidden">
     <div class="help-panel ai-panel">
       <div class="help-head">
-        <span>✨ AI 助手 · 一句话生成演示</span>
+        <span>AI 助手 · 一句话生成演示</span>
         <button class="p-btn" id="btn-ai-close">关闭</button>
       </div>
       <div id="ai-msgs" class="ai-msgs"></div>
@@ -220,7 +216,7 @@
             <li>左侧拖动<b>积木</b>到工作区，拼出演示流程</li>
             <li>右侧舞台放<b>元素</b>（工具栏添加，拖动摆位置）</li>
             <li>选中元素可在<b>属性面板</b>调外观、入场动画、关键帧</li>
-            <li>点右上角<b>▶ 播放</b>全屏放映（空格推进、Esc 退出）</li>
+            <li>点右上角<b>播放</b>全屏放映（空格推进、Esc 退出）</li>
             <li><b>保存</b>为 .bdp 单文件；<b>更多→导出放映包</b>发给别人</li>
           </ol>
           <h4>快捷键</h4>
@@ -262,7 +258,7 @@
         <span class="kf-title">关键帧动画</span>
         <label>时长 <input id="kf-dur" type="number" step="0.1" min="0.2" max="60" value="3">秒</label>
         <label class="p-chk"><input id="kf-loop" type="checkbox">循环</label>
-        <button id="kf-play" class="p-btn">▶ 试播</button>
+        <button id="kf-play" class="p-btn">试播</button>
         <button id="kf-clear" class="p-btn">清空</button>
         <div class="spacer"></div>
         <button id="kf-close" class="p-btn">完成</button>
@@ -281,7 +277,7 @@
   <div id="video-overlay" class="hidden">
     <div class="help-panel video-panel">
       <div class="help-head">
-        <span>🎥 录制视频（MP4）</span>
+        <span>录制视频（MP4）</span>
         <button class="p-btn" onclick="document.getElementById('video-overlay').classList.add('hidden')">关闭</button>
       </div>
       <div class="video-body">

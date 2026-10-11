@@ -240,16 +240,31 @@ public slots:
 
     QVariantList recentFiles() {
         QSettings s;
-        return s.value(QStringLiteral("recentFiles")).toList();
+        QStringList list = s.value(QStringLiteral("recentFiles")).toStringList();
+        list.removeAll(QString());   // 过滤历史空项（列表序列化的尾巴逗号会产生幽灵条目）
+        QVariantList out;
+        out.reserve(list.size());
+        for (const QString &x : list) out.append(x);
+        return out;
     }
 
     void addRecentFile(const QString &path) {
         if (path.isEmpty()) return;
         QSettings s;
         QStringList list = s.value(QStringLiteral("recentFiles")).toStringList();
+        list.removeAll(QString());
         list.removeAll(path);
         list.prepend(path);
         while (list.size() > 8) list.removeLast();
+        s.setValue(QStringLiteral("recentFiles"), list);
+    }
+
+    void removeRecentFile(const QString &path) {
+        if (path.isEmpty()) return;
+        QSettings s;
+        QStringList list = s.value(QStringLiteral("recentFiles")).toStringList();
+        list.removeAll(QString());
+        list.removeAll(path);
         s.setValue(QStringLiteral("recentFiles"), list);
     }
 

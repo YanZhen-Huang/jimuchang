@@ -48,7 +48,7 @@ const Templates = (() => {
     });
     const name = T('你的名字', 560, 500, 800, 130, 88, '#E6E9EF', { bold: true });
     const sub = T('在这里写一句自我介绍～', 510, 650, 900, 60, 36, '#8A93A6');
-    const tags = ['🎯 我的爱好', '💡 我的特长', '📫 联系方式'].map((txt, i) =>
+    const tags = ['我的爱好', '我的特长', '联系方式'].map((txt, i) =>
       T(txt, 420 + i * 350, 800, 300, 60, 32, '#C9D1E0'));
     setVis(s1, [av.id, name.id, sub.id].concat(tags.map(t => t.id)));
     s1.blocks = {
@@ -80,7 +80,7 @@ const Templates = (() => {
     s2.preset.background = { type: 'color', value: '#0F1115' };
     const t2 = T('三个要点', 660, 100, 600, 90, 64, '#E6E9EF', { bold: true });
     const cards = [];
-    const icons = ['📌', '📊', '💡'];
+    const icons = ['01', '02', '03'];
     const labels = ['要点一：在这里写', '要点二：在这里写', '要点三：在这里写'];
     for (let i = 0; i < 3; i++) {
       const box = Project.createElement('shape', {
@@ -125,22 +125,19 @@ const Templates = (() => {
     s1.name = '贺卡';
     const bg = grad(160, '#2A1030', '#0F1523');
     s1.preset.background = bg;
-    const emoji = Project.createElement('icon', {
-      name: '大图标', x: 810, y: 130, w: 300, h: 300,
-      props: { char: '🎂', size: 220, color: '#F5A623' }
-    });
-    const wish = T('生日快乐！今天也要开心呀', 360, 520, 1200, 120, 72, '#E6E9EF', { bold: true });
+    const big = T('生日快乐', 360, 160, 1200, 200, 132, '#F5A623', { bold: true });
+    const wish = T('今天也要开心呀', 360, 520, 1200, 120, 72, '#E6E9EF', { bold: true });
     const from = T('—— 来自：你的名字', 760, 700, 400, 50, 32, '#8A93A6');
     const star = Project.createElement('icon', {
       name: '星星', x: 1400, y: 780, w: 140, h: 140,
-      props: { char: '✨', size: 110, color: '#F5A623' }
+      props: { char: '★', size: 110, color: '#F5A623' }
     });
-    setVis(s1, [emoji.id, wish.id, from.id, star.id]);
+    setVis(s1, [big.id, wish.id, from.id, star.id]);
     s1.blocks = {
       blocks: {
         languageVersion: 0, blocks: [link([
           blk('jimu_on_scene', { SCENE: s1.id }),
-          anim(emoji.id, 'bounceIn', 0.8, 0, 'easeOutBounce'),
+          anim(big.id, 'bounceIn', 0.8, 0, 'easeOutBounce'),
           anim(wish.id, 'typewriter', 1.6, 0.1, 'linear'),
           anim(from.id, 'fadeIn', 0.6, 0.2),
           anim(star.id, 'glowPulse', 1.2, 0, 'easeInOutCubic'),
@@ -253,7 +250,7 @@ const Templates = (() => {
       name: '发射按钮', x: 838, y: 655, w: 244, h: 96,
       props: { shape: 'rect', fill: '#E4573D', stroke: '#E4573D', strokeWidth: 0, radius: 48 }
     });
-    const btnTxt = T('🚀 发射', 838, 655, 244, 96, 40, '#FFFFFF', { bold: true });
+    const btnTxt = T('发射', 838, 655, 244, 96, 40, '#FFFFFF', { bold: true });
     const sAngle = Project.createElement('slider', {
       name: '角度滑块', x: 130, y: 720, w: 560, h: 130,
       props: { min: 15, max: 90, value: 45, step: 1, label: '发射角度 (°)', color: '#E8B84B' }
@@ -411,13 +408,13 @@ const Templates = (() => {
   }
 
   const list = [
-    { key: 'intro', name: '自我介绍', icon: '🙋', desc: '姓名 / 特长 / 联系方式', build: intro },
-    { key: 'lesson', name: '课堂演示', icon: '📚', desc: '课题 + 三个要点卡片', build: lesson },
-    { key: 'card', name: '节日贺卡', icon: '🎂', desc: '祝福语 + 动画', build: card },
-    { key: 'chart', name: '数据图表', icon: '📊', desc: '柱状图 + 标题说明', build: chart },
-    { key: 'quote', name: '报价单', icon: '💰', desc: '点卡片切换方案', build: quote },
-    { key: 'physics', name: '抛体实验', icon: '🧪', desc: '拖滑块 · 点发射', build: physics },
-    { key: 'dashboard', name: '数据看板', icon: '📈', desc: '切区域 · 点柱条', build: dashboard }
+    { key: 'intro', name: '自我介绍', desc: '姓名 / 特长 / 联系方式', build: intro },
+    { key: 'lesson', name: '课堂演示', desc: '课题 + 三个要点卡片', build: lesson },
+    { key: 'card', name: '节日贺卡', desc: '祝福语 + 动画', build: card },
+    { key: 'chart', name: '数据图表', desc: '柱状图 + 标题说明', build: chart },
+    { key: 'quote', name: '报价单', desc: '点卡片切换方案', build: quote },
+    { key: 'physics', name: '抛体实验', desc: '拖滑块 · 点发射', build: physics },
+    { key: 'dashboard', name: '数据看板', desc: '切区域 · 点柱条', build: dashboard }
   ];
 
   return {

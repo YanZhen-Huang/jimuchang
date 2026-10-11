@@ -420,7 +420,7 @@ const Panel = {
         ${this.row('字符', `<input data-prop="props.char" value="${esc(p.char)}" maxlength="4">`)}
         ${this.row('大小', `<input type="number" data-prop="props.size" value="${p.size}" min="8" max="800">`)}
         ${this.row('颜色', `<input type="color" data-prop="props.color" value="${p.color || '#F5A623'}">`)}
-        <div class="p-hint">可以直接粘贴 emoji：😀 🚀 ⭐ 🎉 ❤️ 🔥 💡 ✨</div>
+        <div class="p-hint">可以直接粘贴任意字符或 emoji</div>
       `;
     } else if (el.type === 'video') {
       const res = p.resourceId ? Project.getResource(p.resourceId) : null;
@@ -447,7 +447,7 @@ const Panel = {
         ${this.row('分类', `<input data-prop="props.categories" value="${esc((p.categories || []).join(','))}">`)}
         ${this.row('数值', `<input data-prop="props.values" value="${esc((p.values || []).join(','))}">`)}
         ${this.row('系列名', `<input data-prop="props.seriesName" value="${esc(p.seriesName || '')}">`)}
-        ${this.row('', `<button data-action="import-chart-csv" class="p-btn">📄 从 CSV / 文本文件导入数据…</button>`)}
+        ${this.row('', `<button data-action="import-chart-csv" class="p-btn">从 CSV / 文本文件导入数据…</button>`)}
         <div class="p-hint">分类与数值用逗号分隔、两行数量对应（一月,二月,三月 / 120,200,150）；也可以导入 CSV 文件（每行「名称,数值」或两行表格）</div>
       `;
     } else if (el.type === 'model3d') {
