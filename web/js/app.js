@@ -471,6 +471,10 @@ const App = {
       await sleep(1500);
       this.runDemoVideo();
     }
+    if (params.get('testpdf') === '1') {
+      await sleep(900);
+      this.testPdf();
+    }
     if (params.get('testtplshot')) {
       await sleep(500);
       const key = params.get('testtplshot');
@@ -592,6 +596,7 @@ const App = {
     on('card-export-exe', () => { this.closeExportPanel(); this.exportExe(); });
     on('card-export-ppt', () => { this.closeExportPanel(); this.showPptDialog(); });
     on('card-export-video', () => { this.closeExportPanel(); this.openVideoDialog(); });
+    on('card-export-pdf', () => { this.closeExportPanel(); this.exportPdf(); });
     on('btn-video-start', () => this.startVideoRecord());
     on('ppt-generate', () => this.generatePpt());
     on('btn-restore-autosave', () => this.restoreAutosave());
@@ -613,6 +618,7 @@ const App = {
     on('home-demo', () => { document.getElementById('home-overlay').classList.add('hidden'); this.loadDemo(); });
     on('home-open', () => { document.getElementById('home-overlay').classList.add('hidden'); this.open(); });
     on('home-ai', () => { document.getElementById('home-overlay').classList.add('hidden'); this.openAi(); });
+    on('btn-clear-recent', async () => { try { await this.host.clearRecentFiles(); } catch (e) { } this.showHome(); });
     // 自动保存：间隔由设置决定（默认 2 分钟）
     this.setupAutosave();
     // "更多"下拉菜单：JS 控制 + 延迟关闭（划过间隙不消失）
@@ -1084,7 +1090,7 @@ html, body { height: 100%; overflow: hidden; touch-action: none; -webkit-user-se
 </head>
 <body class="playing">
 ${echartsSrc ? '<script>' + echartsSrc + '<\/script><!-- 图表运行库（ECharts） -->\n' : ''}${extDataName ? '<script src="' + extDataName + '"><\/script><!-- 可选外部数据文件：修改它即可更新图表数据，缺失时自动用内嵌数据 -->\n' : ''}<div id="stage-wrap"></div>
-<div id="play-hint">空格 推进 · ← → 切章节 · 手机左右滑动切换 · 双击全屏</div>
+<div id="play-hint">空格 推进 · ← → 切章节 · 按住 L 激光笔 · 手机左右滑动切换 · 双击全屏</div>
 <div id="rotate-hint">横屏观看效果更佳</div>
 <script>
 ${runtime}
@@ -1122,6 +1128,41 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const mb = (html.length * 0.75 / 1048576);
       toast('已导出（' + mb.toFixed(1) + ' MB' + (resMb > 0.5 ? '，其中素材约 ' + resMb.toFixed(1) + ' MB' : '') + extMsg + '）：' + path.split('/').pop());
     }
+    return path;
+  },
+
+  // 导出 PDF：逐章节截图 → C++ 合成 A4 横版 PDF（autoPath 供自动化测试直存）
+  async exportPdf(autoPath) {
+    if (!this.host || !this.host.captureWindow || !this.host.buildPdf) { toast('导出 PDF 需要桌面程序环境'); return; }
+    if (this.playing) { toast('正在播放中，无法导出'); return; }
+    const chapters = Project.data.chapters || [];
+    if (!chapters.length) { toast('没有章节'); return; }
+    toast('正在生成 PDF（逐章节截图）…');
+    const shots = [];
+    const sel = Editor.selectedId;
+    const view = Stage.saveView ? Stage.saveView() : null;
+    if (Stage.resetView) Stage.resetView();
+    Editor.select(null);
+    try {
+      for (const chapter of chapters) {
+        await Stage.goChapter(chapter.id, { instant: true });
+        if (this.host.raiseWindow) this.host.raiseWindow();
+        await sleep(360);
+        let fullB64 = await this.host.captureWindow();
+        if (!fullB64) { await sleep(340); fullB64 = await this.host.captureWindow(); }
+        if (!fullB64) continue;
+        const dataUrl = await PptxExport.cropStage(fullB64);
+        if (dataUrl) shots.push(dataUrl);
+      }
+    } finally {
+      if (view && Stage.restoreView) Stage.restoreView(view);
+      const back = Stage.currentChapter() || chapters[0];
+      if (back) await Stage.goChapter(back.id, { instant: true });
+      if (sel) Editor.select(sel);
+    }
+    if (!shots.length) { toast('截图失败（窗口可能被遮挡，请让窗口保持可见后重试）'); return; }
+    const path = await this.host.buildPdf(shots, (Project.data.name || '演示') + '.pdf', autoPath || '');
+    if (path) toast('已导出 PDF（' + shots.length + ' 页）：' + path.split('/').pop());
     return path;
   },
 
@@ -1183,6 +1224,10 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   // ---------- 播放 ----------
   async play() {
     if (this.playing) return;
+    if (!Project.data.elements.length) {
+      toast('演示是空的——先添加元素，或从主页模板 / 示例开始');
+      return;
+    }
     await this.enterPlayMode();
     await this.runPlayScripts();
   },
@@ -1458,11 +1503,46 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
           && !!chartEl10 && dataJs.indexOf(chartEl10.id) > 0);
       }
 
+      // 12. Ctrl+C / Ctrl+V 复制粘贴
+      {
+        Editor.select(box.id);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true }));
+        const n0 = Project.data.elements.length;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }));
+        eq('copy-paste', Project.data.elements.length === n0 + 1 && !!this._elClipboard);
+        Editor.select(null);
+      }
+
       Executor.playing = false;
       console.log(results.every(Boolean) ? 'INTTEST|PASS' : 'INTTEST|FAIL');
     } catch (e) {
       console.log('INTTEST|error|' + (e.message || e));
       console.log('INTTEST|FAIL');
+    }
+  },
+
+  // PDFTEST：两章模板 → 逐章节截图 → 合成 PDF，校验产物大小
+  async testPdf() {
+    try {
+      JimuBlocks.ws.clear();
+      JimuBlocks.current = null;
+      Project.newProject('PDF测试');
+      Templates.build('lesson');
+      Stage.renderAll();
+      await Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+      await sleep(700);
+      const out = '/tmp/jimuchang-regress/pdf-test.pdf';
+      await this.exportPdf(out);
+      let size = 0;
+      try {
+        const b64 = await this.host.readFileBase64(out);
+        size = b64 ? Math.round(b64.length * 0.75) : 0;
+      } catch (e) { }
+      console.log('PDFTEST|size=' + size);
+      console.log(size > 4000 ? 'PDFTEST|PASS' : 'PDFTEST|FAIL');
+    } catch (e) {
+      console.log('PDFTEST|error|' + (e.message || e));
+      console.log('PDFTEST|FAIL');
     }
   },
 
@@ -1588,6 +1668,19 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       eq('dash-hit-through', results[results.length - 1]);
       Executor.trigger('onElementClick', pidB);
       await sleep(400);
+      // 播放辅助：章节进度指示 + 激光笔
+      {
+        const ind = document.getElementById('chapter-ind');
+        const indOk = !!ind && /1\s*\/\s*1/.test(ind.textContent);
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }));
+        await sleep(80);
+        const dotOn = !!document.querySelector('#laser-dot.on');
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'l' }));
+        await sleep(80);
+        const dotOff = !document.querySelector('#laser-dot.on');
+        results.push(indOk && dotOn && dotOff);
+        eq('play-ind-laser', results[results.length - 1]);
+      }
       const cNow = (Project.data.elements || []).find(e => e.type === 'chart');
       results.push(cNow.props.values.join() === '90,140,210,180' && css(detailEl.id).indexOf('华南区') === 0);
       eq('dash-btn', results[results.length - 1]);
@@ -3045,6 +3138,13 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
         </div>`).join('');
       box.querySelectorAll('.home-recent-item').forEach(n => {
         n.onclick = () => this.openRecent(n.dataset.path);
+        n.oncontextmenu = e => {
+          e.preventDefault(); e.stopPropagation();
+          const p = n.dataset.path;
+          ContextMenu.show(e.clientX, e.clientY, [
+            { label: '从列表移除', action: async () => { try { await this.host.removeRecentFile(p); } catch (e2) { } this.showHome(); } }
+          ]);
+        };
       });
     } catch (e) {
       box.innerHTML = '<div class="help-dim">读取最近文件失败</div>';
@@ -3289,6 +3389,22 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   },
 
   // ---------- 键盘 ----------
+  // Ctrl+C / Ctrl+V：元素复制粘贴（粘贴为新元素，偏移 24px）
+  pasteElement() {
+    const src = this._elClipboard;
+    if (!src) return;
+    const copy = JSON.parse(JSON.stringify(src));
+    copy.id = Project.uid('el');
+    copy.x += 24; copy.y += 24;
+    copy.z = Project.data.elements.reduce((m, e) => Math.max(m, e.z || 0), 0) + 1;
+    copy.name = src.name + ' 副本';
+    Project.data.elements.push(copy);
+    Stage.refreshAll();
+    Editor.select(copy.id);
+    this.markDirty();
+    toast('已粘贴：' + copy.name);
+  },
+
   onKeyDown(e) {
     // 画布缩放快捷键（编辑模式）：Ctrl+= 放大 / Ctrl+- 缩小 / Ctrl+0 适应 / Ctrl+1 回到 100%
     if ((e.ctrlKey || e.metaKey) && !this.playing) {
@@ -3375,6 +3491,11 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       Editor.select(null);
     } else if (e.ctrlKey && e.key.toLowerCase() === 'd') {
       Editor.duplicateSelected(); e.preventDefault();
+    } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+      const sel = Editor.selected();
+      if (sel) { this._elClipboard = JSON.parse(JSON.stringify(sel.element)); toast('已复制：' + sel.element.name); e.preventDefault(); }
+    } else if (e.ctrlKey && e.key.toLowerCase() === 'v') {
+      if (this._elClipboard) { this.pasteElement(); e.preventDefault(); }
     }
   }
 };

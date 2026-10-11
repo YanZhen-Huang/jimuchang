@@ -132,7 +132,7 @@
           <div id="home-templates"></div>
         </div>
         <div class="home-recent-wrap">
-          <h4>最近打开</h4>
+          <div class="home-recent-head"><h4>最近打开</h4><button id="btn-clear-recent" class="p-btn tiny">清除</button></div>
           <div id="home-recent"></div>
         </div>
         <div class="help-dim" style="margin-top:10px">拖积木做动画 · 3D / 图表 / 粒子特效 · 导出 HTML / PPT / exe · AI 一句话生成</div>
@@ -165,6 +165,10 @@
         <button class="export-card" id="card-export-video">
           <span class="ec-title">视频（MP4）</span>
           <span class="ec-desc">自动录制整场演示 · 720p / 1080p · 可发微信、传视频号（无声）</span>
+        </button>
+        <button class="export-card" id="card-export-pdf">
+          <span class="ec-title">PDF 文档</span>
+          <span class="ec-desc">逐章节截图合成 A4 横版 PDF · 适合打印讲义、会议留档</span>
         </button>
       </div>
     </div>
@@ -224,11 +228,13 @@
             <tr><td>Ctrl+S / Ctrl+O / Ctrl+N</td><td>保存 / 打开 / 新建</td></tr>
             <tr><td>Ctrl+Z / Ctrl+Y</td><td>撤销 / 重做（元素编辑）</td></tr>
             <tr><td>Del</td><td>删除选中元素</td></tr>
+            <tr><td>Ctrl+C / Ctrl+V</td><td>复制 / 粘贴元素</td></tr>
             <tr><td>方向键（+Shift）</td><td>微调位置 1px / 10px</td></tr>
             <tr><td>Ctrl+滚轮 / Ctrl+0 / Ctrl+1</td><td>画布缩放 / 适应窗口 / 100%</td></tr>
             <tr><td>空格拖动 / 中键拖动</td><td>平移画布（放大后查看边缘）</td></tr>
             <tr><td>F5</td><td>播放</td></tr>
             <tr><td>空格 / ← → / Esc</td><td>放映时：推进 / 切章节 / 退出</td></tr>
+            <tr><td>按住 L</td><td>放映时：激光笔</td></tr>
           </table>
         </div>
         <div class="help-col">
@@ -303,7 +309,7 @@
     </div>
   </div>
 
-  <div id="play-hint">空格 推进 · ← → 切章节 · Esc 退出</div>
+  <div id="play-hint">空格 推进 · ← → 切章节 · 按住 L 激光笔 · Esc 退出</div>
   <div id="rec-hint"><i></i><span id="rec-time">00:00</span><em>Esc 结束</em></div>
   <div id="toast"></div>
 

@@ -77,6 +77,8 @@ const Editor = {
         { label: '关键帧动画…', action: () => Keyframes.open() },
         { type: 'sep' },
         { label: '复制元素', action: () => this.duplicateSelected() },
+        { label: '水平居中', action: () => { f.element.x = Math.round((1920 - f.element.w) / 2); const d = Stage.elDom(f.element.id); if (d) Elements.applyBox(f.element, d); Panel.updateQuick(f.element); App.markDirty(); } },
+        { label: '垂直居中', action: () => { f.element.y = Math.round((1080 - f.element.h) / 2); const d = Stage.elDom(f.element.id); if (d) Elements.applyBox(f.element, d); Panel.updateQuick(f.element); App.markDirty(); } },
         { label: '上移一层', action: () => { f.element.z += 1; Stage.refreshAll(); this.refresh(); App.markDirty(); } },
         { label: '下移一层', action: () => { f.element.z = Math.max(1, f.element.z - 1); Stage.refreshAll(); this.refresh(); App.markDirty(); } },
         { type: 'sep' },

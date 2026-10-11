@@ -136,6 +136,19 @@ const Stage = {
         Stage._hoverId = null;
         hoverLeave(prev);
       });
+      // 播放态辅助：按住 L 激光笔（跟随鼠标）——编辑态与放映包通用
+      window.addEventListener('keydown', e => {
+        if (!document.body.classList.contains('playing')) return;
+        if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey && !e.altKey) Stage.laser(true);
+      });
+      window.addEventListener('keyup', e => {
+        if (e.key === 'l' || e.key === 'L') Stage.laser(false);
+      });
+      window.addEventListener('blur', () => Stage.laser(false));
+      window.addEventListener('mousemove', e => {
+        const dot = document.getElementById('laser-dot');
+        if (dot && dot.classList.contains('on')) dot.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+      });
     }
     this._bindZoomUI();
     this._bindPan();
@@ -438,6 +451,7 @@ const Stage = {
       try { dom.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'easeOut' }); } catch (e) { }
     });
     this.currentChapterId = chapterId;
+    this.updateChapterInd();
     if (bgPromise) await bgPromise;
     return ch;
   },
@@ -467,5 +481,34 @@ const Stage = {
   currentChapter() { return Project.getChapter(this.currentChapterId); },
 
   // 兼容：v1 的 currentScene
-  currentScene() { return this.currentChapter(); }
+  currentScene() { return this.currentChapter(); },
+
+  // 播放态激光笔：按住 L 时在鼠标位置显示红点（跟随移动）
+  laser(on) {
+    let dot = document.getElementById('laser-dot');
+    if (on) {
+      if (!dot) {
+        dot = document.createElement('div');
+        dot.id = 'laser-dot';
+        dot.style.transform = 'translate(-100px,-100px)';
+        document.body.appendChild(dot);
+      }
+      dot.classList.add('on');
+    } else if (dot) {
+      dot.classList.remove('on');
+    }
+  },
+
+  // 播放态右下角章节进度（x / n）
+  updateChapterInd() {
+    let el = document.getElementById('chapter-ind');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'chapter-ind';
+      document.body.appendChild(el);
+    }
+    const i = Project.chapterIndex(this.currentChapterId);
+    const n = (Project.data.chapters || []).length;
+    el.textContent = (i >= 0 ? i + 1 : 1) + ' / ' + Math.max(1, n);
+  }
 };

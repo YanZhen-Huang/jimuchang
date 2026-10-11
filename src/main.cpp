@@ -18,6 +18,10 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QPainter>
+#include <QPdfWriter>
 #include <QProcess>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -266,6 +270,53 @@ public slots:
         list.removeAll(QString());
         list.removeAll(path);
         s.setValue(QStringLiteral("recentFiles"), list);
+    }
+
+    void clearRecentFiles() {
+        QSettings s;
+        s.setValue(QStringLiteral("recentFiles"), QStringList());
+    }
+
+    // 导出 PDF：把逐章节截图（dataURL 数组）合成为 A4 横向 PDF；autoPath 供自动化测试直存
+    QString buildPdf(const QVariantList &images, const QString &suggestedName, const QString &autoPath = QString()) {
+        if (images.isEmpty() || !m_win) return QString();
+        QString path = autoPath;
+        if (path.isEmpty()) {
+            path = QFileDialog::getSaveFileName(
+                m_win, QStringLiteral("导出 PDF"),
+                QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("演示.pdf") : suggestedName),
+                QStringLiteral("PDF (*.pdf)"));
+            if (path.isEmpty()) return QString();
+        }
+        QPdfWriter writer(path);
+        writer.setPageSize(QPageSize(QPageSize::A4));
+        writer.setPageOrientation(QPageLayout::Landscape);
+        writer.setResolution(150);
+        QPainter painter(&writer);
+        bool first = true;
+        for (const QVariant &v : images) {
+            QString b64 = v.toString();
+            const int comma = b64.indexOf(QLatin1Char(','));
+            if (comma >= 0) b64 = b64.mid(comma + 1);   // dataURL → 纯 base64
+            QImage img;
+            if (!img.loadFromData(QByteArray::fromBase64(b64.toLatin1()))) continue;
+            if (!first) writer.newPage();
+            first = false;
+            const QRectF full = writer.pageLayout().fullRectPixels(writer.resolution());
+            painter.fillRect(full, QColor(15, 17, 21));   // 深色底，页面观感与演示一致
+            const QRectF pr = writer.pageLayout().paintRectPixels(writer.resolution());
+            const QSizeF sz = QSizeF(img.size()).scaled(pr.size(), Qt::KeepAspectRatio);
+            painter.drawImage(QRectF(pr.left() + (pr.width() - sz.width()) / 2,
+                                     pr.top() + (pr.height() - sz.height()) / 2,
+                                     sz.width(), sz.height()), img);
+        }
+        painter.end();
+        const QFileInfo fi(path);
+        const bool ok = !first && fi.exists() && fi.size() > 1024;
+        std::fprintf(stdout, "[PDF] ok=%d pages=%d size=%lld path=%s\n", ok ? 1 : 0,
+                     images.size(), static_cast<long long>(fi.size()), path.toUtf8().constData());
+        std::fflush(stdout);
+        return ok ? path : QString();
     }
 
     // 全局偏好读写（设置面板用；部分项重启生效）
@@ -529,6 +580,7 @@ protected:
             v->hide();
             v->stop();
         }
+        if (!m_testMode) QSettings().setValue(QStringLiteral("winGeometry"), saveGeometry());   // 记住窗口位置与大小
         hide();
         QMainWindow::closeEvent(e);
     }
@@ -584,7 +636,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.3.1"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.4.0"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -785,6 +837,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testdemovid"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-pdf"))) {
+            q.addQueryItem(QStringLiteral("testpdf"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         const int tsi = args.indexOf(QStringLiteral("--test-tplshot"));
         if (tsi >= 0 && tsi + 1 < args.size()) {
             q.addQueryItem(QStringLiteral("testtplshot"), args.at(tsi + 1));
@@ -815,6 +871,12 @@ int main(int argc, char *argv[]) {
     if (args.contains(QStringLiteral("--test-closedlg"))) {
         // 2.5s 后触发关闭（此时页面已 markDirty）→ 弹出"保存并退出 / 直接退出 / 取消"对话框供截图
         QTimer::singleShot(2500, &win, [&win]() { win.close(); });
+    }
+    // 恢复上次窗口几何（位置 / 大小），首次运行用默认
+    {
+        QSettings s;
+        const QByteArray geo = s.value(QStringLiteral("winGeometry")).toByteArray();
+        if (!geo.isEmpty()) win.restoreGeometry(geo);
     }
     // 实机演示视频录制：--record-demo [输出路径]（配合 --test-demovid 页面脚本）
     if (args.contains(QStringLiteral("--record-demo"))) {
