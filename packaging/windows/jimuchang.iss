@@ -4,14 +4,14 @@
 [Setup]
 AppId={{A7C4E2F1-3B9D-4E6A-8C21-0123456789AB}
 AppName=积木剧场
-AppVersion=0.4.0
+AppVersion=0.4.1
 AppPublisher=YanZhen Huang
 AppPublisherURL=https://github.com/YanZhen-Huang/jimuchang
 DefaultDirName={autopf}\Jimuchang
 DefaultGroupName=积木剧场
 DisableProgramGroupPage=yes
 OutputDir=Output
-OutputBaseFilename=Jimuchang-Setup-0.4.0
+OutputBaseFilename=Jimuchang-Setup-0.4.1
 SetupIconFile=jimuchang.ico
 UninstallDisplayIcon={app}\jimuchang.exe
 Compression=lzma2
