@@ -4,7 +4,6 @@
 [Setup]
 AppId={{A7C4E2F1-3B9D-4E6A-8C21-JIMUCHANG0001}
 AppName=积木剧场
-AppName[en]=Jimuchang
 AppVersion=0.3.0
 AppPublisher=YanZhen Huang
 AppPublisherURL=https://github.com/YanZhen-Huang/jimuchang
