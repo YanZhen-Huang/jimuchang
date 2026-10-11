@@ -16,7 +16,7 @@ jobs:
         with:
           version: '6.8.0'
           arch: win64_msvc2022_64
-          modules: 'qtwebengine qtwebchannel qtwebsockets qthttpserver'
+          modules: 'qtwebengine qtwebchannel qtwebsockets qthttpserver qtpositioning'
           cache: true
 
       - name: Diagnose Qt layout
