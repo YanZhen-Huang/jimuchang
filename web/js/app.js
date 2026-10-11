@@ -134,7 +134,7 @@ const App = {
       } catch (e) { }
     }
     this.applySettings();
-    this.applyTheme(Settings.get('theme') || 'dark');
+    this.applyTheme(Settings.get('theme') || 'dark', false);   // 启动回显不落盘，避免把异常值固化
     this.applyLayoutPrefs();
 
     // 启动首屏：主页（模板 / 示例 / 最近文件）；带测试参数时不弹，避免干扰自动化
@@ -144,6 +144,17 @@ const App = {
 
     // 自动化测试钩子：--test-save / --test-open / --test-play
     const params = new URLSearchParams(location.search);
+    // 双击 .bdp 关联打开（命令行传入文件路径）或拖拽打开
+    const openFilePath = params.get('file');
+    if (openFilePath && this.host) {
+      try {
+        await this.loadProjectFromPath(openFilePath);
+        console.log('OPENFILE|ok|' + openFilePath);
+      } catch (e) {
+        console.log('OPENFILE|error|' + (e.message || e));
+        toast('打开失败：' + (e.message || e));
+      }
+    }
     const testSave = params.get('testsave');
     if (testSave && this.host) {
       try {
@@ -455,6 +466,11 @@ const App = {
       this.markDirty();
       console.log('CLOSEDLG|dirty-set');
     }
+    if (params.get('testdemovid') === '1') {
+      // 配合 --record-demo：实机演示脚本（假光标 + 真实操作链路）
+      await sleep(1500);
+      this.runDemoVideo();
+    }
     if (params.get('testtplshot')) {
       await sleep(500);
       const key = params.get('testtplshot');
@@ -493,6 +509,17 @@ const App = {
         const out = '/tmp/jimuchang-regress/' + key + '-player.html';
         const ok = await this.host.saveProjectDirect(out, b64);
         console.log('PEXP|' + (ok ? 'saved' : 'fail') + '|' + out + '|' + b64.length);
+        // 外置数据版：HTML 引用 jimuchang-data.js；写入明显不同的数据以验证"外部数据覆盖内嵌数据"生效
+        const html2 = await this.buildPlayerHtml('jimuchang-data.js');
+        const b642 = btoa(unescape(encodeURIComponent(html2)));
+        const ok2 = await this.host.saveProjectDirect('/tmp/jimuchang-regress/' + key + '-ext.html', b642);
+        const ext = {};
+        (Project.data.elements || []).filter(e => e.type === 'chart').forEach(e => {
+          ext[e.id] = { name: e.name, categories: ['EX1', 'EX2', 'EX3', 'EX4'], values: [999, 888, 777, 666] };
+        });
+        const dataJs = 'window.__JC_EXT_DATA__ = ' + JSON.stringify(ext) + ';\n';
+        const ok3 = await this.host.saveProjectDirect('/tmp/jimuchang-regress/jimuchang-data.js', btoa(unescape(encodeURIComponent(dataJs))));
+        console.log('PEXP|ext|' + (ok2 && ok3 ? 'saved' : 'fail'));
       } catch (e) {
         console.log('PEXP|error|' + (e.message || e));
       }
@@ -999,7 +1026,7 @@ const App = {
     });
   },
 
-  async buildPlayerHtml() {
+  async buildPlayerHtml(extDataName) {
     JimuBlocks.save();
     const scripts = Executor.compileAll();
     const projectData = JSON.parse(JSON.stringify(Project.data));
@@ -1032,6 +1059,9 @@ const App = {
     const needBuiltin = projectData.elements.some(e =>
       e.type === 'model3d' && (!e.props.resourceId || e.props.resourceId === 'builtin:robot'));
     const builtinRobot = needBuiltin ? await this.host.readFileBase64(':/assets/models/RobotExpressive.glb') : null;
+    // 图表需要 ECharts 运行库（此前遗漏导致放映包中图表空白）
+    const needEcharts = projectData.elements.some(e => e.type === 'chart');
+    const echartsSrc = needEcharts ? await readSrc(':/vendor/echarts/echarts.min.js') : '';
     const data = { project: projectData, scripts, three, builtinRobot };
     const title = (projectData.name || '积木剧场演示') + ' · 放映';
     return `<!DOCTYPE html>
@@ -1052,7 +1082,7 @@ html, body { height: 100%; overflow: hidden; touch-action: none; -webkit-user-se
 </style>
 </head>
 <body class="playing">
-<div id="stage-wrap"></div>
+${echartsSrc ? '<script>' + echartsSrc + '<\/script><!-- 图表运行库（ECharts） -->\n' : ''}${extDataName ? '<script src="' + extDataName + '"><\/script><!-- 可选外部数据文件：修改它即可更新图表数据，缺失时自动用内嵌数据 -->\n' : ''}<div id="stage-wrap"></div>
 <div id="play-hint">空格 推进 · ← → 切章节 · 手机左右滑动切换 · 双击全屏</div>
 <div id="rotate-hint">📱 横屏观看效果更佳</div>
 <script>
@@ -1069,16 +1099,46 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (!this.host) { toast('浏览器预览模式无法导出'); return; }
     await this.hostReady;
     toast('正在打包放映包…');
-    const html = await this.buildPlayerHtml();
+    const extChk = document.getElementById('pack-ext-data');
+    const extChecked = !!(extChk && extChk.checked);
+    const html = await this.buildPlayerHtml(extChecked ? 'jimuchang-data.js' : null);
     const b64 = btoa(unescape(encodeURIComponent(html)));
     const path = await this.host.exportHtml(b64, (Project.data.name || '未命名演示') + '-放映机.html');
     if (path) {
+      // 数据外置：同目录生成 jimuchang-data.js（改数据不用改 HTML）
+      let extMsg = '';
+      if (extChecked) {
+        try {
+          const dataJs = this.buildExtDataJs();
+          const dir = path.replace(/\/[^/]+$/, '');
+          const dp = dir + '/jimuchang-data.js';
+          const ok2 = await this.host.saveProjectDirect(dp, btoa(unescape(encodeURIComponent(dataJs))));
+          extMsg = ok2 ? '，数据文件：jimuchang-data.js' : '（数据文件写入失败）';
+        } catch (e) { extMsg = '（数据文件写入失败）'; }
+      }
       let resMb = 0;
       try { (Project.data.resources || []).forEach(r => { resMb += ((r.data || '').length * 0.75) / 1048576; }); } catch (e) { }
       const mb = (html.length * 0.75 / 1048576);
-      toast('已导出（' + mb.toFixed(1) + ' MB' + (resMb > 0.5 ? '，其中素材约 ' + resMb.toFixed(1) + ' MB' : '') + '）：' + path.split('/').pop());
+      toast('已导出（' + mb.toFixed(1) + ' MB' + (resMb > 0.5 ? '，其中素材约 ' + resMb.toFixed(1) + ' MB' : '') + extMsg + '）：' + path.split('/').pop());
     }
     return path;
+  },
+
+  // 外置数据文件内容：图表数据按元素 id 编入，放映页启动时覆盖内嵌数据
+  buildExtDataJs() {
+    const ext = {};
+    (Project.data.elements || []).filter(e => e.type === 'chart').forEach(e => {
+      ext[e.id] = {
+        name: e.name,
+        categories: (e.props.categories || []).slice(),
+        values: (e.props.values || []).slice()
+      };
+    });
+    return '/* 积木剧场 · 外部数据文件\n'
+      + ' * 修改下面的 categories（分类）/ values（数值）后，刷新浏览器里的放映页即生效——不用改 HTML。\n'
+      + ' * 键为图表元素 id（name 是图表名字，便于对应）。\n'
+      + ' */\n'
+      + 'window.__JC_EXT_DATA__ = ' + JSON.stringify(ext, null, 1) + ';\n';
   },
 
   // 导出 Windows 单文件程序（.exe：外壳 + HTML 内嵌）
@@ -1377,12 +1437,113 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
           && c3.length === cloneN && c3.every(e => !!e._templateId));
       }
 
+      // 10. CSV 解析（本地数据文件 → 图表数据）
+      {
+        const p1 = parseChartCsv('月度,销售额\n一月,120\n二月,200\n三月,150');
+        const p2 = parseChartCsv('Q1,Q2,Q3\n10,20,30');
+        const p3 = parseChartCsv('5\n8\n13');
+        const p4 = parseChartCsv('不是数据');
+        eq('csv-parse', !!(p1 && p1.categories.join() === '一月,二月,三月' && p1.values.join() === '120,200,150'
+          && p2 && p2.categories.join() === 'Q1,Q2,Q3' && p2.values.join() === '10,20,30'
+          && p3 && p3.values.join() === '5,8,13' && !p4));
+      }
+
+      // 11. 放映包外置数据（HTML 引用 data.js + 数据文件内容含图表 id）
+      {
+        const html1 = await this.buildPlayerHtml('jimuchang-data.js');
+        const dataJs = this.buildExtDataJs();
+        const chartEl10 = (Project.data.elements || []).find(e => e.type === 'chart');
+        eq('ext-data', html1.indexOf('jimuchang-data.js') > 0 && dataJs.indexOf('__JC_EXT_DATA__') > 0
+          && !!chartEl10 && dataJs.indexOf(chartEl10.id) > 0);
+      }
+
       Executor.playing = false;
       console.log(results.every(Boolean) ? 'INTTEST|PASS' : 'INTTEST|FAIL');
     } catch (e) {
       console.log('INTTEST|error|' + (e.message || e));
       console.log('INTTEST|FAIL');
     }
+  },
+
+  // ---------- 实机演示视频脚本（配合 --record-demo：假光标 + 真实操作链路） ----------
+  async runDemoVideo() {
+    // 录制期间不真全屏（保持窗口尺寸稳定，便于全窗口录制）
+    try { this._demoFs = this.host.setFullscreen; this.host.setFullscreen = () => Promise.resolve(); } catch (e) { }
+    const cur = document.createElement('div');
+    cur.id = 'demo-cursor';
+    cur.style.left = (window.innerWidth - 150) + 'px';
+    cur.style.top = (window.innerHeight - 110) + 'px';
+    cur.innerHTML = '<span class="dc-arrow">➤</span><span class="dc-ring"></span>';
+    document.body.appendChild(cur);
+    const move = (x, y, ms = 620) => new Promise(res => {
+      cur.style.transition = `left ${ms}ms cubic-bezier(.33,.1,.25,1), top ${ms}ms cubic-bezier(.33,.1,.25,1)`;
+      cur.style.left = Math.round(x) + 'px';
+      cur.style.top = Math.round(y) + 'px';
+      setTimeout(res, ms + 60);
+    });
+    const pulse = () => { cur.classList.remove('click'); void cur.offsetWidth; cur.classList.add('click'); };
+    const center = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    try {
+      // ① 主页：点「抛体实验」模板
+      this.showHome();
+      await sleep(900);
+      const tpl = document.querySelector('.home-tpl[data-tpl="physics"]');
+      if (tpl) { const p = center(tpl); await move(p.x, p.y, 780); pulse(); await sleep(300); }
+      document.getElementById('home-overlay').classList.add('hidden');   // 复刻真实点击（点模板卡会关主页）
+      this.loadTemplate('physics');
+      await sleep(1500);
+      // ② 编辑器 → 播放
+      const playBtn = document.getElementById('btn-play');
+      const pb = center(playBtn);
+      await move(pb.x, pb.y, 700); pulse(); await sleep(260);
+      await this.enterPlayMode();
+      this.runPlayScripts();
+      await sleep(2400);
+      // ③ 拖滑块（角度 45 → ~72°）
+      const sEl = (Project.data.elements || []).find(e => e.name === '角度滑块');
+      const sDom = sEl ? Stage.elDom(sEl.id) : null;
+      const sInp = sDom ? sDom.querySelector('input') : null;
+      if (sInp) {
+        const r0 = sInp.getBoundingClientRect();
+        const y0 = r0.top + r0.height / 2;
+        await move(r0.left + r0.width * 0.4, y0, 600);
+        for (const t of [0.5, 0.6, 0.72]) {
+          sInp.value = String(Math.round(15 + (90 - 15) * t));
+          sInp.dispatchEvent(new Event('input', { bubbles: true }));
+          await move(r0.left + r0.width * t, y0, 210);
+        }
+        await sleep(350);
+      }
+      // ④ 点发射 → 看轨迹
+      const btnEl = (Project.data.elements || []).find(e => e.name === '发射按钮');
+      if (btnEl) {
+        const db = Stage.elDom(btnEl.id);
+        const pb2 = db ? center(db) : { x: 800, y: 500 };
+        await move(pb2.x, pb2.y, 640); pulse(); await sleep(220);
+        const pid = Executor.pickClickTarget(pb2.x, pb2.y) || btnEl.id;
+        Executor.trigger('onElementClick', pid);
+      }
+      await sleep(3200);
+      // ⑤ 退出播放 → 打开导出面板
+      this.stop();
+      await sleep(420);
+      const exBtn = document.getElementById('btn-export-main');
+      if (exBtn) { const pe = center(exBtn); await move(pe.x, pe.y, 680); pulse(); await sleep(240); }
+      this.openExportPanel();
+      await sleep(1900);
+      // ⑥ 结尾卡（停留到录制结束）
+      const end = document.createElement('div');
+      end.id = 'demo-end';
+      end.innerHTML = '<div class="de-logo">🧩</div><div class="de-title">积木剧场</div>'
+        + '<div class="de-sub">拖积木 · 做动画 · 一键放映</div>'
+        + '<div class="de-sub2">github.com/YanZhen-Huang/jimuchang</div>';
+      document.body.appendChild(end);
+      requestAnimationFrame(() => end.classList.add('on'));
+      await sleep(3600);
+    } catch (e) { console.log('DEMOVID|error|' + (e.message || e)); }
+    try { if (this._demoFs) this.host.setFullscreen = this._demoFs; } catch (e) { }
+    cur.remove();
+    console.log('DEMOVID|done');
   },
 
   // PLAYTPL 测试：交互模板的真实播放链路（加载 → 播放 → 模拟用户操作 → 校验响应）
@@ -1501,7 +1662,27 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       results.push(ballNow.x > x0 + 50 && ballNow.y < 828 + 60);
       if (!results[results.length - 1]) console.log(`PLAYTPL|physics-debug|x0=${x0}|x=${ballNow.x}|y=${ballNow.y}|playing=${Executor.playing}`);
       eq('physics-launch', results[results.length - 1]);
+      // 轨迹线：画笔已落笔并在小球路径上留下像素
+      let trail = false;
+      try {
+        const px = Pen.ctx.getImageData(280, 300, 900, 560).data;
+        for (let i = 3; i < px.length; i += 4) { if (px[i] > 0) { trail = true; break; } }
+      } catch (e) { }
+      results.push(!!(Pen.canvas && Pen.canvas.isConnected && Pen.last[ballNow.id] && trail));
+      eq('physics-trail', results[results.length - 1]);
       this.stop();
+      // 停止播放后：长脚本（发射循环）必须已中止——球回到初始位且不再移动、笔迹已清
+      await sleep(700);
+      const bx1 = (Project.data.elements || []).find(e => e.name === '小球').x;
+      await sleep(500);
+      const bx2 = (Project.data.elements || []).find(e => e.name === '小球').x;
+      let residue = false;
+      try {
+        const px2 = Pen.ctx.getImageData(200, 200, 1200, 700).data;
+        for (let i = 3; i < px2.length; i += 4) { if (px2[i] > 0) { residue = true; break; } }
+      } catch (e) { }
+      results.push(bx1 === 280 && bx2 === 280 && !residue);
+      eq('physics-clean-stop', results[results.length - 1]);
       await sleep(300);
 
       console.log(results.every(Boolean) ? 'PLAYTPL|PASS' : 'PLAYTPL|FAIL');
@@ -2196,6 +2377,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (!this.playing) return;
     this.playing = false;
     document.body.classList.remove('playing');
+    try { if (typeof Pen !== 'undefined') Pen.clear(); } catch (e) { }   // 播放时画的笔迹不残留到编辑态
     const hint = document.getElementById('play-hint');
     if (hint) { hint.style.opacity = ''; }
     clearTimeout(this._cursorTimer);
@@ -2870,27 +3052,35 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   async openRecent(path) {
     if (this.dirty && !confirm('当前项目有未保存的修改，仍要打开其他文件吗？')) return;
     try {
-      const r = await this.host.readProjectFile(path);
-      if (!r || !r.base64) { toast('读不到文件：' + path); return; }
-      await Project.unpack(r.base64);
-      Project.filePath = path;
-      JimuBlocks.current = null;
-      JimuBlocks.ws.clear();
-      Stage.renderAll();
-    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-      this.activeTab = 'global';
-      JimuBlocks.switchTo('global');
-      this.renderTabs();
-      this.renderScriptTabs();
-      this.renderElementBar();
-      Panel.show();
-      this.clearDirty();
-      History.reset();
+      await this.loadProjectFromPath(path);
       document.getElementById('home-overlay').classList.add('hidden');
       toast('已打开：' + String(path).split('/').pop());
     } catch (e) {
       toast('打开失败：' + e.message);
     }
+  },
+
+  // 从磁盘路径加载项目（最近文件 / 双击 .bdp 关联 / 复用）
+  async loadProjectFromPath(path) {
+    const r = await this.host.readProjectFile(path);
+    if (!r || !r.base64) throw new Error('读不到文件：' + path);
+    await Project.unpack(r.base64);
+    Project.filePath = path;
+    JimuBlocks.current = null;
+    JimuBlocks.ws.clear();
+    Stage.renderAll();
+    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
+    this.activeTab = 'global';
+    JimuBlocks.switchTo('global');
+    this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
+    Panel.show();
+    this.clearDirty();
+    History.reset();
+    try { await this.host.addRecentFile(path); } catch (e) { }
+    try { await this.host.setTitle('积木剧场 · ' + (Project.data.name || '未命名演示')); } catch (e) { }
+    return true;
   },
 
   toggleHelp() {

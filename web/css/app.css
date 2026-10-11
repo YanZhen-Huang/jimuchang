@@ -707,6 +707,40 @@ body:has(#home-overlay:not(.hidden)) #festive-canvas { display: none !important;
 .home-recent-item span { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------- 空状态 / 加载 / 动画 ---------------- */
+
+/* 实机演示视频：假光标 + 结尾卡（仅演示脚本使用） */
+#demo-cursor { position: fixed; z-index: 9800; pointer-events: none; width: 34px; height: 34px; }
+#demo-cursor .dc-arrow {
+  position: absolute; left: -3px; top: -4px; display: block;
+  font-size: 30px; color: #FFFFFF;
+  -webkit-text-stroke: 1.2px rgba(0, 0, 0, .6);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
+  transform: rotate(-30deg);
+}
+#demo-cursor .dc-ring {
+  position: absolute; left: 5px; top: 5px; width: 18px; height: 18px;
+  border-radius: 50%; border: 3px solid #6C8CFF; opacity: 0;
+}
+#demo-cursor.click .dc-ring { animation: dc-pulse .6s ease-out; }
+@keyframes dc-pulse {
+  from { transform: scale(.5); opacity: .95; }
+  to { transform: scale(4); opacity: 0; }
+}
+#demo-end {
+  position: fixed; inset: 0; z-index: 9900;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: radial-gradient(1000px 700px at 50% 42%, #1A2233 0%, #0B0E14 72%);
+  opacity: 0; transition: opacity .55s ease;
+}
+#demo-end.on { opacity: 1; }
+#demo-end .de-logo { font-size: 66px; margin-bottom: 6px; }
+#demo-end .de-title { font-size: 54px; font-weight: 700; color: #E6E9EF; letter-spacing: 8px; text-indent: 8px; }
+#demo-end .de-sub { font-size: 20px; color: #8A93A6; letter-spacing: 3px; }
+#demo-end .de-sub2 { margin-top: 20px; font-size: 15px; color: #6C8CFF; letter-spacing: 1px; }
+#demo-end.on .de-title { animation: de-up .7s cubic-bezier(.2, .8, .25, 1) both; }
+#demo-end.on .de-sub, #demo-end.on .de-sub2 { animation: de-up .7s .12s cubic-bezier(.2, .8, .25, 1) both; }
+@keyframes de-up { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
 .stage-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   text-align: center; color: rgba(138, 147, 166, .45); font-size: 42px; line-height: 1.9;
@@ -918,6 +952,12 @@ body.light #ai-overlay { background: rgba(240, 242, 245, .8); }
 body.light #export-overlay { background: rgba(240, 242, 245, .8); }
 .export-panel { width: 560px; max-width: 94vw; }
 .export-cards { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 18px; }
+.export-ext-row { margin: -4px 2px 0; }
+.ec-chk {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim);
+  cursor: pointer; line-height: 1.5;
+}
+.ec-chk input { accent-color: var(--accent); flex: none; }
 .export-card {
   display: flex; align-items: center; gap: 14px; text-align: left;
   background: var(--panel2); border: 1px solid var(--line); border-radius: 12px;

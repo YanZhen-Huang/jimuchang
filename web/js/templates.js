@@ -168,24 +168,30 @@ const Templates = (() => {
       { name: '专业版', price: '¥299', feat: '团队 5 人\n无限项目\n全部模板', desc: '专业版 · 团队首选' },
       { name: '旗舰版', price: '¥899', feat: '不限人数\n私有部署\n专属支持', desc: '旗舰版 · 企业级' }
     ];
-    const cards = [], cardTexts = [];
+    const cards = [], cardTexts = [], checks = [];
     plans.forEach((pl, i) => {
       const x = 170 + i * 540;
       const card = Project.createElement('shape', {
         name: '卡片·' + pl.name, x, y: 275, w: 460, h: 520,
         props: { shape: 'rect', fill: i === 0 ? '#243050' : '#1A2030', stroke: '#2E3A54', strokeWidth: 2, radius: 26 }
       });
+      const ck = Project.createElement('icon', {
+        name: '勾·' + pl.name, x: x + 376, y: 305, w: 64, h: 64,
+        props: { char: '✓', size: 44, color: '#7CE3A8' }
+      });
+      ck.visible = i === 0;
       cardTexts.push(
         T(pl.name, x + 40, 330, 380, 64, 40, '#C9D1E0', { align: 'left' }),
         T(pl.price, x + 40, 415, 380, 90, 72, '#E8B84B', { align: 'left', bold: true }),
         T(pl.feat, x + 40, 555, 380, 200, 28, '#8A93A6', { align: 'left' })
       );
-      cards.push(card);
+      cards.push(card); checks.push(ck);
     });
 
     const big = T('¥99', 560, 840, 800, 120, 92, '#E8B84B', { bold: true });
     const desc = T('基础版 · 适合个人起步', 560, 970, 800, 54, 32, '#8A93A6');
-    setVis(s1, [title.id, sub.id, big.id, desc.id]
+    // 勾选徽标：卡1 初始显示，其余隐藏（点击时切换显隐）
+    setVis(s1, [title.id, sub.id, big.id, desc.id, checks[0].id]
       .concat(cards.map(c => c.id), cardTexts.map(t => t.id)));
 
     // 卡片交互：点击高亮 + 更新底部价格；悬停上浮 / 移出还原
@@ -196,6 +202,9 @@ const Templates = (() => {
           blk('jimu_self_on_click'),
           ...allIds.map(id => blk('jimu_el_color', { ELEMENT: id, COLOR: '#1A2030' })),
           blk('jimu_self_el_color', { COLOR: '#243050' }),
+          blk('jimu_el_show', { ELEMENT: checks[i].id }),
+          ...checks.filter((c, k) => k !== i).map(c => blk('jimu_el_hide', { ELEMENT: c.id })),
+          anim(checks[i].id, 'zoomIn', 0.35, 0, 'easeOutBack'),
           setText(big.id, txt(plans[i].price)),
           setText(desc.id, txt(plans[i].desc)),
           anim(big.id, 'zoomIn', 0.45, 0, 'easeOutBack')
@@ -285,8 +294,13 @@ const Templates = (() => {
     };
     btn.blocks = { blocks: { languageVersion: 0, blocks: [link([
       blk('jimu_self_on_click'),
+      blk('jimu_pen_clear'),
+      blk('jimu_pen_color', { COLOR: '#E8B84B' }),
+      blk('jimu_pen_size', { N: 5 }),
+      blk('jimu_pen_state', { VAL: 'down' }),
       blk('jimu_timer_reset'),
-      loop
+      loop,
+      blk('jimu_pen_state', { VAL: 'up' })
     ])] } };
 
     s1.blocks = { blocks: { languageVersion: 0, blocks: [link([
@@ -341,7 +355,8 @@ const Templates = (() => {
         ...btns.map(bb => blk('jimu_el_color', { ELEMENT: bb.id, COLOR: '#1A2030' })),
         blk('jimu_self_el_color', { COLOR: '#6C8CFF' }),
         blk('jimu_chart_set', { ELEMENT: chartEl.id }, null, { VALUE: { shadow: { type: 'text', fields: { TEXT: regions[i].values } } } }),
-        setText(detail.id, txt(regions[i].name + '区 · 全年合计 ' + regions[i].total))
+        setText(detail.id, txt(regions[i].name + '区 · 全年合计 ' + regions[i].total)),
+        anim(detail.id, 'fadeIn', 0.4)
       ])] } };
     });
 
@@ -353,7 +368,8 @@ const Templates = (() => {
         { type: 'jimu_chart_click', fields: { WHAT: 'name' } },
         txt(' 季度：'),
         { type: 'jimu_chart_click', fields: { WHAT: 'value' } }
-      ]))
+      ])),
+      anim(detail.id, 'zoomIn', 0.35, 0, 'easeOutBack')
     ])] } };
 
     s1.blocks = { blocks: { languageVersion: 0, blocks: [link([

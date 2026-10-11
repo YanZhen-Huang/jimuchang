@@ -569,7 +569,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("2.1.1"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.3.0"));
 
     MainWindow win;
     win.resize(1440, 900);
@@ -766,6 +766,10 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testclosedlg"), QStringLiteral("1"));
             hasQuery = true;
         }
+        if (args.contains(QStringLiteral("--test-demovid"))) {
+            q.addQueryItem(QStringLiteral("testdemovid"), QStringLiteral("1"));
+            hasQuery = true;
+        }
         const int tsi = args.indexOf(QStringLiteral("--test-tplshot"));
         if (tsi >= 0 && tsi + 1 < args.size()) {
             q.addQueryItem(QStringLiteral("testtplshot"), args.at(tsi + 1));
@@ -779,6 +783,15 @@ int main(int argc, char *argv[]) {
             q.addQueryItem(QStringLiteral("testpexport"), args.at(pei + 1));
             hasQuery = true;
         }
+        // 双击 .bdp 文件关联：命令行传入文件路径时自动打开
+        for (int i = 1; i < args.size(); ++i) {
+            const QString a = args.at(i);
+            if (!a.startsWith(QStringLiteral("--")) && a.endsWith(QStringLiteral(".bdp"), Qt::CaseInsensitive)) {
+                q.addQueryItem(QStringLiteral("file"), a);
+                hasQuery = true;
+                break;
+            }
+        }
         if (hasQuery) {
             url.setQuery(q);
             view->load(url);
@@ -787,6 +800,29 @@ int main(int argc, char *argv[]) {
     if (args.contains(QStringLiteral("--test-closedlg"))) {
         // 2.5s 后触发关闭（此时页面已 markDirty）→ 弹出"保存并退出 / 直接退出 / 取消"对话框供截图
         QTimer::singleShot(2500, &win, [&win]() { win.close(); });
+    }
+    // 实机演示视频录制：--record-demo [输出路径]（配合 --test-demovid 页面脚本）
+    if (args.contains(QStringLiteral("--record-demo"))) {
+        const int ri = args.indexOf(QStringLiteral("--record-demo"));
+        const QString demoOut = (ri >= 0 && ri + 1 < args.size())
+            ? args.at(ri + 1)
+            : (QDir::homePath() + QStringLiteral("/Desktop/jimuchang-demo-raw.mp4"));
+        win.resize(1600, 900);
+        QTimer::singleShot(1800, &win, [&win, bridge, view]() {
+            win.raise();
+            const QSize vs = view->size();
+            const bool ok = bridge->recordStart(30, 1600, 900, 0, 0, vs.width(), vs.height());
+            std::fprintf(stdout, "[DEMO] recordStart=%d view=%dx%d\n", ok ? 1 : 0, vs.width(), vs.height());
+            std::fflush(stdout);
+        });
+        QTimer::singleShot(25000, &win, [&win, bridge, demoOut]() {
+            const int n = bridge->recordStop();
+            const QString out = bridge->recordFinish(demoOut);
+            std::fprintf(stdout, "[DEMO] done frames=%d out=%s\n", n, out.toUtf8().constData());
+            std::fflush(stdout);
+            win.setTestMode(true);
+            qApp->quit();
+        });
     }
     win.show();
 

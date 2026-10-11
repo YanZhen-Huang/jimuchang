@@ -84,6 +84,8 @@ const Executor = {
     this.playing = false;
     if (this.sceneCtx) this.sceneCtx.aborted = true;
     this.sceneCtx = null;
+    // 中止所有运行中的脚本上下文（否则"停止播放"后长脚本——如发射循环——会继续跑并污染编辑态数据）
+    (this._ctxs || []).forEach(c => { c.aborted = true; });
     this._ctxs = [];
     const askOv = document.getElementById('ask-overlay');
     if (askOv) askOv.remove();

@@ -1,4 +1,43 @@
 // 编辑交互：选中/拖动/缩放/属性面板
+// 文本解码（本地数据文件常见编码自动适配：UTF-8 → GBK → 宽松 UTF-8）
+function decodeTextSmart(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) {
+    try { return new TextDecoder('gbk').decode(buf); }
+    catch (e2) { return new TextDecoder('utf-8').decode(buf); }
+  }
+}
+
+// CSV / 文本 → 图表数据。支持：
+//   ① 每行「名称,数值」（跳过表头行）
+//   ② 两行表格（第一行分类、第二行数值）
+//   ③ 单列数值（自动编号分类）
+function parseChartCsv(text) {
+  const lines = String(text || '').split(/\r\n|\r|\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const split = l => l.split(/[,\t;，]/).map(x => x.trim()).filter(x => x !== '');
+  let rows = lines.map(split).filter(r => r.length);
+  if (!rows.length) return null;
+  // ② 两行表格（先判定，避免与"每行名称,数值"混淆）：第一行分类、第二行数值
+  const allNum = r => r.every(x => x !== '' && !isNaN(Number(x)));
+  if (rows.length === 2 && rows[0].length === rows[1].length && rows[0].length >= 2
+    && allNum(rows[1]) && !allNum(rows[0])) {
+    return { categories: rows[0], values: rows[1].map(x => Number(x)) };
+  }
+  // ① 每行两列：名称,数值（跳过表头行）
+  if (rows.every(r => r.length >= 2)) {
+    if (rows.length > 1 && isNaN(Number(rows[0][1]))) rows = rows.slice(1);   // 表头
+    const cats = rows.map(r => r[0]);
+    const vals = rows.map(r => Number(r[1]));
+    if (vals.length && vals.every(v => !isNaN(v))) return { categories: cats, values: vals };
+  }
+  // ③ 单列数值
+  if (rows.every(r => r.length === 1 && r[0] !== '' && !isNaN(Number(r[0])))) {
+    return { categories: rows.map((_, i) => String(i + 1)), values: rows.map(r => Number(r[0])) };
+  }
+  return null;
+}
+
 function setPath(obj, path, v) {
   const parts = path.split('.');
   let o = obj;
@@ -408,7 +447,8 @@ const Panel = {
         ${this.row('分类', `<input data-prop="props.categories" value="${esc((p.categories || []).join(','))}">`)}
         ${this.row('数值', `<input data-prop="props.values" value="${esc((p.values || []).join(','))}">`)}
         ${this.row('系列名', `<input data-prop="props.seriesName" value="${esc(p.seriesName || '')}">`)}
-        <div class="p-hint">分类与数值用逗号分隔、两行数量对应，例如：一月,二月,三月 / 120,200,150</div>
+        ${this.row('', `<button data-action="import-chart-csv" class="p-btn">📄 从 CSV / 文本文件导入数据…</button>`)}
+        <div class="p-hint">分类与数值用逗号分隔、两行数量对应（一月,二月,三月 / 120,200,150）；也可以导入 CSV 文件（每行「名称,数值」或两行表格）</div>
       `;
     } else if (el.type === 'model3d') {
       const builtin = !p.resourceId || p.resourceId === 'builtin:robot';
@@ -564,6 +604,7 @@ const Panel = {
       }
       case 'edit-keyframes': Keyframes.open(); break;
       case 'pick-model': App.pickMediaForSelected('model'); break;
+      case 'import-chart-csv': this.importChartCsv(); break;
       case 'pick-webapp': App.pickMediaForSelected('webapp'); break;
       case 'use-robot': {
         const sel = Editor.selected();
@@ -581,6 +622,36 @@ const Panel = {
       case 'pick-sprite': App.pickMediaForSelected('image'); break;
       case 'pick-frames': App.pickFramesForSelected(); break;
     }
+  },
+
+  // 从 CSV / 文本导入图表数据（本地数据文件 → 演示联动）
+  importChartCsv() {
+    const sel = this.selected();
+    if (!sel) return;
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.csv,.txt,.tsv,text/csv,text/plain';
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        const text = decodeTextSmart(fr.result);
+        const parsed = parseChartCsv(text);
+        if (!parsed || !parsed.values.length) {
+          toast('没有解析到数据（支持每行「名称,数值」，或两行表格）');
+          return;
+        }
+        sel.element.props.categories = parsed.categories;
+        sel.element.props.values = parsed.values;
+        Stage.refresh(sel.element.id);
+        Panel.show();
+        App.markDirty();
+        toast('已导入 ' + parsed.values.length + ' 条数据（' + f.name + '）');
+      };
+      fr.readAsArrayBuffer(f);
+    };
+    inp.click();
   },
 
   updateQuick(el) {

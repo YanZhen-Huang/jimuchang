@@ -8,6 +8,24 @@ const Player = {
     }
     Project.data = data.project;
 
+    // 外部数据文件（可选）：同目录 jimuchang-data.js 提供 window.__JC_EXT_DATA__ 时覆盖图表数据
+    try {
+      const ext = window.__JC_EXT_DATA__;
+      if (ext && typeof ext === 'object') {
+        let n = 0;
+        Object.keys(ext).forEach(id => {
+          const el = (Project.data.elements || []).find(e => e.id === id);
+          const d = ext[id] || {};
+          if (el && el.type === 'chart') {
+            if (Array.isArray(d.categories)) el.props.categories = d.categories.map(String);
+            if (Array.isArray(d.values)) el.props.values = d.values.map(Number);
+            n++;
+          }
+        });
+        if (n) console.log('PLAYER|ext-data|' + n + ' 个图表已使用外部数据');
+      }
+    } catch (e) { }
+
     // 兼容宿主环境引用
     window.App = {
       playing: true,
