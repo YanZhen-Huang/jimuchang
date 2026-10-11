@@ -1548,6 +1548,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
 
   // ---------- 实机演示视频脚本（配合 --record-demo：假光标 + 真实操作链路） ----------
   async runDemoVideo() {
+    // 录制素材用中性深色主题（避免节庆装饰进入宣传画面）
+    try { this.applyTheme('dark', false); } catch (e) { }
     // 录制期间不真全屏（保持窗口尺寸稳定，便于全窗口录制）
     try { this._demoFs = this.host.setFullscreen; this.host.setFullscreen = () => Promise.resolve(); } catch (e) { }
     const cur = document.createElement('div');

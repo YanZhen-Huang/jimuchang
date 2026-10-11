@@ -1,5 +1,7 @@
 # 积木剧场 Jimuchang
 
+<p align="center"><img src="docs/screenshots/logo.png" width="128" alt="logo"></p>
+
 用图形化积木编排**交互式演示**——Scratch 的手感、PPT 的舞台、网页的交互。
 
 拖积木定义演示流程；放映时观众可以点击、拖动、调参数参与其中；一键导出为单个网页放映包（可交互）/ PPT / MP4 / Windows 程序，发给任何人双击即看。

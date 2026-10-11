@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 一束聚光灯，打在一块积木上 -->
+  <polygon points="52,20 76,20 100,106 28,106" fill="#B8862B" opacity="0.24"/>
+  <circle cx="51" cy="74" r="6.5" fill="#1C1F26"/>
+  <circle cx="77" cy="74" r="6.5" fill="#1C1F26"/>
+  <rect x="31" y="78" width="66" height="26" rx="3" fill="#1C1F26"/>
+</svg>

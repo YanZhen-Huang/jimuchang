@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; }
+  body {
+    position: relative; overflow: hidden;
+    background-color: #F4F2ED;
+    background-image:
+      radial-gradient(circle, rgba(28,31,38,.20) 1.2px, transparent 1.8px),
+      linear-gradient(to right, rgba(28,31,38,.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(28,31,38,.06) 1px, transparent 1px);
+    background-size: 72px 72px, 72px 72px, 72px 72px;
+    background-position: -0.5px -0.5px;
+    font-family: 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+    color: #1C1F26;
+  }
+  .mono { font-family: 'Noto Sans Mono CJK SC', monospace; }
+  .abs { position: absolute; }
+
+  /* 顶部 */
+  .logo { left: 84px; top: 70px; width: 78px; height: 78px; }
+  .brand-name { left: 182px; top: 86px; font-size: 30px; font-weight: 700; letter-spacing: 5px; }
+  .brand-en { left: 184px; top: 124px; font-size: 11px; letter-spacing: 4px; color: #8A8F98; }
+  .title { left: 84px; top: 178px; font-size: 96px; font-weight: 700; line-height: 1.16; letter-spacing: 2px; }
+  .title .gold-cap {
+    display: inline-block; width: 26px; height: 26px; background: #B8862B;
+    margin-left: 14px; transform: translateY(-10px);
+  }
+  .subtitle { left: 84px; top: 454px; font-size: 25px; letter-spacing: 7px; color: #6B7280; }
+  .gold-rule { left: 84px; top: 516px; width: 64px; height: 4px; background: #B8862B; }
+
+  /* 主视觉：窗口卡 */
+  .win {
+    left: 84px; top: 572px; width: 912px;
+    background: #FBFAF7; border: 1px solid rgba(28,31,38,.1); border-radius: 4px;
+    box-shadow: 0 24px 54px rgba(28,31,38,.16);
+  }
+  .win-bar {
+    height: 32px; background: #ECEAE4; border-bottom: 1px solid rgba(28,31,38,.08);
+    display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  }
+  .win-dot { width: 10px; height: 10px; border-radius: 50%; background: #D8D5CD; }
+  .win-title { margin-left: auto; margin-right: auto; font-size: 11px; letter-spacing: 2px; color: #8A8F98; }
+  .win img { display: block; width: 910px; height: 512px; object-fit: cover; }
+
+  /* 副图：冲印照片式 */
+  .photo {
+    left: 470px; top: 992px; width: 526px;
+    background: #FFFFFF; padding: 8px; border: 1px solid rgba(28,31,38,.1);
+    border-radius: 2px; box-shadow: 0 14px 30px rgba(28,31,38,.13);
+  }
+  .photo img { display: block; width: 508px; height: 286px; object-fit: cover; }
+  .photo-cap { margin-top: 7px; font-size: 10.5px; letter-spacing: 1.5px; color: #8A8F98; }
+
+  /* 图纸标注 */
+  .note-line { left: 84px; top: 1118px; width: 1px; height: 34px; background: rgba(28,31,38,.35); }
+  .note-dot { left: 80.5px; top: 1152px; width: 8px; height: 8px; background: #B8862B; border-radius: 50%; }
+  .note-text { left: 104px; top: 1140px; font-size: 11.5px; letter-spacing: 1px; color: #6B7280; }
+  .note-text2 { left: 104px; top: 1160px; font-size: 11.5px; letter-spacing: 1px; color: #9AA0A8; }
+
+  /* 规格表 */
+  .spec-top { left: 84px; top: 1316px; width: 912px; height: 1px; background: rgba(28,31,38,.14); }
+  .spec-mid-v { left: 540px; top: 1316px; width: 1px; height: 328px; background: rgba(28,31,38,.14); }
+  .spec-mid-h { left: 84px; top: 1480px; width: 912px; height: 1px; background: rgba(28,31,38,.14); }
+  .spec { width: 380px; }
+  .spec .studs { width: 16px; height: 16px; margin-bottom: 14px;
+    background-image: radial-gradient(circle, #1C1F26 2.6px, transparent 3.2px);
+    background-size: 9px 9px; background-position: 0 0; }
+  .spec .s-main { font-size: 21px; font-weight: 700; letter-spacing: 1px; }
+  .spec .s-sub { margin-top: 9px; font-size: 13px; letter-spacing: 1px; color: #6B7280; }
+
+  /* 底部 */
+  .qr { left: 84px; top: 1700px; width: 128px; height: 128px; background: #FFFFFF;
+        border: 1px solid rgba(28,31,38,.12); padding: 7px; }
+  .qr img { display: block; width: 112px; height: 112px; }
+  .repo { left: 240px; top: 1706px; font-size: 14px; letter-spacing: 0.5px; color: #1C1F26; }
+  .repo-sub { left: 240px; top: 1734px; font-size: 12px; letter-spacing: 1.5px; color: #8A8F98; }
+  .top-meta { right: 84px; top: 78px; text-align: right; font-size: 12px; line-height: 2.05; letter-spacing: 1.5px; color: #8A8F98; }
+  .top-meta b { color: #1C1F26; font-weight: 700; }
+  .colophon { right: 84px; top: 1806px; font-size: 11px; letter-spacing: 2px; color: #9AA0A8; }
+</style>
+</head>
+<body>
+  <!-- Logo：一束聚光打在积木上（圆凸点） -->
+  <svg class="abs logo" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="52,20 76,20 100,106 28,106" fill="#B8862B" opacity="0.24"/>
+    <circle cx="51" cy="74" r="6.5" fill="#1C1F26"/>
+    <circle cx="77" cy="74" r="6.5" fill="#1C1F26"/>
+    <rect x="31" y="78" width="66" height="26" rx="3" fill="#1C1F26"/>
+  </svg>
+  <div class="abs brand-name">积木剧场</div>
+  <div class="abs brand-en mono">JIMUCHANG</div>
+
+  <div class="abs title">把演示做成<br>能上手玩的<span class="gold-cap"></span></div>
+  <div class="abs subtitle">拖积木 · 做动画 · 一键放映</div>
+  <div class="abs gold-rule"></div>
+
+  <div class="abs win">
+    <div class="win-bar">
+      <span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span>
+      <span class="win-title mono">抛体实验 · 放映中</span>
+    </div>
+    <img src="stage-main.png" alt="">
+  </div>
+
+  <div class="abs photo">
+    <img src="stage-second.png" alt="">
+    <div class="photo-cap mono">另一章节：区域销售看板（观众可点击切换）</div>
+  </div>
+
+  <div class="abs note-line"></div>
+  <div class="abs note-dot"></div>
+  <div class="abs note-text mono">实时画面：拖滑块 · 点发射——金色曲线为实算轨迹</div>
+  <div class="abs note-text2 mono">无需编程基础 · 图形化积木一分钟上手</div>
+
+  <div class="abs spec-top"></div>
+  <div class="abs spec-mid-v"></div>
+  <div class="abs spec-mid-h"></div>
+  <div class="abs spec" style="left:112px; top:1348px;">
+    <div class="studs"></div>
+    <div class="s-main">图形化积木编排</div>
+    <div class="s-sub">174 块中文积木 · 每个元素一份独立脚本</div>
+  </div>
+  <div class="abs spec" style="left:568px; top:1348px;">
+    <div class="studs"></div>
+    <div class="s-main">交互式演示</div>
+    <div class="s-sub">滑块 · 图表联动 · 悬停反馈——观众上手玩</div>
+  </div>
+  <div class="abs spec" style="left:112px; top:1512px;">
+    <div class="studs"></div>
+    <div class="s-main">五种导出</div>
+    <div class="s-sub">网页放映包 · PPT · PDF · MP4 · Windows 程序</div>
+  </div>
+  <div class="abs spec" style="left:568px; top:1512px;">
+    <div class="studs"></div>
+    <div class="s-main">免费开源</div>
+    <div class="s-sub">MIT 协议 · 本地运行 · 数据不出门</div>
+  </div>
+
+  <div class="abs qr"><img src="qr.png" alt=""></div>
+  <div class="abs repo mono">github.com/YanZhen-Huang/jimuchang</div>
+  <div class="abs repo-sub">扫码看源码 · 下载 Windows 安装包</div>
+  <div class="abs top-meta">
+    <div><b>免费开源</b> · MIT 协议</div>
+    <div>Windows / Linux 双平台</div>
+    <div class="mono" style="font-size:11px; letter-spacing:2px;">v0.4 · 2026</div>
+  </div>
+  <div class="abs colophon mono">JIMUCHANG · 拖积木，做能上手玩的演示</div>
+</body>
+</html>
