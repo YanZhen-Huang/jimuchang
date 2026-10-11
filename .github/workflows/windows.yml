@@ -19,6 +19,12 @@ jobs:
           modules: 'qtwebengine qtwebchannel qtwebsockets qthttpserver'
           cache: true
 
+      - name: Diagnose Qt layout
+        shell: pwsh
+        run: |
+          Write-Host "QT_ROOT_DIR=$env:QT_ROOT_DIR"
+          Get-ChildItem "$env:QT_ROOT_DIR\lib\cmake" -Name | Select-String -Pattern 'WebEngine'
+
       - name: Configure
         run: cmake -S . -B build
 

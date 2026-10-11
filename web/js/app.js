@@ -1834,11 +1834,11 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       // ① 拖动分隔条加宽
       const rx = resizer.getBoundingClientRect().left + 2;
       resizer.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: rx, clientY: 400, button: 0 }));
-      await sleep(60);
+      await sleep(100);
       window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: rx + 90, clientY: 400 }));
-      await sleep(80);
+      await sleep(120);
       window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      await sleep(150);
+      await sleep(220);
       const w1 = left.getBoundingClientRect().width;
       check('drag-wider', w1 > w0 + 50);
       // ② Ctrl+B 收起 → 再按展开
