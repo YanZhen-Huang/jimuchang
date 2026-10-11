@@ -2,12 +2,11 @@
 ; 由 GitHub Actions 在 windows-latest 上编译（见 .github/workflows/windows.yml）
 
 [Setup]
-AppId={{A7C4E2F1-3B9D-4E6A-8C21-JIMUCHANG0001}
+AppId={{A7C4E2F1-3B9D-4E6A-8C21-0123456789AB}
 AppName=积木剧场
 AppVersion=0.3.0
 AppPublisher=YanZhen Huang
 AppPublisherURL=https://github.com/YanZhen-Huang/jimuchang
-SupportURL=https://github.com/YanZhen-Huang/jimuchang
 DefaultDirName={autopf}\Jimuchang
 DefaultGroupName=积木剧场
 DisableProgramGroupPage=yes
