@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- 一束聚光灯，打在一块积木上 -->
-  <polygon points="52,20 76,20 100,106 28,106" fill="#B8862B" opacity="0.24"/>
-  <circle cx="51" cy="74" r="6.5" fill="#1C1F26"/>
-  <circle cx="77" cy="74" r="6.5" fill="#1C1F26"/>
-  <rect x="31" y="78" width="66" height="26" rx="3" fill="#1C1F26"/>
+  <!-- 能播放的积木：一块带凸点的积木，中央镂出一个播放三角 -->
+  <rect x="44" y="28" width="16" height="12" rx="3.5" fill="#1C1F26"/>
+  <rect x="68" y="28" width="16" height="12" rx="3.5" fill="#1C1F26"/>
+  <path fill-rule="evenodd" fill="#1C1F26" d="M31 36 h66 a5 5 0 0 1 5 5 v52 a5 5 0 0 1 -5 5 h-66 a5 5 0 0 1 -5 -5 v-52 a5 5 0 0 1 5 -5 z M54 55 L74 67 L54 79 Z"/>
 </svg>
