@@ -121,7 +121,7 @@ const ApiBridge = {
   status() {
     return this.ok({
       app: 'jimuchang',
-      version: '0.4.1',
+      version: '0.4.2',
       playing: App.playing,
       project: {
         name: Project.data.name,

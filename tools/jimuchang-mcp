@@ -60,7 +60,7 @@ const fail = e => ({
   content: [{ type: 'text', text: '错误：' + (e && e.message ? e.message : String(e)) }]
 });
 
-const server = new McpServer({ name: 'jimuchang', version: '0.4.1' });
+const server = new McpServer({ name: 'jimuchang', version: '0.4.2' });
 const tool = (name, desc, schema, fn) => {
   server.tool(name, desc, schema, async (args) => {
     try { return ok(await fn(args || {})); } catch (e) { return fail(e); }

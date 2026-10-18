@@ -315,7 +315,7 @@ const Project = {
     }
     zip.file('project.json', JSON.stringify(data, null, 1));
     zip.file('meta.json', JSON.stringify({
-      app: 'jimuchang', appVersion: '0.2.0',
+      app: 'jimuchang', appVersion: '0.4.2',
       created: new Date().toISOString(), modified: new Date().toISOString()
     }));
     return await zip.generateAsync({ type: 'base64' });

@@ -773,7 +773,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.4.1"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.4.2"));
     {
         const QString configDir = QDir::homePath() + QStringLiteral("/.config/jimuchang");
         QDir().mkpath(configDir);
