@@ -1,0 +1,22 @@
+{
+  "name": "jimuchang-update-video",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts JimuchangUpdate ../jimuchang-update.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --concurrency=4",
+    "still": "remotion still src/index.ts JimuchangUpdate"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.536",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.536"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,5 +1,24 @@
 # 积木剧场 · 宣传片（代码化渲染）
 
+## 本次更新视频（Remotion）
+
+- 源码：`remotion-update/`
+- 成片：`jimuchang-update.mp4`
+- 规格：1920×1080 / 30fps / 28 秒 / H.264 + AAC
+- 内容：素材区 / 章节自动出积木 / AI 复用素材 / MCP 35 工具 / 安全与质量
+
+```bash
+cd remotion-update
+npm install
+npm run render
+```
+
+关键静帧：
+
+```bash
+npx remotion still src/index.ts JimuchangUpdate /tmp/update.png --frame=550
+```
+
 不是用剪辑软件剪的，而是**一个 HTML 时间轴 + 逐帧渲染**：
 
 ```
