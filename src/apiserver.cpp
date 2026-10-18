@@ -25,6 +25,7 @@ QString apiConfigPath() {
     // 固定路径（不依赖 QStandardPaths，避免组织名影响路径规则）
     const QString dir = QDir::homePath() + QStringLiteral("/.config/jimuchang");
     QDir().mkpath(dir);
+    QFile::setPermissions(dir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
     return dir + QStringLiteral("/api.json");
 }
 
@@ -61,6 +62,7 @@ bool ApiServer::start(quint16 port) {
         cf.write(QJsonDocument(cfg).toJson(QJsonDocument::Indented));
         cf.close();
     }
+    QFile::setPermissions(apiConfigPath(), QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     qInfo() << "[API] 已启动 http://127.0.0.1:" << m_port << "令牌已写入" << apiConfigPath();
     return true;
 }

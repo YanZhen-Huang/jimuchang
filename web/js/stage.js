@@ -243,8 +243,13 @@ const Stage = {
 
   _clampPan() {
     if (!this.wrapEl) return;
-    const limX = Math.max(0, 960 * this.scale - this.wrapEl.clientWidth / 2);
-    const limY = Math.max(0, 540 * this.scale - this.wrapEl.clientHeight / 2);
+    const halfW = this.wrapEl.clientWidth / 2;
+    const halfH = this.wrapEl.clientHeight / 2;
+    const stageHalfW = 960 * this.scale;
+    const stageHalfH = 540 * this.scale;
+    // 画布大于视口时限制边缘；小于视口时允许在留白范围内移动，保证指针锚点缩放不跳。
+    const limX = stageHalfW >= halfW ? stageHalfW - halfW : halfW - stageHalfW;
+    const limY = stageHalfH >= halfH ? stageHalfH - halfH : halfH - stageHalfH;
     this.panX = Math.max(-limX, Math.min(limX, this.panX));
     this.panY = Math.max(-limY, Math.min(limY, this.panY));
   },

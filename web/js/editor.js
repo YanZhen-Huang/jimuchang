@@ -224,7 +224,7 @@ const Editor = {
     if (this.drag.mode === 'move') {
       el.x = Math.round(this.drag.ox + dx);
       el.y = Math.round(this.drag.oy + dy);
-      const snap = this.computeSnap(el);
+      const snap = this.computeSnap(el) || { dx: 0, dy: 0, lineV: null, lineH: null };
       if (snap.dx) el.x += Math.round(snap.dx);
       if (snap.dy) el.y += Math.round(snap.dy);
       this.drawGuides(snap.lineV, snap.lineH);
@@ -299,6 +299,7 @@ const Editor = {
     const sel = this.selected();
     if (!sel) return;
     Project.removeElement(sel.element.id);
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.removeElement(sel.element.id);
     this.select(null);
     Stage.refreshAll();
     App.markDirty();
@@ -354,6 +355,13 @@ const Panel = {
     this.el.classList.remove('collapsed');
     const sel = Editor.selected();
     if (sel) this.renderElement(null, sel.element);
+    else if (App.workspaceMode === 'chapters') {
+      this.el.innerHTML = `
+        <div class="p-title">舞台</div>
+        ${this.row('全片特效', `<select data-prop="fx.type">${this.options([['无', ''], ['星空', 'starfield'], ['飘雪', 'snow'], ['漂浮微粒', 'particles'], ['极光', 'aurora']], (Project.data.stage.fx && Project.data.stage.fx.type) || '')}</select>`)}
+        <div class="p-hint">章节名称、显隐和流程在左侧「章节流程」里编辑；点舞台元素可继续调整元素属性。</div>
+      `;
+    }
     else this.renderScene();
   },
 
@@ -374,18 +382,16 @@ const Panel = {
   renderScene() {
     const sc = Stage.currentScene();
     if (!sc) { this.el.innerHTML = '<div class="p-empty">没有章节</div>'; return; }
-    const bg = sc.background || { type: 'color', value: '#0F1115' };
+    const bg = (sc.preset && sc.preset.background) || Project.data.stage.background || { type: 'color', value: '#0F1115' };
     const bgColor = typeof bg.value === 'string' ? bg.value
       : (bg.value && bg.value.stops && bg.value.stops[0] ? bg.value.stops[0][0] : '#0F1115');
-    const tr = sc.transition || { type: 'fade', duration: 0.6 };
     this.el.innerHTML = `
       <div class="p-title">章节设置</div>
       ${this.row('名称', `<input data-prop="name" value="${esc(sc.name)}">`)}
-      ${this.row('背景色', `<input type="color" data-prop="background.value" value="${bgColor}">`)}
-      ${this.row('转场', `<select data-prop="transition.type">${this.options(JimuConst.TRANSITIONS, tr.type)}</select>`)}
-      ${this.row('转场时长', `<input type="number" step="0.1" min="0" max="10" data-prop="transition.duration" value="${tr.duration}">`)}
+      ${this.row('背景色', `<input type="color" data-prop="preset.background.value" value="${bgColor}">`)}
       ${this.row('全片特效', `<select data-prop="fx.type">${this.options([['无', ''], ['星空', 'starfield'], ['飘雪', 'snow'], ['漂浮微粒', 'particles'], ['极光', 'aurora']], (Project.data.stage.fx && Project.data.stage.fx.type) || '')}</select>`)}
-      <div class="p-hint">在舞台中拖入元素，或者用工具栏添加文字 / 图片 / 视频 / 音频 / 形状 / 图标</div>
+      <button data-action="edit-chapter-mode" class="p-btn primary" style="width:100%;margin:8px 0">打开章节流程模式</button>
+      <div class="p-hint">章节模式可设置显隐、入场动画、等待和跳转，并自动生成对应积木。</div>
     `;
   },
 
@@ -565,10 +571,13 @@ const Panel = {
     if (!sel && path === 'fx.type') {
       // 背景特效是舞台级设置（渲染读 Project.data.stage.fx），面板显示在章节属性里
       Project.data.stage.fx = { ...(Project.data.stage.fx || {}), type: value };
+    } else if (!sel && path === 'preset.background.value') {
+      obj.preset = obj.preset || {};
+      obj.preset.background = { type: 'color', value };
     } else {
       setPath(obj, path, value);
     }
-    if (path === 'background.value' && obj.background) obj.background.type = 'color';
+    if (!sel && path === 'preset.background.value' && obj.preset.background) obj.preset.background.type = 'color';
 
     // 视觉更新防抖（连续输入合并为一次重绘）
     clearTimeout(this._renderTimer);
@@ -583,7 +592,8 @@ const Panel = {
         }
       } else {
         const sc = Stage.currentScene();
-        Stage.render(sc);
+        if (path === 'fx.type') Stage.render(sc);
+        else Stage.goChapter(sc.id, { instant: true });
         Editor.refresh();
         App.renderTabs();
       }
@@ -595,6 +605,7 @@ const Panel = {
     const sel = Editor.selected();
     switch (action) {
       case 'delete': Editor.deleteSelected(); break;
+      case 'edit-chapter-mode': App.applyWorkspaceMode('chapters'); break;
       case 'duplicate': Editor.duplicateSelected(); break;
       case 'up': if (sel) { sel.element.z += 1; Stage.refreshAll(); Editor.refresh(); App.markDirty(); } break;
       case 'down': if (sel) { sel.element.z = Math.max(1, sel.element.z - 1); Stage.refreshAll(); Editor.refresh(); App.markDirty(); } break;

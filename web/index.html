@@ -14,6 +14,11 @@
 <body>
   <header id="toolbar">
     <div class="brand">积木剧场<span id="dirty-dot" title="有未保存修改"></span></div>
+    <div class="tb-group mode-switch" title="切换创作模式">
+      <button id="btn-mode-blocks" class="tbtn mode-btn active">积木</button>
+      <button id="btn-mode-chapters" class="tbtn mode-btn">章节</button>
+    </div>
+    <div class="tb-sep"></div>
     <div class="tb-group">
       <button id="btn-new" class="tbtn">新建</button>
       <button id="btn-open" class="tbtn">打开</button>
@@ -51,6 +56,7 @@
     <div class="spacer"></div>
     <div class="tb-group">
       <button id="btn-demo" class="tbtn">示例</button>
+      <button id="btn-assets" class="tbtn" title="打开项目素材区">素材</button>
       <button id="btn-ai" class="tbtn" title="AI 生成演示">AI</button>
     </div>
     <div class="tb-sep"></div>
@@ -71,10 +77,43 @@
     <section id="left">
       <div id="script-tabs"></div>
       <section id="blocklyDiv"></section>
+      <div id="blockly-lock" class="hidden">
+        <div class="blockly-lock-card">
+          <b>本章节由章节模式自动生成</b>
+          <span>要自由增删积木，请先将本章节转为手工积木。</span>
+          <button id="btn-convert-manual" class="p-btn primary">转为手工积木</button>
+        </div>
+      </div>
+      <section id="chapter-editor" class="hidden"></section>
     </section>
     <div id="left-resizer" title="拖动调整宽度 · 双击收起 / 展开 (Ctrl+B)"></div>
     <section id="right">
       <div id="scene-tabs"></div>
+      <aside id="asset-dock" class="hidden">
+        <div class="asset-head">
+          <div>
+            <b>素材区</b>
+            <span id="asset-count">0 个素材</span>
+          </div>
+          <div class="asset-head-actions">
+            <button id="asset-import" class="p-btn primary">导入素材</button>
+            <button id="asset-close" class="p-btn">关闭</button>
+          </div>
+        </div>
+        <div class="asset-tools">
+          <input id="asset-search" type="search" placeholder="搜索素材…" autocomplete="off">
+          <div id="asset-filters" class="asset-filters">
+            <button data-asset-filter="all" class="active">全部</button>
+            <button data-asset-filter="image">图片</button>
+            <button data-asset-filter="audio">音频</button>
+            <button data-asset-filter="video">视频</button>
+            <button data-asset-filter="model3d">3D</button>
+            <button data-asset-filter="webapp">网页</button>
+          </div>
+        </div>
+        <div id="asset-grid"></div>
+        <div class="asset-foot">拖到舞台可直接插入；双击也能插入。素材会随 .bdp 一起保存。</div>
+      </aside>
       <div id="stage-wrap"></div>
       <div id="element-bar-wrap">
         <button id="elbar-left" class="elbar-arrow" title="向左滚动">‹</button>
@@ -182,10 +221,10 @@
       </div>
       <div id="ai-msgs" class="ai-msgs"></div>
       <div class="ai-input-row">
-        <textarea id="ai-input" rows="2" placeholder="例如：做一个介绍国庆节的演示，标题+三个要点配图标，结尾放烟花效果"></textarea>
+        <textarea id="ai-input" rows="2" placeholder="例如：用素材区的 logo 做封面，再做一个产品介绍；没有合适素材时会自动跳过"></textarea>
         <button id="ai-send" class="p-btn primary">生成</button>
       </div>
-      <div class="ai-foot">生成会覆盖当前项目内容 · 需在「设置 → AI 助手」填 DeepSeek Key · 费用由你的账号承担（约几分钱/次）</div>
+      <div class="ai-foot">生成会重建章节与元素，但保留素材区资源 · AI 可引用素材区已有图片/音频/视频/3D · 需在「设置 → AI 助手」填 DeepSeek Key</div>
     </div>
   </div>
 
@@ -217,7 +256,8 @@
         <div class="help-col">
           <h4>怎么用</h4>
           <ol>
-            <li>左侧拖动<b>积木</b>到工作区，拼出演示流程</li>
+            <li>顶部选<b>章节</b>模式：设置显隐、动画、等待和跳转，会自动生成积木</li>
+            <li>顶部切到<b>积木</b>模式：可精细增加条件、函数、广播、交互等脚本</li>
             <li>右侧舞台放<b>元素</b>（工具栏添加，拖动摆位置）</li>
             <li>选中元素可在<b>属性面板</b>调外观、入场动画、关键帧</li>
             <li>点右上角<b>播放</b>全屏放映（空格推进、Esc 退出）</li>
@@ -252,7 +292,7 @@
           <h4>交互演示</h4>
           <p class="help-dim">加「滑块」让观众调参数、「图表数据/点击」做联动、「悬停」做反馈；主页模板库有报价单 / 抛体实验 / 数据看板三个现成范例。</p>
           <h4>AI 接一口（可选）</h4>
-          <p class="help-dim">本程序开着的时候，AI 工具（如 opencode）可以通过 MCP 直接帮你生成演示：说一句"用积木剧场做个 XX"就行。</p>
+          <p class="help-dim">本地 HTTP API 默认关闭，可在「设置 → 高级」开启。开启后，AI 工具（如 opencode）可以通过 MCP 直接帮你生成演示。</p>
         </div>
       </div>
     </div>
@@ -327,6 +367,7 @@
   <script src="js/pen.js"></script>
   <script src="js/animations.js"></script>
   <script src="js/blocks.js"></script>
+  <script src="js/chapter-flow.js"></script>
   <script src="js/executor.js"></script>
   <script src="js/keyframes.js"></script>
   <script src="js/jimu-api.js"></script>
@@ -334,6 +375,7 @@
   <script src="js/api-bridge.js"></script>
   <script src="js/history.js"></script>
   <script src="js/editor.js"></script>
+  <script src="js/asset-hub.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

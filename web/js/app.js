@@ -53,10 +53,10 @@ const SETTING_DEFS = [
   { group: '高级', items: [
     { key: 'showAdvanced', label: '显示「高级」积木分类', type: 'bool', hint: '执行代码等进阶积木；已放到工作区的块不受影响' },
     { key: 'cloneLimit', label: '克隆体上限', type: 'select', options: [[100, '100 个'], [200, '200 个'], [500, '500 个']] },
-    { key: 'apiEnabled', label: 'AI 接口（HTTP API）（重启生效）', type: 'bool', hint: '供外部 AI 控制的本地接口' }
+    { key: 'apiEnabled', label: 'AI 接口（HTTP API）（重启生效）', type: 'bool', hint: '默认关闭；开启后本机程序可读写当前项目，令牌见 ~/.config/jimuchang/api.json' }
   ] },
   { group: 'AI 助手（DeepSeek）', items: [
-    { key: 'aiKey', label: 'API Key', type: 'text', placeholder: 'sk-…（仅存本机）', hint: '在 platform.deepseek.com 获取；「AI」按钮用一句话生成演示，按量计费约几分钱/次' },
+    { key: 'aiKey', label: 'API Key', type: 'password', placeholder: '输入新 Key；已保存的 Key 不回显', hint: '仅存本机独立配置项；「AI」按钮用一句话生成演示，按量计费约几分钱/次' },
     { key: 'aiModel', label: '模型', type: 'select', options: [['deepseek-chat', 'deepseek-chat（快·便宜）'], ['deepseek-reasoner', 'deepseek-reasoner（强·较贵）']] }
   ] }
 ];
@@ -67,12 +67,14 @@ const AI_SYSTEM_PROMPT = `你是"积木剧场"（图形化积木演示工具）�
 {"cmd":"text","name":"标题","text":"积木剧场","x":460,"y":400,"w":1000,"size":120,"color":"#E6E9EF","bold":true}
 {"cmd":"shape","name":"装饰线","shape":"rect","fill":"#6C8CFF","x":860,"y":560,"w":200,"h":4}
 {"cmd":"icon","name":"图标1","char":"★","x":420,"y":380,"size":140,"color":"#6C8CFF"}
+{"cmd":"asset","name":"Logo","resource":"素材区里的文件名或 id","x":700,"y":300,"w":520,"h":320}
 {"cmd":"chapter","name":"封面","show":["标题","装饰线"],"bg":"#12101A"}
 {"cmd":"anim","target":"标题","type":"fadeIn","duration":0.8,"delay":0}
 {"cmd":"wait","sec":2}
 {"cmd":"next"}
 规则：
 - 舞台尺寸 1920×1080；元素坐标不要重叠；文字宽 w 与字号匹配（64 号字 w≥600，120 号 w≥1000）
+- 只有“当前素材区”列表中存在的资源才能用于 asset 命令；优先复用素材，缺少素材时不要编造路径
 - 每章节用 {"cmd":"chapter"} 开始；show 列出该章节中可见的元素名（未列出的会隐藏）；bg 是十六进制背景色
 - 动画类型只能从这些里选：fadeIn, flyInLeft, flyInRight, flyInTop, flyInBottom, zoomIn, rotateIn, bounceIn, flipIn, typewriter, pulse, shake, wobble, breathe, glowPulse
 - 每个动画后可配 {"cmd":"wait","sec":N} 停留；章节末尾用 {"cmd":"next"} 推进（最后一章不加）
@@ -85,6 +87,8 @@ const App = {
   playing: false,
   dirty: false,
   activeTab: 'global',
+  workspaceMode: 'blocks',
+  trustedProject: true,
 
   async init() {
     this.hostReady = new Promise(resolve => {
@@ -104,6 +108,7 @@ const App = {
     Panel.init(document.getElementById('props'));
     Keyframes.initPanel();
     await JimuBlocks.init('blocklyDiv');
+    this.initChapterEditorUI();
     // 积木区空状态提示层
     this.emptyHint = document.createElement('div');
     this.emptyHint.id = 'blockly-empty';
@@ -117,6 +122,7 @@ const App = {
     Executor.hooks.onSceneEnter = id => this.playEntrances(id);
 
     this.bindUI();
+    if (typeof AssetHub !== 'undefined') AssetHub.init();
     Stage.renderAll();
     this.renderTabs();
     this.switchTab(Project.data.chapters[0].id);
@@ -136,6 +142,7 @@ const App = {
     this.applySettings();
     this.applyTheme(Settings.get('theme') || 'dark', false);   // 启动回显不落盘，避免把异常值固化
     this.applyLayoutPrefs();
+    this.applyWorkspaceMode(Settings.get('workspaceMode') || 'blocks', false);
 
     // 启动首屏：主页（模板 / 示例 / 最近文件）；带测试参数时不弹，避免干扰自动化
     if (!location.search && Settings.get('showHomeOnStart') !== false) {
@@ -560,6 +567,18 @@ const App = {
       await sleep(900);
       this.testPerf();
     }
+    if (params.get('testmodes') === '1') {
+      await sleep(900);
+      this.testModes();
+    }
+    if (params.get('testsecurity') === '1') {
+      await sleep(900);
+      this.testSecurity();
+    }
+    if (params.get('testassets') === '1') {
+      await sleep(900);
+      this.testAssets();
+    }
     if (params.get('testexe') === '1') {
       await sleep(900);
       this.testExe();
@@ -572,6 +591,9 @@ const App = {
     on('btn-open', () => this.open());
     on('btn-save', () => this.save());
     on('btn-save-as', () => this.saveAs());
+    on('btn-mode-blocks', () => this.applyWorkspaceMode('blocks'));
+    on('btn-mode-chapters', () => this.applyWorkspaceMode('chapters'));
+    on('btn-convert-manual', () => this.convertCurrentChapterToManual());
     on('btn-undo', () => History.undo());
     on('btn-redo', () => History.redo());
     on('btn-play', () => this.play());
@@ -579,6 +601,7 @@ const App = {
     this.initLayoutUI();
     this.initElementBarUI();
     on('btn-demo', () => this.loadDemo());
+    on('btn-assets', () => { if (typeof AssetHub !== 'undefined') AssetHub.toggle(); });
     on('btn-add-text', () => Editor.addElement('text'));
     on('btn-add-image', () => this.addMediaElement('image'));
     on('btn-add-video', () => this.addMediaElement('video'));
@@ -650,6 +673,305 @@ const App = {
     });
   },
 
+  // ---------- 积木 / 章节双模式 ----------
+  applyWorkspaceMode(mode, persist = true) {
+    mode = mode === 'chapters' ? 'chapters' : 'blocks';
+    this.workspaceMode = mode;
+    const isChapters = mode === 'chapters';
+    document.body.classList.toggle('chapter-workspace', isChapters);
+    const blockBtn = document.getElementById('btn-mode-blocks');
+    const chapterBtn = document.getElementById('btn-mode-chapters');
+    if (blockBtn) blockBtn.classList.toggle('active', !isChapters);
+    if (chapterBtn) chapterBtn.classList.toggle('active', isChapters);
+    const tabs = document.getElementById('script-tabs');
+    const blockly = document.getElementById('blocklyDiv');
+    const chapterEditor = document.getElementById('chapter-editor');
+    if (tabs) tabs.classList.toggle('hidden', isChapters);
+    if (blockly) blockly.classList.toggle('hidden', isChapters);
+    if (chapterEditor) chapterEditor.classList.toggle('hidden', !isChapters);
+
+    if (isChapters) {
+      try { JimuBlocks.save(); } catch (e) { }
+      const cur = Stage.currentChapter() || (Project.data.chapters || [])[0];
+      if (cur) this.activeTab = cur.id;
+      this.renderChapterEditor();
+      this.updateBlockLock();
+      Panel.show();
+    } else {
+      const cur = Project.getChapter(this.activeTab);
+      if (cur) this.switchTab(cur.id);
+      else JimuBlocks.switchTo(this.activeTab || 'global');
+      this.updateBlockLock();
+      this.resizeBlocklySoon();
+      Panel.show();
+    }
+    if (persist) Settings.set('workspaceMode', mode);
+  },
+
+  currentFlowChapter() {
+    return Project.getChapter(this.activeTab)
+      || Stage.currentChapter()
+      || (Project.data.chapters || [])[0]
+      || null;
+  },
+
+  activateChapter(chapterId) {
+    if (!chapterId || !Project.getChapter(chapterId)) return;
+    if (this.workspaceMode === 'blocks') this.switchTab(chapterId);
+    else {
+      this.activeTab = chapterId;
+      Stage.goChapter(chapterId, { instant: true });
+      Editor.select(null);
+      Panel.show();
+      this.renderTabs();
+      this.renderScriptTabs();
+      this.renderElementBar();
+      this.renderChapterEditor();
+      this.updateBlockLock();
+    }
+  },
+
+  renderChapterEditor() {
+    const box = document.getElementById('chapter-editor');
+    if (!box) return;
+    const ch = this.currentFlowChapter();
+    if (!ch) {
+      box.innerHTML = '<div class="cf-empty">还没有章节，先新建一个。</div>';
+      return;
+    }
+    ChapterFlow.ensure(ch);
+    const bg = ch.preset && ch.preset.background || Project.data.stage.background;
+    const bgColor = typeof bg.value === 'string'
+      ? bg.value
+      : ((bg.value && bg.value.stops && bg.value.stops[0] && bg.value.stops[0][0]) || '#0F1115');
+    const chapterChips = Project.data.chapters.map((c, i) =>
+      `<button class="cf-chapter${c.id === ch.id ? ' active' : ''}" data-chapter-id="${esc(c.id)}" title="第 ${i + 1} 章">${esc(c.name || ('章节 ' + (i + 1)))}</button>`
+    ).join('');
+    const visible = Project.data.elements.map(el => {
+      const checked = ChapterFlow.visibleIn(ch, el);
+      return `<label><input type="checkbox" data-cf-visible="${esc(el.id)}" ${checked ? 'checked' : ''}>${esc(el.name || el.type)}</label>`;
+    }).join('');
+    const visibleEls = ChapterFlow.visibleElements(ch);
+    const animOptions = JimuConst.ANIM_TYPES.map(([name, value]) =>
+      `<option value="${esc(value)}">${esc(name)}</option>`).join('');
+    const easeOptions = JimuConst.EASINGS.map(([name, value]) =>
+      `<option value="${esc(value)}">${esc(name)}</option>`).join('');
+    const stepTitle = { animate: '播放入场动画', wait: '等待', next: '进入下一章', jump: '跳到指定章节' };
+    const steps = (ch.flow.steps || []).map((step, i) => {
+      let body = '';
+      if (step.kind === 'animate') {
+        const elOptions = visibleEls.map(el =>
+          `<option value="${esc(el.id)}"${el.id === step.elementId ? ' selected' : ''}>${esc(el.name || el.type)}</option>`
+        ).join('');
+        body = `<div class="cf-step-grid">
+          <label>元素<select data-step-i="${i}" data-step-field="elementId">${elOptions}</select></label>
+          <label>动画<select data-step-i="${i}" data-step-field="anim">${animOptions.replace('value="' + esc(step.anim) + '"', 'value="' + esc(step.anim) + '" selected')}</select></label>
+          <label>时长（秒）<input type="number" min="0.1" max="20" step="0.1" value="${step.duration}" data-step-i="${i}" data-step-field="duration"></label>
+          <label>延迟（秒）<input type="number" min="0" max="20" step="0.1" value="${step.delay}" data-step-i="${i}" data-step-field="delay"></label>
+          <label style="grid-column:1/-1">缓动<select data-step-i="${i}" data-step-field="easing">${easeOptions.replace('value="' + esc(step.easing) + '"', 'value="' + esc(step.easing) + '" selected')}</select></label>
+        </div>`;
+      } else if (step.kind === 'wait') {
+        body = `<div class="cf-step-grid"><label>等待（秒）<input type="number" min="0.1" max="120" step="0.1" value="${step.seconds}" data-step-i="${i}" data-step-field="seconds"></label></div>`;
+      } else if (step.kind === 'jump') {
+        const chapterOpts = Project.data.chapters.filter(c => c.id !== ch.id).map(c =>
+          `<option value="${esc(c.id)}"${c.id === step.chapterId ? ' selected' : ''}>${esc(c.name)}</option>`
+        ).join('');
+        body = `<div class="cf-step-grid"><label>目标章节<select data-step-i="${i}" data-step-field="chapterId">${chapterOpts}</select></label></div>`;
+      }
+      return `<div class="cf-step" data-step-index="${i}">
+        <div class="cf-step-head">
+          <span class="cf-step-no">${i + 1}</span>
+          <span class="cf-step-title">${stepTitle[step.kind] || step.kind}</span>
+          <button class="cf-icon-btn" data-cf-action="step-up" data-i="${i}" title="上移">↑</button>
+          <button class="cf-icon-btn" data-cf-action="step-down" data-i="${i}" title="下移">↓</button>
+          <button class="cf-icon-btn danger" data-cf-action="step-remove" data-i="${i}" title="删除">×</button>
+        </div>
+        ${body}
+      </div>`;
+    }).join('');
+    const modeHint = ch.flowMode === 'manual'
+      ? `<div class="cf-empty" style="color:var(--danger)">本章节当前是手工积木。编辑流程前会先确认，并把流程重新生成为自动积木。</div><button class="p-btn" data-cf-action="switch-auto">恢复自动生成</button>`
+      : `<div class="cf-empty">背景色、每个元素的显隐和下方流程都会生成积木；渐变 / 图片背景没有对应积木，继续由章节预设负责。</div>`;
+    box.innerHTML = `
+      <div class="cf-top">
+        <h3>章节流程 <small style="color:var(--dim);font-weight:normal">${ch.flowMode === 'auto' ? '自动生成' : '手工积木'}</small></h3>
+        <button class="p-btn primary" data-cf-action="add-chapter">＋章节</button>
+        <button class="p-btn danger" data-cf-action="delete-chapter">删除</button>
+      </div>
+      <div class="cf-chapters">${chapterChips}</div>
+      <div class="cf-card">
+        <h4>章节设置</h4>
+        <div class="cf-field"><label>名称</label><input data-cf="chapter-name" value="${esc(ch.name || '')}"></div>
+        <div class="cf-field"><label>背景色</label><input type="color" data-cf="background" value="${esc(bgColor)}"></div>
+        <div class="cf-field" style="align-items:flex-start"><label>显示元素</label><div class="cf-visible">${visible || '<span class="cf-empty">舞台上还没有元素</span>'}</div></div>
+      </div>
+      <div class="cf-card">
+        <h4>章节设置 → 自动积木（背景 / 显隐 / 流程）</h4>
+        <div class="cf-steps">${steps || '<div class="cf-empty">还没有步骤。建议先加“等待”，再加“进入下一章”。</div>'}</div>
+        <div class="cf-add-row">
+          <button class="p-btn" data-cf-add="animate" ${visibleEls.length ? '' : 'disabled'}>＋动画</button>
+          <button class="p-btn" data-cf-add="wait">＋等待</button>
+          <button class="p-btn" data-cf-add="next">＋下一章</button>
+          <button class="p-btn" data-cf-add="jump" ${Project.data.chapters.length > 1 ? '' : 'disabled'}>＋跳转章节</button>
+        </div>
+        ${modeHint}
+      </div>`;
+  },
+
+  initChapterEditorUI() {
+    const box = document.getElementById('chapter-editor');
+    if (!box || box._bound) return;
+    box._bound = true;
+    box.addEventListener('change', e => this.onChapterEditorChange(e));
+    box.addEventListener('click', e => {
+      const chapterBtn = e.target.closest('[data-chapter-id]');
+      if (chapterBtn) { this.activateChapter(chapterBtn.dataset.chapterId); return; }
+      const add = e.target.closest('[data-cf-add]');
+      if (add) { this.addChapterFlowStep(add.dataset.cfAdd); return; }
+      const action = e.target.closest('[data-cf-action]');
+      if (action) this.onChapterEditorAction(action.dataset.cfAction, Number(action.dataset.i));
+    });
+  },
+
+  requireAutoFlow(ch) {
+    if (!ch) return false;
+    ChapterFlow.ensure(ch);
+    if (ch.flowMode !== 'manual') return true;
+    if (!confirm('本章节已有手工积木，修改流程会覆盖这些积木。继续吗？')) return false;
+    ch.flowMode = 'auto';
+    return true;
+  },
+
+  onChapterEditorChange(e) {
+    const ch = this.currentFlowChapter();
+    if (!ch) return;
+    const t = e.target;
+    if (t.dataset.cf === 'chapter-name') {
+      const name = String(t.value || '').trim();
+      if (!name) { t.value = ch.name; return; }
+      ch.name = name;
+      this.renderTabs();
+      Panel.show();
+      this.markDirty();
+      return;
+    }
+    if (t.dataset.cf === 'background') {
+      ch.preset = ch.preset || {};
+      ch.preset.background = { type: 'color', value: t.value };
+      Stage.goChapter(ch.id, { instant: true });
+      Panel.show();
+      this.markDirty();
+      return;
+    }
+    if (t.dataset.cfVisible) {
+      ch.preset = ch.preset || {};
+      ch.preset.visibility = ch.preset.visibility || {};
+      ch.preset.visibility[t.dataset.cfVisible] = !!t.checked;
+      Stage.goChapter(ch.id, { instant: true });
+      ChapterFlow.sync(ch);
+      this.renderChapterEditor();
+      this.markDirty();
+      return;
+    }
+    if (t.dataset.stepI !== undefined) {
+      if (!this.requireAutoFlow(ch)) { this.renderChapterEditor(); return; }
+      const i = Number(t.dataset.stepI);
+      const step = ch.flow.steps[i];
+      if (!step) return;
+      const field = t.dataset.stepField;
+      const numeric = field === 'duration' || field === 'delay' || field === 'seconds';
+      step[field] = numeric ? Number(t.value) : t.value;
+      ChapterFlow.sync(ch);
+      this.markDirty();
+    }
+  },
+
+  addChapterFlowStep(kind) {
+    const ch = this.currentFlowChapter();
+    if (!ch || !this.requireAutoFlow(ch)) return;
+    const step = ChapterFlow.addStep(ch, kind);
+    if (!step) { toast('当前没有可用的元素或目标章节'); return; }
+    ChapterFlow.sync(ch);
+    this.renderChapterEditor();
+    this.markDirty();
+  },
+
+  onChapterEditorAction(action, i) {
+    const ch = this.currentFlowChapter();
+    if (!ch) return;
+    if (action === 'add-chapter') {
+      JimuBlocks.save();
+      const next = Project.addChapter();
+      next.preset = next.preset || { background: JSON.parse(JSON.stringify(Project.data.stage.background)), visibility: {} };
+      Project.data.elements.forEach(el => { next.preset.visibility[el.id] = el.visible !== false; });
+      ChapterFlow.sync(next);
+      this.activeTab = next.id;
+      Stage.goChapter(next.id, { instant: true });
+      this.renderTabs();
+      this.renderChapterEditor();
+      this.markDirty();
+      return;
+    }
+    if (action === 'delete-chapter') {
+      if (Project.data.chapters.length <= 1) { toast('至少保留一个章节'); return; }
+      if (!confirm(`删除章节「${ch.name}」？（元素与舞台内容保留）`)) return;
+      const fallback = Project.data.chapters.find(c => c.id !== ch.id);
+      JimuBlocks.switchTo('global');
+      Project.removeChapter(ch.id);
+      ChapterFlow.onChapterDeleted(ch.id);
+      if (fallback) {
+        this.activeTab = fallback.id;
+        Stage.goChapter(fallback.id, { instant: true });
+      }
+      this.renderTabs();
+      this.renderScriptTabs();
+      this.renderChapterEditor();
+      Panel.show();
+      this.markDirty();
+      return;
+    }
+    if (action === 'switch-auto') {
+      if (!confirm('恢复自动生成会用章节流程覆盖当前章节的手工积木，继续吗？')) return;
+      ch.flowMode = 'auto';
+      ChapterFlow.sync(ch);
+      this.renderChapterEditor();
+      this.markDirty();
+      return;
+    }
+    if (ch.flowMode === 'manual' && !this.requireAutoFlow(ch)) return;
+    const steps = ch.flow.steps;
+    if (action === 'step-remove') {
+      if (i >= 0 && i < steps.length) steps.splice(i, 1);
+    } else if (action === 'step-up' && i > 0) {
+      [steps[i - 1], steps[i]] = [steps[i], steps[i - 1]];
+    } else if (action === 'step-down' && i >= 0 && i < steps.length - 1) {
+      [steps[i + 1], steps[i]] = [steps[i], steps[i + 1]];
+    } else {
+      return;
+    }
+    ChapterFlow.sync(ch);
+    this.renderChapterEditor();
+    this.markDirty();
+  },
+
+  convertCurrentChapterToManual() {
+    const ch = Project.getChapter(this.activeTab);
+    if (!ch) return;
+    ch.flowMode = 'manual';
+    try { JimuBlocks.save(); } catch (e) { }
+    this.updateBlockLock();
+    this.markDirty();
+    toast('已转为手工积木，可以自由编辑');
+  },
+
+  updateBlockLock() {
+    const lock = document.getElementById('blockly-lock');
+    if (!lock) return;
+    const ch = Project.getChapter(this.activeTab);
+    const show = this.workspaceMode === 'blocks' && ch && ch.flowMode === 'auto';
+    lock.classList.toggle('hidden', !show);
+  },
+
   applyTheme(mode, persist) {
     this.themeMode = mode;
     document.body.classList.toggle('light', mode === 'light');
@@ -679,6 +1001,9 @@ const App = {
     if (t) t.classList.add('on');
     if (this.host) this.hostReady.then(() => this.host.setDirty(true)).catch(() => { });
     if (!noCapture) History.capture();
+  },
+  refreshAssetHub() {
+    if (typeof AssetHub !== 'undefined') AssetHub.render();
   },
   clearDirty() {
     this.dirty = false;
@@ -916,6 +1241,9 @@ const App = {
     this.renderTabs();
     this.renderScriptTabs();
     this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
   },
 
   copyChapter(id) {
@@ -927,10 +1255,11 @@ const App = {
     copy.blocks = null;
     const idx = Project.data.chapters.indexOf(ch);
     Project.data.chapters.splice(idx + 1, 0, copy);
+    ChapterFlow.cloneChapterFlow(ch, copy);
     this.renderTabs();
     this.switchTab(copy.id);
     this.markDirty();
-    toast('已复制章节（元素不重复；脚本未复制）');
+    toast('已复制章节（元素不重复；流程按当前模式复制）');
   },
 
   deleteChapter() {
@@ -938,12 +1267,17 @@ const App = {
     if (Project.data.chapters.length <= 1) { toast('至少保留一个章节'); return; }
     const ch = Project.getChapter(this.activeTab);
     if (!ch || !confirm(`删除章节「${ch.name}」？（元素与舞台内容保留）`)) return;
+    const fallback = Project.data.chapters.find(c => c.id !== ch.id);
     JimuBlocks.switchTo('global');
     Project.removeChapter(ch.id);
-    this.activeTab = 'global';
+    ChapterFlow.onChapterDeleted(ch.id);
+    this.activeTab = this.workspaceMode === 'chapters' && fallback ? fallback.id : 'global';
     this.renderTabs();
     this.renderScriptTabs();
-    JimuBlocks.switchTo('global');
+    JimuBlocks.switchTo(this.activeTab);
+    if (this.workspaceMode === 'chapters' && fallback) Stage.goChapter(fallback.id, { instant: true });
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
     Panel.show();
     this.markDirty();
   },
@@ -959,6 +1293,7 @@ const App = {
     const el = Project.createElement(kind, { props: { resourceId: res.id } });
     Stage.refreshAll();
     Editor.select(el.id);
+    this.refreshAssetHub();
     this.markDirty();
   },
 
@@ -973,6 +1308,7 @@ const App = {
     sel.element.props.resourceId = res.id;
     Stage.refreshAll();
     Panel.show();
+    this.refreshAssetHub();
     this.markDirty();
   },
 
@@ -1218,6 +1554,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     sel.element.props.frames = ids;
     Stage.refreshAll();
     Panel.show();
+    this.refreshAssetHub();
     this.markDirty();
   },
 
@@ -1832,12 +2169,14 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       check('wheel-in', Stage.scale > fit * 1.05 && rr1.width > rr0.width + 4);
       // ② 锚点：缩放前后指针下的舞台坐标不变
       const ax = cx + 120, ay = cy - 60;
+      const wrA = wrap.getBoundingClientRect();
       const wa = Stage.screenToWorld(ax, ay);
       wrap.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, clientX: ax, clientY: ay, bubbles: true, cancelable: true }));
       await sleep(160);
+      const wrB = wrap.getBoundingClientRect();
       const wb = Stage.screenToWorld(ax, ay);
       const dx = Math.abs(wa.x - wb.x), dy = Math.abs(wa.y - wb.y);
-      console.log(`ZOOM|anchor|dx=${dx.toFixed(2)}|dy=${dy.toFixed(2)}|scale=${Stage.scale.toFixed(4)}|fit=${Stage.fitScale.toFixed(4)}|pan=${Stage.panX.toFixed(1)},${Stage.panY.toFixed(1)}|wrap=${wrap.clientWidth}x${wrap.clientHeight}`);
+      console.log(`ZOOM|anchor|dx=${dx.toFixed(2)}|dy=${dy.toFixed(2)}|scale=${Stage.scale.toFixed(4)}|fit=${Stage.fitScale.toFixed(4)}|pan=${Stage.panX.toFixed(1)},${Stage.panY.toFixed(1)}|wrap=${wrap.clientWidth}x${wrap.clientHeight}|topA=${wrA.top.toFixed(1)}|topB=${wrB.top.toFixed(1)}|hA=${wrA.height.toFixed(1)}|hB=${wrB.height.toFixed(1)}`);
       check('anchor', dx < 2 && dy < 2);
       // ③ Ctrl+0 → 适应窗口
       document.dispatchEvent(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -2275,13 +2614,123 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     }
   },
 
+  // MODES：章节设置 → 自动积木 → 积木只读锁定 → 手工转换
+  async testModes() {
+    try {
+      Project.newProject('模式测试');
+      Project.createElement('text', { name: '标题', props: { text: '模式测试' } });
+      const ch = Project.data.chapters[0];
+      this.applyWorkspaceMode('chapters', false);
+      const chapterVisible = !document.getElementById('chapter-editor').classList.contains('hidden')
+        && document.getElementById('blocklyDiv').classList.contains('hidden');
+      this.addChapterFlowStep('animate');
+      this.addChapterFlowStep('wait');
+      this.addChapterFlowStep('next');
+      const types = (() => {
+        const out = [];
+        let b = ch.blocks && ch.blocks.blocks && ch.blocks.blocks.blocks && ch.blocks.blocks.blocks[0];
+        while (b) { out.push(b.type); b = b.next && b.next.block; }
+        return out;
+      })();
+      const generated = types[0] === 'jimu_on_scene'
+        && types.includes('jimu_scene_bg')
+        && types.includes('jimu_el_show')
+        && types.includes('jimu_anim')
+        && types.includes('jimu_wait')
+        && types.includes('jimu_scene_next');
+      const apiFlow = await ApiBridge.sceneFlow(ch.id, { flow: { version: 1, steps: ch.flow.steps }, flowMode: 'auto' });
+      const flowApiOk = apiFlow && apiFlow.body && apiFlow.body.ok === true;
+      this.applyWorkspaceMode('blocks', false);
+      const locked = ch.flowMode === 'auto'
+        && !document.getElementById('blockly-lock').classList.contains('hidden');
+      this.convertCurrentChapterToManual();
+      const unlocked = ch.flowMode === 'manual'
+        && document.getElementById('blockly-lock').classList.contains('hidden');
+      ch.flowMode = 'auto';
+      ChapterFlow.sync(ch);
+      this.applyWorkspaceMode('chapters', false);
+      console.log(`MODESTEST|chapter=${chapterVisible}|generated=${generated}|flowApi=${flowApiOk}|locked=${locked}|unlocked=${unlocked}|types=${types.join(',')}`);
+      console.log(chapterVisible && generated && flowApiOk && locked && unlocked ? 'MODESTEST|PASS' : 'MODESTEST|FAIL');
+    } catch (e) {
+      console.log('MODESTEST|error|' + (e && e.message || e));
+      console.log('MODESTEST|FAIL');
+    }
+  },
+
+  // SECURITY：安全默认值、不可信项目识别、文件桥白名单
+  async testSecurity() {
+    try {
+      const base = JSON.parse(JSON.stringify(Project.data));
+      base.globalBlocks = {
+        blocks: {
+          languageVersion: 0,
+          blocks: [{ type: 'jimu_js', fields: { CODE: 'return 1' } }]
+        }
+      };
+      const risks = Project.executableRisks(base);
+      base.elements = base.elements || [];
+      base.elements.push({ id: 'badweb', type: 'webapp', props: { inline: '<h1>x</h1>' } });
+      const risks2 = Project.executableRisks(base);
+      let rejected = false;
+      try { await this.applyProjectData(base, null, { interactive: false }); }
+      catch (e) { rejected = /可执行内容/.test(e.message || ''); }
+      const badWrite = await this.host.saveProjectDirect('/tmp/test-security.desktop', '');
+      const badRead = await this.host.readFileBase64('/etc/passwd');
+      const qrcRead = await this.host.readFileBase64(':/index.html');
+      const settingsRaw = await this.host.getPref('settingsJson');
+      const keyNotPersisted = !/"aiKey"\s*:/.test(String(settingsRaw || ''));
+      const safeDefault = Settings.defaults.apiEnabled === false;
+      const ok = safeDefault && keyNotPersisted && risks.length > 0 && risks2.length >= 2 && rejected && !badWrite && !badRead && !!qrcRead;
+      console.log(`SECTEST|defaultOff=${safeDefault}|keyHidden=${keyNotPersisted}|code=${risks.length}|web=${risks2.length}|reject=${rejected}|write=${badWrite}|read=${badRead ? 'leaked' : 'blocked'}|qrc=${!!qrcRead}`);
+      console.log(ok ? 'SECTEST|PASS' : 'SECTEST|FAIL');
+    } catch (e) {
+      console.log('SECTEST|error|' + (e && e.message || e));
+      console.log('SECTEST|FAIL');
+    }
+  },
+
+  // ASSETS：素材区渲染、插入、引用检查与 API 删除保护
+  async testAssets() {
+    try {
+      Project.newProject('素材测试');
+      const img = Project.addResource(
+        '测试图.png', 'image/png',
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      );
+      const audio = Project.addResource('测试音.mp3', 'audio/mpeg', 'AA==');
+      AssetHub.filter = 'all';
+      AssetHub.open();
+      const rendered = document.querySelectorAll('#asset-grid .asset-card').length;
+      const el = AssetHub.insert(img.id);
+      const inserted = !!el && el.type === 'image'
+        && el.props.resourceId === img.id
+        && Stage.currentChapter().preset.visibility[el.id] === true;
+      const blocked = await ApiBridge.resourceDelete(img.id);
+      const deleteBlocked = blocked && blocked.status === 409 && blocked.body && blocked.body.ok === false;
+      const removed = Project.removeResource(audio.id).ok;
+      App.refreshAssetHub();
+      const listed = (await ApiBridge.resourcesList()).body.data;
+      const apiOk = Array.isArray(listed) && listed.length === 1 && listed[0].id === img.id && listed[0].usage >= 1;
+      AssetHub.filter = 'image';
+      AssetHub.render();
+      const filtered = document.querySelectorAll('#asset-grid .asset-card').length === 1;
+      const ok = rendered === 2 && inserted && deleteBlocked && removed && apiOk && filtered;
+      console.log(`ASSETTEST|render=${rendered}|insert=${inserted}|block=${deleteBlocked}|remove=${removed}|api=${apiOk}|filter=${filtered}`);
+      console.log(ok ? 'ASSETTEST|PASS' : 'ASSETTEST|FAIL');
+    } catch (e) {
+      console.log('ASSETTEST|error|' + (e && e.message || e));
+      console.log('ASSETTEST|FAIL');
+    }
+  },
+
   // EXE 测试：导出 Windows 单文件程序（结构验证在外部脚本）
   async testExe() {
     try {
       const html = await this.buildPlayerHtml();
       const b64 = btoa(unescape(encodeURIComponent(html)));
-      const p = await this.host.exportExeTo('/tmp/jc_export_test.exe', b64);
+      const p = await this.host.exportExeTo('/tmp/opencode/jc_export_test.exe', b64);
       console.log('EXE|path=' + p);
+      console.log(p ? 'EXE|PASS' : 'EXE|FAIL');
       this.openExportPanel();   // 截图用：展示导出面板
     } catch (e) {
       console.log('EXE|error|' + (e.message || e));
@@ -2325,9 +2774,15 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   // AI 测试：DSL 执行器（离线，不调网络）
   async testAi() {
     try {
+      Project.addResource(
+        '测试图.png',
+        'image/png',
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      );
       const cmds = [
         { cmd: 'text', name: '标题', text: '国庆快乐', x: 460, y: 300, w: 1000, size: 120 },
         { cmd: 'icon', name: '烟花', char: '★', x: 880, y: 620, size: 140 },
+        { cmd: 'asset', name: '配图', resource: '测试图.png', x: 1200, y: 300, w: 400, h: 260 },
         { cmd: 'chapter', name: '封面', show: ['标题', '烟花'], bg: '#1A0A0C' },
         { cmd: 'anim', target: '标题', type: 'fadeIn', duration: 0.8 },
         { cmd: 'wait', sec: 1 },
@@ -2344,8 +2799,10 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const vis1 = ch1.preset.visibility;
       const titleEl = Project.data.elements.find(e => e.name === '标题');
       const hiddenOk = titleEl && vis1[titleEl.id] === true;
-      console.log(`AI|els=${els} chapters=${chs} ch1blocks=${blocks1} vis=${hiddenOk}`);
-      const ok = els === 2 && chs === 2 && blocks1 === 1 && hiddenOk;
+      const assetEl = Project.data.elements.find(e => e.name === '配图');
+      const assetOk = !!assetEl && Project.data.resources.length === 1;
+      console.log(`AI|els=${els} chapters=${chs} ch1blocks=${blocks1} vis=${hiddenOk} asset=${assetOk}`);
+      const ok = els === 3 && chs === 2 && blocks1 === 1 && hiddenOk && assetOk;
       console.log(ok ? 'AI|PASS' : 'AI|FAIL');
     } catch (e) {
       console.log('AI|error|' + (e.message || e));
@@ -2583,10 +3040,6 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (this._aiBusy) return;
     this.aiAddMsg('user', text);
     if (inp) inp.value = '';
-    if (!Settings.get('aiKey')) {
-      this.aiAddMsg('sys', '请先到「设置 → AI 助手」填写 DeepSeek API Key（platform.deepseek.com 获取，约几分钱/次）');
-      return;
-    }
     if (!this.host || !this.host.aiChat) {
       this.aiAddMsg('sys', '需要桌面程序环境');
       return;
@@ -2595,8 +3048,16 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const wait = this.aiAddMsg('sys', '正在生成演示，请稍候…（约 10~30 秒）');
     const id = 'ai' + Date.now();
     this._aiPending = id;
+    const assets = (Project.data.resources || []).slice(0, 80).map(r =>
+      `- ${r.name} | id=${r.id} | ${Project.resourceKind(r)} | ${Math.round((r.size || 0) / 1024)} KB`
+    );
+    if ((Project.data.resources || []).length > 80) assets.push(`- （其余 ${Project.data.resources.length - 80} 个素材省略）`);
+    const assetContext = assets.length ? assets.join('\n') : '（当前素材区为空）';
     const messages = [
-      { role: 'system', content: AI_SYSTEM_PROMPT },
+      {
+        role: 'system',
+        content: AI_SYSTEM_PROMPT + `\n\n当前素材区：\n${assetContext}\n生成时优先复用当前素材，不要编造不存在的素材。`
+      },
       { role: 'user', content: text }
     ];
     try {
@@ -2628,9 +3089,14 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       return;
     }
     try {
-      this.applyAiCommands(cmds);
-      const chs = cmds.filter(c => c && c.cmd === 'chapter').length;
-      this.aiAddMsg('sys', `已生成 ${chs} 个章节的演示，直接播放看看吧（不满意可以再描述一次）`);
+      const stats = this.applyAiCommands(cmds);
+      let msg = `已生成 ${stats.chapters} 个章节、${stats.elements} 个元素`;
+      if (stats.assets) msg += `，复用 ${stats.assets} 个素材`;
+      msg += '。直接播放看看吧（不满意可以再描述一次）';
+      this.aiAddMsg('sys', msg);
+      if (stats.warnings.length) {
+        this.aiAddMsg('sys', '有 ' + stats.warnings.length + ' 条素材引用被跳过：\n' + stats.warnings.slice(0, 6).join('\n'));
+      }
       setTimeout(() => document.getElementById('ai-overlay').classList.add('hidden'), 900);
     } catch (e) {
       this.aiAddMsg('sys', '应用失败：' + (e.message || e));
@@ -2640,22 +3106,15 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   // 把 AI 输出的 DSL 命令数组落成项目
   applyAiCommands(cmds) {
     JimuBlocks.save();
+    const availableResources = (Project.data.resources || []).slice();
     Project.newProject('AI 生成演示');
+    Project.data.resources = availableResources;
     Project.data.chapters.length = 0;   // 清掉默认章节，由 AI 命令按需重建
-    const S = blocks => ({ blocks: { languageVersion: 0, blocks } });
-    const blk = (type, fields, next, inputs) => {
-      const o = { type };
-      if (fields) o.fields = fields;
-      if (inputs) o.inputs = inputs;
-      if (next) o.next = { block: next };
-      return o;
-    };
-    const link = list => {
-      for (let i = list.length - 1; i > 0; i--) list[i - 1].next = { block: list[i] };
-      return list[0];
-    };
+    this.trustedProject = true;
     const elMap = {};
     const chapters = [];
+    const warnings = [];
+    let assetCount = 0;
     let cur = null;
     for (const c of (cmds || [])) {
       if (!c || !c.cmd) continue;
@@ -2668,21 +3127,45 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       } else if (c.cmd === 'icon') {
         elMap[c.name] = Project.createElement('icon', { name: c.name || '图标', x: c.x, y: c.y, w: c.w, h: c.h,
           props: { char: c.char || '★', size: c.size || 120, color: c.color || '#F5A623' } });
+      } else if (c.cmd === 'asset') {
+        const r = Project.findResource(c.resource);
+        const kind = r && Project.resourceKind(r);
+        if (!r || !['image', 'audio', 'video', 'model3d', 'webapp'].includes(kind)) {
+          warnings.push('找不到可用素材：' + String(c.resource || c.name || ''));
+          continue;
+        }
+        const dims = {
+          image: [480, 320], video: [720, 405], audio: [140, 140],
+          model3d: [640, 560], webapp: [480, 320]
+        }[kind];
+        const w = c.w || dims[0], h = c.h || dims[1];
+        elMap[c.name || r.name] = Project.createElement(kind, {
+          name: c.name || r.name,
+          x: c.x !== undefined ? c.x : 960 - w / 2,
+          y: c.y !== undefined ? c.y : 540 - h / 2,
+          w, h,
+          props: { resourceId: r.id }
+        });
+        assetCount++;
       } else if (c.cmd === 'chapter') {
         const ch = Project.addChapter(c.name || ('章节 ' + (chapters.length + 1)));
         if (c.bg) ch.preset.background = { type: 'color', value: c.bg };
-        cur = { ch, blocks: [], show: c.show || null };
+        cur = { ch, flowSteps: [], show: c.show || null };
         chapters.push(cur);
       } else if (cur && c.cmd === 'anim') {
         const tgt = elMap[c.target];
-        if (tgt) cur.blocks.push(blk('jimu_anim', {
-          ELEMENT: tgt.id, ANIM: c.type || 'fadeIn',
-          DUR: c.duration || 0.6, DELAY: c.delay || 0, EASE: c.ease || 'easeOutCubic'
-        }));
+        if (tgt) cur.flowSteps.push({
+          kind: 'animate',
+          elementId: tgt.id,
+          anim: c.type || 'fadeIn',
+          duration: c.duration || 0.6,
+          delay: c.delay || 0,
+          easing: c.ease || 'easeOutCubic'
+        });
       } else if (cur && c.cmd === 'wait') {
-        cur.blocks.push(blk('jimu_wait', null, null, { SEC: { shadow: { type: 'math_number', fields: { NUM: c.sec || 1 } } } }));
+        cur.flowSteps.push({ kind: 'wait', seconds: c.sec || 1 });
       } else if (cur && c.cmd === 'next') {
-        cur.blocks.push(blk('jimu_scene_next'));
+        cur.flowSteps.push({ kind: 'next' });
       }
     }
     if (!chapters.length) throw new Error('没有生成任何章节');
@@ -2691,22 +3174,31 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       ch.preset.visibility = {};
       Project.data.elements.forEach(el => { ch.preset.visibility[el.id] = show ? show.indexOf(el.name) >= 0 : true; });
     });
-    // 章节脚本
-    chapters.forEach(({ ch, blocks }) => {
-      if (!blocks.length) return;
-      const hat = blk('jimu_on_scene', { SCENE: ch.id });
-      ch.blocks = S([link([hat].concat(blocks))]);
+    // 章节流程 → 自动积木
+    chapters.forEach(({ ch, flowSteps }) => {
+      ch.flowMode = 'auto';
+      ch.flow = { version: 1, steps: flowSteps };
+      ChapterFlow.sync(ch);
     });
-    Project.data.globalBlocks = S([]);
+    Project.data.globalBlocks = { blocks: { languageVersion: 0, blocks: [] } };
     // 应用
     Stage.renderAll();
     Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    this.activeTab = 'global';
-    JimuBlocks.switchTo('global');
+    this.activeTab = this.workspaceMode === 'chapters' ? Project.data.chapters[0].id : 'global';
+    JimuBlocks.switchTo(this.activeTab);
     this.renderTabs(); this.renderScriptTabs(); this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
     Editor.select(null);
     Panel.show();
     this.markDirty();
+    return {
+      chapters: chapters.length,
+      elements: Object.keys(elMap).length,
+      assets: assetCount,
+      warnings
+    };
   },
 
   // ---------- 积木搜索（Ctrl+F） ----------
@@ -2801,8 +3293,8 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
           + (it.hint ? `<span class="set-hint">${it.hint}</span>` : '') + '</div>';
         if (it.type === 'bool') {
           html += `<label class="set-switch"><input type="checkbox" data-key="${it.key}" ${Settings.get(it.key) ? 'checked' : ''}><span></span></label>`;
-        } else if (it.type === 'text') {
-          html += `<input type="text" data-key="${it.key}" value="${esc(Settings.get(it.key) || '')}" placeholder="${it.placeholder || ''}">`;
+        } else if (it.type === 'text' || it.type === 'password') {
+          html += `<input type="${it.type}" data-key="${it.key}" value="${esc(Settings.get(it.key) || '')}" placeholder="${it.placeholder || ''}">`;
         } else {
           html += `<select data-key="${it.key}">` + it.options.map(o =>
             `<option value="${o[0]}" ${String(Settings.get(it.key)) === String(o[0]) ? 'selected' : ''}>${o[1]}</option>`).join('') + '</select>';
@@ -2815,7 +3307,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     box.querySelectorAll('input[type=checkbox]').forEach(inp => {
       inp.onchange = () => Settings.set(inp.dataset.key, inp.checked);
     });
-    box.querySelectorAll('input[type=text]').forEach(inp => {
+    box.querySelectorAll('input[type=text],input[type=password]').forEach(inp => {
       inp.onchange = () => Settings.set(inp.dataset.key, inp.value.trim());
     });
     box.querySelectorAll('select').forEach(sel => {
@@ -2839,7 +3331,6 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (typeof Model3D !== 'undefined' && Model3D.applyShadows) { try { Model3D.applyShadows(); } catch (e) { } }
     if (this.host && this.host.setPref) {
       try { this.host.setPref('apiEnabled', Settings.get('apiEnabled') ? '1' : '0'); } catch (e) { }
-      try { this.host.setPref('aiKey', String(Settings.get('aiKey') || '')); } catch (e) { }
     }
     try { if (this.host && this.host.setZoom) this.host.setZoom((Settings.get('uiScale') || 100) / 100); } catch (e) { }
   },
@@ -3007,6 +3498,41 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     if (prev) await Executor.sceneGo(prev.id);
   },
 
+  // 统一的项目装载入口：先检查不可信内容，再赋值并刷新 UI。
+  // API 模式不能弹确认框，遇到可执行内容直接拒绝，要求用户在界面里手动信任。
+  async applyProjectData(data, filePath, opts = {}) {
+    const risks = Project.executableRisks(data);
+    if (risks.length) {
+      if (opts.interactive === false) {
+        throw new Error('项目包含可执行内容（' + risks.join('、') + '），请先在界面中手动打开并确认信任');
+      }
+      const ok = confirm('这个项目包含：' + risks.join('、') + '。\n\n代码/网页可能与你的文件、设置交互，只有在你信任来源时才打开。继续吗？');
+      if (!ok) throw new Error('已取消打开未信任项目');
+    }
+    Project.applyLoadedData(data);
+    Project.filePath = filePath || null;
+    this.trustedProject = true;
+    JimuBlocks.current = null;
+    JimuBlocks.ws.clear();
+    Editor.select(null);
+    Stage.renderAll();
+    const first = Project.data.chapters[0];
+    if (first) Stage.goChapter(first.id, { instant: true });
+    this.activeTab = this.workspaceMode === 'chapters' && first ? first.id : 'global';
+    JimuBlocks.switchTo(this.activeTab);
+    this.renderTabs();
+    this.renderScriptTabs();
+    this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
+    Panel.show();
+    this.clearDirty();
+    History.reset();
+    try { await this.host.setTitle('积木剧场 · ' + (Project.data.name || '未命名演示')); } catch (e) { }
+    return true;
+  },
+
   // ---------- 存取 ----------
   async save() {
     JimuBlocks.save();
@@ -3100,20 +3626,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       const r = await this.host.readProjectFile(path);
       if (!r || !r.base64) { toast('没有自动保存文件'); return; }
       if (this.dirty && !confirm('当前项目有未保存修改，仍要用自动保存内容替换吗？')) return;
-      await Project.unpack(r.base64);
-      Project.filePath = null;
-      JimuBlocks.current = null;
-      JimuBlocks.ws.clear();
-      Stage.renderAll();
-    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-      this.activeTab = 'global';
-      JimuBlocks.switchTo('global');
-      this.renderTabs();
-      this.renderScriptTabs();
-      this.renderElementBar();
-      Panel.show();
+      const data = await Project.parse(r.base64);
+      await this.applyProjectData(data, null, { interactive: true });
       this.markDirty(true);
-      History.reset();
       toast('已恢复自动保存内容');
     } catch (e) {
       toast('恢复失败：' + e.message);
@@ -3176,22 +3691,9 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   async loadProjectFromPath(path) {
     const r = await this.host.readProjectFile(path);
     if (!r || !r.base64) throw new Error('读不到文件：' + path);
-    await Project.unpack(r.base64);
-    Project.filePath = path;
-    JimuBlocks.current = null;
-    JimuBlocks.ws.clear();
-    Stage.renderAll();
-    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    this.activeTab = 'global';
-    JimuBlocks.switchTo('global');
-    this.renderTabs();
-    this.renderScriptTabs();
-    this.renderElementBar();
-    Panel.show();
-    this.clearDirty();
-    History.reset();
+    const data = await Project.parse(r.base64);
+    await this.applyProjectData(data, path, { interactive: true });
     try { await this.host.addRecentFile(path); } catch (e) { }
-    try { await this.host.setTitle('积木剧场 · ' + (Project.data.name || '未命名演示')); } catch (e) { }
     return true;
   },
 
@@ -3218,24 +3720,12 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     const r = await this.host.openProject();
     if (!r) return;
     try {
-      await Project.unpack(r.base64);
+      const data = await Project.parse(r.base64);
+      await this.applyProjectData(data, r.path, { interactive: true });
     } catch (e) {
       alert('打开失败：' + e.message);
       return;
     }
-    Project.filePath = r.path;
-    JimuBlocks.ws.clear();
-    Stage.renderAll();
-    Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    this.activeTab = 'global';
-    JimuBlocks.current = null;
-    JimuBlocks.switchTo('global');
-    this.renderTabs();
-    this.renderScriptTabs();
-    this.renderElementBar();
-    Panel.show();
-    this.clearDirty();
-    History.reset();
     try { await this.host.addRecentFile(r.path); } catch (e) { }
     toast('已打开：' + r.path.split('/').pop());
   },
@@ -3245,13 +3735,17 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.ws.clear();
     JimuBlocks.current = null;
     Project.newProject();
+    this.trustedProject = true;
     Stage.renderAll();
     Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    this.activeTab = 'global';
-    JimuBlocks.switchTo('global');
+    this.activeTab = this.workspaceMode === 'chapters' ? Project.data.chapters[0].id : 'global';
+    JimuBlocks.switchTo(this.activeTab);
     this.renderTabs();
     this.renderScriptTabs();
     this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
     Panel.show();
     this.clearDirty();
     History.reset();
@@ -3283,13 +3777,17 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.current = null;
     Project.newProject(t.name);
     Templates.build(key);
-    this.activeTab = 'global';
+    this.trustedProject = true;
+    this.activeTab = this.workspaceMode === 'chapters' ? Project.data.chapters[0].id : 'global';
     Stage.renderAll();
     Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    JimuBlocks.switchTo('global');
+    JimuBlocks.switchTo(this.activeTab);
     this.renderTabs();
     this.renderScriptTabs();
     this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
     Panel.show();
     this.clearDirty();
     History.reset();
@@ -3302,13 +3800,17 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
     JimuBlocks.current = null;
     Project.newProject('积木剧场演示');
     this.buildDemo();
-    this.activeTab = 'global';
+    this.trustedProject = true;
+    this.activeTab = this.workspaceMode === 'chapters' ? Project.data.chapters[0].id : 'global';
     Stage.renderAll();
     Stage.goChapter(Project.data.chapters[0].id, { instant: true });
-    JimuBlocks.switchTo('global');
+    JimuBlocks.switchTo(this.activeTab);
     this.renderTabs();
     this.renderScriptTabs();
     this.renderElementBar();
+    this.refreshAssetHub();
+    if (this.workspaceMode === 'chapters') this.renderChapterEditor();
+    this.updateBlockLock();
     Panel.show();
     this.clearDirty();
     History.reset();
@@ -3388,6 +3890,7 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
       ])] }
     };
     d.globalBlocks = { blocks: { languageVersion: 0, blocks: [] } };
+    d.chapters.forEach(ch => { ch.flowMode = 'manual'; });
   },
 
   // ---------- 键盘 ----------

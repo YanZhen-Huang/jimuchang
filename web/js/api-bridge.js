@@ -25,6 +25,7 @@ const ApiBridge = {
   ok(data) { return { __done: true, status: 200, body: { ok: true, data: data === undefined ? null : data } }; },
 
   refreshUI(opts = {}) {
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.syncAll();
     Stage.renderAll();
     const sc = Stage.currentChapter() || Project.data.chapters[0];
     if (sc) Stage.goChapter(sc.id, { instant: true });
@@ -36,6 +37,9 @@ const ApiBridge = {
       JimuBlocks.switchTo(App.activeTab || 'global');
     }
     App.markDirty(true);
+    if (App.workspaceMode === 'chapters') App.renderChapterEditor();
+    App.updateBlockLock();
+    if (typeof AssetHub !== 'undefined') AssetHub.render();
   },
 
   async route(m, p, b) {
@@ -57,6 +61,10 @@ const ApiBridge = {
         if (m === 'GET') return this.scenesList();
         if (m === 'POST') return this.sceneAdd(b);
         break;
+      case 'chapters':
+        if (m === 'GET') return this.scenesList();
+        if (m === 'POST') return this.sceneAdd(b);
+        break;
       case 'play':
         if (m === 'POST') return this.play(b);
         break;
@@ -64,6 +72,7 @@ const ApiBridge = {
         if (m === 'POST') return this.stop();
         break;
       case 'resources':
+        if (m === 'GET') return this.resourcesList();
         if (m === 'POST') return this.resourceAdd(b);
         break;
       case 'export':
@@ -75,9 +84,20 @@ const ApiBridge = {
       if (m === 'PATCH') return this.scenePatch(p[1], b);
       if (m === 'DELETE') return this.sceneDelete(p[1]);
     }
+    if (p[0] === 'chapters' && p.length === 2) {
+      if (m === 'GET') return this.sceneGet(p[1]);
+      if (m === 'PATCH') return this.scenePatch(p[1], b);
+      if (m === 'DELETE') return this.sceneDelete(p[1]);
+    }
     if (p[0] === 'scenes' && p.length === 3) {
       if (p[2] === 'elements' && m === 'GET') return this.sceneElements(p[1]);
       if (p[2] === 'blocks' && m === 'PUT') return this.setBlocks(p[1], b);
+      if (p[2] === 'flow' && m === 'PUT') return this.sceneFlow(p[1], b);
+    }
+    if (p[0] === 'chapters' && p.length === 3) {
+      if (p[2] === 'elements' && m === 'GET') return this.sceneElements(p[1]);
+      if (p[2] === 'blocks' && m === 'PUT') return this.setBlocks(p[1], b);
+      if (p[2] === 'flow' && m === 'PUT') return this.sceneFlow(p[1], b);
     }
     if (p[0] === 'elements') {
       if (p.length === 1 && m === 'POST') return this.elementAdd(b);
@@ -86,6 +106,14 @@ const ApiBridge = {
       if (p.length === 3 && p[2] === 'animate' && m === 'POST') return this.elementAnimate(p[1], b);
       if (p.length === 3 && p[2] === 'keyframes' && m === 'PUT') return this.elementKeyframes(p[1], b);
     }
+    if (p[0] === 'resources' && p.length === 2) {
+      if (m === 'GET') return this.resourceGet(p[1]);
+      if (m === 'PATCH') return this.resourcePatch(p[1], b);
+      if (m === 'DELETE') return this.resourceDelete(p[1]);
+    }
+    if (p[0] === 'resources' && p.length === 3 && p[2] === 'element' && m === 'POST') {
+      return this.resourceElement(p[1], b);
+    }
     return this.err(404, '未知端点: ' + key);
   },
 
@@ -93,13 +121,18 @@ const ApiBridge = {
   status() {
     return this.ok({
       app: 'jimuchang',
-      version: '0.1.0',
+      version: '0.4.1',
       playing: App.playing,
       project: {
         name: Project.data.name,
         path: Project.filePath,
         chapters: Project.data.chapters.length,
         resources: Project.data.resources.length,
+        assets: Project.data.resources.reduce((acc, r) => {
+          const k = Project.resourceKind(r);
+          acc[k] = (acc[k] || 0) + 1;
+          return acc;
+        }, {}),
         dirty: App.dirty
       },
       currentChapter: (() => { const s = Stage.currentChapter(); return s ? { id: s.id, name: s.name } : null; })()
@@ -115,7 +148,7 @@ const ApiBridge = {
         'POST /api/project/new {name?}',
         'POST /api/project/save {path?}',
         'POST /api/project/open {path}',
-        'GET  /api/scenes | POST /api/scenes {name?}',
+        'GET  /api/chapters | POST /api/chapters {name?}（/scenes 兼容别名）',
         'GET  /api/scenes/:id | PATCH /api/scenes/:id {…} | DELETE /api/scenes/:id',
         'GET  /api/scenes/:id/elements',
         'POST /api/elements {sceneId, type, name?, x?, y?, w?, h?, props?}',
@@ -123,7 +156,10 @@ const ApiBridge = {
         'POST /api/elements/:id/animate {type, duration?, delay?, easing?}',
         'PUT  /api/elements/:id/keyframes {duration, loop, tracks}',
         'PUT  /api/scenes/:id/blocks {blocks} | PUT /api/global-blocks {blocks}',
-        'POST /api/resources {name, mime?, base64}',
+        'PUT  /api/chapters/:id/flow {flow}',
+        'GET  /api/resources | POST /api/resources {name, mime?, base64}',
+        'GET/PATCH/DELETE /api/resources/:id',
+        'POST /api/resources/:id/element {x?, y?}',
         'POST /api/play {mode?} | POST /api/play/stop',
         'GET  /api/screenshot  → {png: base64}'
       ]
@@ -139,7 +175,7 @@ const ApiBridge = {
     return this.ok(d);
   },
 
-  projectPut(b) {
+  async projectPut(b) {
     const data = b.project || b.data || b;
     if (!data || data.format !== 'jimuchang-project') return this.err(400, '缺少合法的 project（format=jimuchang-project）');
     // 保留同名资源数据
@@ -149,11 +185,11 @@ const ApiBridge = {
       if (old && old.data) r.data = old.data;
       if (!r.data) r.data = '';
     });
-    Project.data = data;
-    JimuBlocks.current = null;
-    JimuBlocks.ws.clear();
-    this.refreshUI({ blocks: true });
-    History.reset();
+    try {
+      await App.applyProjectData(data, Project.filePath, { interactive: false });
+    } catch (e) {
+      return this.err(403, e.message || '项目被安全策略拒绝');
+    }
     return this.ok({ chapters: data.chapters.length, resources: data.resources.length });
   },
 
@@ -161,6 +197,7 @@ const ApiBridge = {
     JimuBlocks.current = null;
     JimuBlocks.ws.clear();
     Project.newProject((b && b.name) || '未命名演示');
+    App.trustedProject = true;
     this.refreshUI({ blocks: true });
     History.reset();
     return this.ok({ name: Project.data.name });
@@ -183,12 +220,12 @@ const ApiBridge = {
     if (!b || !b.path) return this.err(400, '缺少 path');
     const r = await App.host.readProjectFile(b.path);
     if (!r || !r.base64) return this.err(404, '读不到文件：' + b.path);
-    await Project.unpack(r.base64);
-    Project.filePath = b.path;
-    JimuBlocks.current = null;
-    JimuBlocks.ws.clear();
-    this.refreshUI({ blocks: true });
-    History.reset();
+    try {
+      const data = await Project.parse(r.base64);
+      await App.applyProjectData(data, b.path, { interactive: false });
+    } catch (e) {
+      return this.err(403, e.message || '项目被安全策略拒绝');
+    }
     return this.ok({ path: b.path, chapters: Project.data.chapters.length, resources: Project.data.resources.length });
   },
 
@@ -222,10 +259,23 @@ const ApiBridge = {
     return this.ok({ id, name: sc.name });
   },
 
+  sceneFlow(id, b) {
+    const sc = Project.getChapter(id);
+    if (!sc) return this.err(404, '章节不存在: ' + id);
+    const flow = b && (b.flow || b);
+    if (!flow || !Array.isArray(flow.steps)) return this.err(400, '需要 {flow:{steps:[...]}}');
+    sc.flow = { version: 1, steps: flow.steps };
+    sc.flowMode = (b && b.flowMode) === 'manual' ? 'manual' : 'auto';
+    if (sc.flowMode === 'auto') ChapterFlow.sync(sc);
+    this.refreshUI({ blocks: App.activeTab === sc.id });
+    return this.ok({ id, flow: sc.flow, flowMode: sc.flowMode });
+  },
+
   sceneDelete(id) {
     if (Project.data.chapters.length <= 1) return this.err(400, '至少保留一个章节');
     const ok = Project.removeChapter(id);
     if (!ok) return this.err(404, '章节不存在: ' + id);
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.onChapterDeleted(id);
     if (Stage.currentChapterId === id) Stage.currentChapterId = Project.data.chapters[0].id;
     this.refreshUI({ blocks: true });
     return this.ok({ deleted: id });
@@ -269,7 +319,8 @@ const ApiBridge = {
   elementDelete(id) {
     const f = Project.findElementById(id);
     if (!f) return this.err(404, '元素不存在: ' + id);
-    Project.removeElement(f.scene, id);
+    Project.removeElement(id);
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.removeElement(id);
     if (Editor.selectedId === id) Editor.select(null);
     this.refreshUI();
     return this.ok({ deleted: id });
@@ -306,6 +357,7 @@ const ApiBridge = {
       const sc = Project.getScene(sceneId);
       if (!sc) return this.err(404, '章节不存在: ' + sceneId);
       sc.blocks = blocks;
+      sc.flowMode = 'manual';
     }
     JimuBlocks.current = null;
     JimuBlocks.ws.clear();
@@ -322,10 +374,72 @@ const ApiBridge = {
   },
 
   // ---------- 资源 ----------
+  resourcesList() {
+    return this.ok(Project.data.resources.map(r => ({
+      id: r.id,
+      name: r.name,
+      mime: r.mime,
+      size: r.size,
+      kind: Project.resourceKind(r),
+      usage: Project.resourceUsage(r.id).length
+    })));
+  },
+
+  resourceGet(id) {
+    const r = Project.getResource(id);
+    if (!r) return this.err(404, '素材不存在: ' + id);
+    return this.ok({
+      id: r.id, name: r.name, mime: r.mime, size: r.size,
+      kind: Project.resourceKind(r), usage: Project.resourceUsage(r.id)
+    });
+  },
+
   resourceAdd(b) {
     if (!b || !b.name || !b.base64) return this.err(400, '需要 {name, base64}');
+    const bytes = Math.round(String(b.base64).length * 0.75);
+    if (bytes > 256 * 1024 * 1024) return this.err(413, '单个素材不能超过 256 MB');
     const res = Project.addResource(b.name, b.mime || 'application/octet-stream', b.base64);
-    return this.ok({ id: res.id, name: res.name, size: res.size });
+    App.markDirty(true);
+    App.refreshAssetHub();
+    return this.ok({ id: res.id, name: res.name, size: res.size, kind: Project.resourceKind(res) });
+  },
+
+  resourcePatch(id, b) {
+    const r = Project.getResource(id);
+    if (!r) return this.err(404, '素材不存在: ' + id);
+    if (b.name !== undefined && !Project.renameResource(id, b.name)) return this.err(400, '素材名称无效');
+    App.markDirty(true);
+    App.refreshAssetHub();
+    return this.ok({ id, name: r.name });
+  },
+
+  resourceDelete(id) {
+    const r = Project.getResource(id);
+    if (!r) return this.err(404, '素材不存在: ' + id);
+    const usage = Project.resourceUsage(id);
+    if (usage.length) {
+      return {
+        __done: true,
+        status: 409,
+        body: { ok: false, error: '素材仍在使用中，不能删除', usage }
+      };
+    }
+    Project.removeResource(id);
+    App.markDirty(true);
+    App.refreshAssetHub();
+    return this.ok({ deleted: id });
+  },
+
+  resourceElement(id, b) {
+    const r = Project.getResource(id);
+    if (!r) return this.err(404, '素材不存在: ' + id);
+    const kind = Project.resourceKind(r);
+    if (kind === 'file') return this.err(400, '这个素材类型不支持直接插入舞台');
+    const el = AssetHub.insert(id, b && (b.x !== undefined || b.y !== undefined)
+      ? { x: Number(b.x), y: Number(b.y) }
+      : null);
+    if (!el) return this.err(500, '创建元素失败');
+    return this.ok({ id: el.id, name: el.name, type: el.type, resourceId: id });
   },
 
   // ---------- 播放 ----------

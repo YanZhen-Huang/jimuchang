@@ -23,4 +23,13 @@ npm install
 
 ## 使用前提
 
-积木剧场正在运行（API 自动开启于 127.0.0.1:17800，令牌在 ~/.config/jimuchang/api.json）。
+积木剧场正在运行，并在「设置 → 高级」手动开启本地 AI 接口（`127.0.0.1:17800`，令牌在 `~/.config/jimuchang/api.json`）。
+
+## 常用能力
+
+- 项目/章节/元素读写，章节流程 `jc_set_chapter_flow`；
+- 素材区查询、重命名、删除、单/批量上传；
+- 用素材直接创建舞台元素 `jc_add_element_from_resource`；
+- 播放、截图、导出 HTML。
+
+API 返回 `ok:false` 或 HTTP 非 2xx 时，MCP 会返回工具错误，不再把失败包装成成功。

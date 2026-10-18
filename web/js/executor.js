@@ -14,6 +14,7 @@ const Executor = {
   // ---------- 编译 ----------
   compileAll() {
     JimuBlocks.save();
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.syncAll();
     const compileState = (state, selfMode) => {
       if (!state) return [];
       const ws = new Blockly.Workspace();

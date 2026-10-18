@@ -22,13 +22,21 @@ const { StdioServerTransport } = req('@modelcontextprotocol/sdk/dist/cjs/server/
 const { z } = req('zod');
 
 const API_CFG = path.join(os.homedir(), '.config/jimuchang/api.json');
+const MIME_BY_EXT = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json',
+  '.html': 'text/html', '.htm': 'text/html'
+};
 
 async function api(method, p, body) {
   let cfg;
   try {
     cfg = JSON.parse(fs.readFileSync(API_CFG, 'utf8'));
   } catch (e) {
-    throw new Error('读不到 ' + API_CFG + '，请先启动积木剧场（API 自动开启）');
+    throw new Error('读不到 ' + API_CFG + '，请先启动积木剧场，并在「设置 → 高级」开启 AI 接口');
   }
   const res = await fetch(`http://127.0.0.1:${cfg.port}${p}`, {
     method,
@@ -38,7 +46,12 @@ async function api(method, p, body) {
     },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
-  return await res.json();
+  const text = await res.text();
+  let payload;
+  try { payload = JSON.parse(text); }
+  catch (e) { throw new Error(`API 返回非 JSON（HTTP ${res.status}）：${text.slice(0, 200)}`); }
+  if (!res.ok || payload.ok === false) throw new Error(payload.error || `API 请求失败（HTTP ${res.status}）`);
+  return payload.data === undefined ? payload : payload.data;
 }
 
 const ok = data => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 1) }] });
@@ -47,7 +60,7 @@ const fail = e => ({
   content: [{ type: 'text', text: '错误：' + (e && e.message ? e.message : String(e)) }]
 });
 
-const server = new McpServer({ name: 'jimuchang', version: '0.1.0' });
+const server = new McpServer({ name: 'jimuchang', version: '0.4.1' });
 const tool = (name, desc, schema, fn) => {
   server.tool(name, desc, schema, async (args) => {
     try { return ok(await fn(args || {})); } catch (e) { return fail(e); }
@@ -66,16 +79,28 @@ tool('jc_open_project', '打开磁盘上的 .bdp 项目文件', { path: z.string
 tool('jc_save_project', '保存项目到 .bdp（不传 path 则覆盖原路径）', { path: z.string().optional() }, a => api('POST', '/api/project/save', a));
 
 // ---------- 场景 ----------
-tool('jc_list_scenes', '列出全部场景', {}, () => api('GET', '/api/scenes'));
-tool('jc_add_scene', '新建场景', { name: z.string().optional() }, a => api('POST', '/api/scenes', a));
-tool('jc_update_scene', '修改场景（name/background/transition/fx 任意子集）', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/scenes/' + a.id, a.patch));
-tool('jc_delete_scene', '删除场景（至少保留一个）', { id: z.string() }, a => api('DELETE', '/api/scenes/' + a.id));
+tool('jc_list_chapters', '列出全部章节（含背景、元素数量）', {}, () => api('GET', '/api/chapters'));
+tool('jc_add_chapter', '新建章节', { name: z.string().optional() }, a => api('POST', '/api/chapters', a));
+tool('jc_update_chapter', '修改章节（name/background 等）', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/chapters/' + a.id, a.patch));
+tool('jc_delete_chapter', '删除章节（至少保留一个）', { id: z.string() }, a => api('DELETE', '/api/chapters/' + a.id));
+tool('jc_set_chapter_flow', '设置章节模式流程（steps: animate/wait/next/jump），自动生成背景、显隐和流程积木', {
+  id: z.string(), steps: z.array(z.any()), flowMode: z.enum(['auto', 'manual']).optional()
+}, a => api('PUT', '/api/chapters/' + a.id + '/flow', { flow: { version: 1, steps: a.steps }, flowMode: a.flowMode || 'auto' }));
+
+// 兼容旧工具名
+tool('jc_list_scenes', '兼容别名：列出全部章节', {}, () => api('GET', '/api/chapters'));
+tool('jc_add_scene', '兼容别名：新建章节', { name: z.string().optional() }, a => api('POST', '/api/chapters', a));
+tool('jc_update_scene', '兼容别名：修改章节', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/chapters/' + a.id, a.patch));
+tool('jc_delete_scene', '兼容别名：删除章节', { id: z.string() }, a => api('DELETE', '/api/chapters/' + a.id));
 
 // ---------- 元素 ----------
 tool('jc_list_elements', '列出某场景的元素', { sceneId: z.string() }, a => api('GET', '/api/scenes/' + a.sceneId + '/elements'));
 tool('jc_add_element', '新建元素。type 可选：text/image/shape/icon/video/audio/chart/sprite/model3d/webapp；可带 name/x/y/w/h/props', { element: z.any() }, a => api('POST', '/api/elements', a.element));
 tool('jc_update_element', '修改元素（x/y/w/h/rotation/opacity/visible/entrance/effects/keyframes/props 任意子集）', { id: z.string(), patch: z.any() }, a => api('PATCH', '/api/elements/' + a.id, a.patch));
 tool('jc_delete_element', '删除元素', { id: z.string() }, a => api('DELETE', '/api/elements/' + a.id));
+tool('jc_add_element_from_resource', '用素材区资源直接创建舞台元素（图片/音频/视频/3D/网页），x/y 为元素中心坐标', {
+  resourceId: z.string(), x: z.number().optional(), y: z.number().optional()
+}, a => api('POST', '/api/resources/' + a.resourceId + '/element', { x: a.x, y: a.y }));
 tool('jc_animate_element', '对元素播放动画（类型如 fadeIn/flyInLeft/zoomIn/bounceIn/typewriter/pulse/shake/glowPulse 等）', {
   id: z.string(), type: z.string(),
   duration: z.number().optional(), delay: z.number().optional(), easing: z.string().optional()
@@ -87,9 +112,36 @@ tool('jc_set_scene_blocks', '设置某场景的积木脚本（Blockly 序列化 
 tool('jc_set_global_blocks', '设置全局积木脚本（当演示开始/按键等）', { blocks: z.any() }, a => api('PUT', '/api/global-blocks', { blocks: a.blocks }));
 
 // ---------- 资源 ----------
-tool('jc_upload_resource', '把本地文件上传进项目（图片/音频/视频/模型等），返回资源 id', { path: z.string(), mime: z.string().optional() }, a => {
+tool('jc_list_resources', '列出项目素材区资源（返回 id、名称、类型、大小、引用次数）', {}, () => api('GET', '/api/resources'));
+tool('jc_get_resource', '查看单个素材的元数据与使用位置', { id: z.string() }, a => api('GET', '/api/resources/' + a.id));
+tool('jc_rename_resource', '重命名素材', { id: z.string(), name: z.string() }, a => api('PATCH', '/api/resources/' + a.id, { name: a.name }));
+tool('jc_delete_resource', '删除未被元素/背景/音乐引用的素材', { id: z.string() }, a => api('DELETE', '/api/resources/' + a.id));
+tool('jc_upload_resource', '把本地图片/音频/视频/3D/HTML 上传进项目素材区（最大 256 MB），返回资源 id', { path: z.string(), mime: z.string().optional() }, a => {
+  const ext = path.extname(a.path).toLowerCase();
+  if (!MIME_BY_EXT[ext]) throw new Error('不支持的素材扩展名：' + ext);
+  const stat = fs.statSync(a.path);
+  if (stat.size > 256 * 1024 * 1024) throw new Error('素材超过 256 MB');
   const data = fs.readFileSync(a.path);
-  return api('POST', '/api/resources', { name: path.basename(a.path), mime: a.mime, base64: data.toString('base64') });
+  return api('POST', '/api/resources', { name: path.basename(a.path), mime: a.mime || MIME_BY_EXT[ext], base64: data.toString('base64') });
+});
+tool('jc_upload_resources', '批量上传多个本地素材文件，返回逐个结果', { paths: z.array(z.string()).min(1) }, async a => {
+  const out = [];
+  for (const file of a.paths) {
+    const ext = path.extname(file).toLowerCase();
+    if (!MIME_BY_EXT[ext]) { out.push({ path: file, ok: false, error: '不支持的扩展名' }); continue; }
+    const stat = fs.statSync(file);
+    if (stat.size > 256 * 1024 * 1024) { out.push({ path: file, ok: false, error: '超过 256 MB' }); continue; }
+    const data = fs.readFileSync(file);
+    try {
+      const saved = await api('POST', '/api/resources', {
+        name: path.basename(file), mime: MIME_BY_EXT[ext], base64: data.toString('base64')
+      });
+      out.push({ path: file, ok: true, resource: saved });
+    } catch (e) {
+      out.push({ path: file, ok: false, error: e.message });
+    }
+  }
+  return out;
 });
 
 // ---------- 播放 / 截图 ----------

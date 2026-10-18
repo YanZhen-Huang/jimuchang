@@ -21,6 +21,8 @@
 - **交互演示**：滑块调参数、点卡片切换、点图表柱条看详情、悬停反馈——观众能上手玩
 - **11 种元素**：文字 / 图片 / 视频 / 音频 / 形状 / 图标 / 滑块 / 图表 / 帧动画 / 3D 模型 / 网页小程序
 - **174 块中文积木**：事件 / 章节 / 元素 / 运动 / 外观 / 动画 / 克隆 / 媒体 / 侦测 / 数学 / 文本 / 数据 / 画笔 / 3D / 特效 / 逻辑 / 函数；每个元素都能拥有独立脚本
+- **积木 / 章节双模式**：章节模式用可视化流程设置显隐、动画、等待和跳转，并自动生成对应积木；积木模式可继续精细编辑
+- **素材区**：图片 / 音频 / 视频 / 3D / HTML 统一入库、搜索筛选、改名、引用检查；拖到舞台即可插入
 - **三层动画**：20 种入场预设 → 积木命令 → 关键帧编辑器
 - **导出与分享**：单文件 HTML 放映包（可交互、手机可看）/ PPT（可编辑 + 高保真）/ PDF 讲义 / MP4 录制 / Windows 单文件程序
 - **与本地数据联动**：图表可从 CSV 导入；放映包支持外置数据文件 `jimuchang-data.js`，改数据不用改 HTML；`.bdp` 项目双击直接打开
@@ -61,19 +63,19 @@ Windows 安装包由 GitHub Actions 自动构建（`.github/workflows/windows.ym
 ### 上手
 
 1. 启动 → 主页选一个模板或「示例演示」→ 点「播放」全屏放映（空格推进、Esc 退出）
-2. 左侧拖积木编排流程；工具栏「＋」添加元素；属性面板调外观 / 动画 / 关键帧
+2. 顶部切换「积木 / 章节」：章节模式自动生成流程积木，积木模式可精细控制；工具栏「＋」添加元素
 3. `Ctrl+S` 保存为 `.bdp` 单文件项目
 
 详细说明见 [docs/使用文档.md](docs/使用文档.md)，设计细节见 [docs/技术文档.md](docs/技术文档.md)。
 
 ## AI 接口（可选）
 
-程序运行时在 `127.0.0.1:17800` 开启本地 API（令牌见 `~/.config/jimuchang/api.json`）。
+本地 API 默认关闭，需要在「设置 → 高级」手动开启；只监听 `127.0.0.1`，令牌见 `~/.config/jimuchang/api.json`（权限 600）。
 配合 MCP 服务器（`tools/jimuchang-mcp`），支持 MCP 的 AI 客户端（opencode / Codex 等）可以直接：
 
 ```
 你：用积木剧场做个介绍太阳系的演示
-AI：（调用 23 个 MCP 工具）建场景 → 放元素 → 写积木脚本 → 截图自检 → 导出放映包
+AI：（调用 35 个 MCP 工具）建章节 → 查/传素材 → 放元素 → 写积木脚本 → 截图自检 → 导出放映包
 ```
 
 ## 项目结构
@@ -83,7 +85,7 @@ jimuchang/
 ├── src/                # C++ 外壳（Qt6 WebEngine 壳 + 文件/全屏桥 + HTTP API 服务器）
 ├── web/                # 前端（编辑器 + 舞台引擎 + 播放器）
 │   ├── js/             #   easing / project / stage / elements / animations /
-│   │                   #   blocks(积木+IR编译) / executor(IR执行) / keyframes /
+│   │                   #   blocks / chapter-flow / asset-hub / executor / keyframes /
 │   │                   #   effects / sprites / three-scene / jimu-api / player ...
 │   ├── vendor/         #   Blockly / Three.js / ECharts / JSZip（内置）
 │   └── assets/         #   内置 3D 模型等
@@ -95,10 +97,12 @@ jimuchang/
 ## 技术要点
 
 - **积木编译成 IR 指令**（不生成 JS），解释执行；导出放映包时预编译，播放器无需 Blockly
+- **章节模式是同一条 IR 链的上游投影**：结构化流程确定性生成 Blockly JSON，不复制项目数据
+- **安全默认**：本地 API 默认关闭，API / AI Key 配置文件仅当前用户可读写，文件桥限制扩展名与授权目录
 - **qrc 单文件发布**：全部前端资源编译进可执行文件，运行时零外部依赖
 - **qrc 下 fetch 不可用**的规避：3D 模型经 QWebChannel 读取 → ArrayBuffer → `GLTFLoader.parse`；导出包用 Blob URL 链解决 ESM 依赖
 - **本地 API 回调模式**：绕过 `runJavaScript` 不解析 Promise 的限制，经 QWebChannel 回传结果
-- **稳定的自动化测试**：`tools/test-regress.sh` 批跑 14 项内置钩子（渲染 / 交互 / 模板端到端 / 导出等）
+- **稳定的自动化测试**：`tools/test-regress.sh` 批跑 21 项内置钩子（渲染 / 交互 / AI / 素材 / 双模式 / 安全 / 导出等）
 
 ## 开发历程
 
@@ -116,6 +120,7 @@ jimuchang/
 | v0.3.0 | 版本号重编为 0.x 迭代线；示例打磨 / 本地文件联动 / Windows 安装包 |
 | v0.3.1 | 去 emoji 设计收敛 / 最近文件修复 / Windows 安装包上架 |
 | v0.4.0 | 细节功能：PDF 导出 / 播放激光笔 / 章节进度 / 复制粘贴 / 最近文件管理 / 窗口记忆 |
+| v0.4.x 开发中 | 安全基线 / 积木·章节双模式 / 素材区 / MCP 与 AI 素材复用 |
 
 各期详细报告见 [docs/](docs/)（[问题与改进清单](docs/问题与改进清单.md) 记录了每一轮"新用户走查"的修复过程）。
 

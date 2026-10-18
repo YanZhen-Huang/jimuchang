@@ -36,7 +36,9 @@ const Project = {
         background: JSON.parse(JSON.stringify(this.data.stage.background)),
         visibility: {}
       },
-      blocks: null
+      blocks: null,
+      flow: { version: 1, steps: [] },
+      flowMode: 'auto'
     };
     this.data.chapters.push(ch);
     return ch;
@@ -115,10 +117,19 @@ const Project = {
 
   // ---------- 资源 ----------
   addResource(name, mime, base64) {
+    const cleanName = String(name || '素材')
+      .split(/[\\/]/).pop()
+      .replace(/[\x00-\x1f\x7f]/g, '')
+      .slice(0, 140) || '素材';
+    const id = this.uid('res');
+    const extMatch = cleanName.match(/(\.[a-z0-9]{1,12})$/i);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
     const res = {
-      id: this.uid('res'),
-      name, mime, size: Math.round(base64.length * 0.75),
-      path: 'resources/' + this.uid('r') + '_' + name,
+      id,
+      name: cleanName,
+      mime: String(mime || 'application/octet-stream'),
+      size: Math.round(String(base64 || '').length * 0.75),
+      path: 'resources/' + id + ext,
       data: base64
     };
     this.data.resources.push(res);
@@ -126,6 +137,64 @@ const Project = {
   },
 
   getResource(id) { return this.data.resources.find(r => r.id === id) || null; },
+
+  findResource(ref) {
+    if (!ref) return null;
+    return this.getResource(ref) || this.data.resources.find(r => r.name === ref) || null;
+  },
+
+  resourceKind(r) {
+    const mime = String(r && r.mime || '').toLowerCase();
+    const name = String(r && r.name || '').toLowerCase();
+    if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name)) return 'image';
+    if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)$/.test(name)) return 'audio';
+    if (mime.startsWith('video/') || /\.(mp4|webm|mov)$/.test(name)) return 'video';
+    if (mime === 'model/gltf-binary' || mime === 'model/gltf+json' || /\.(glb|gltf)$/.test(name)) return 'model3d';
+    if (mime.startsWith('text/html') || /\.html?$/.test(name)) return 'webapp';
+    return 'file';
+  },
+
+  resourceUsage(id) {
+    const usage = [];
+    if (!id) return usage;
+    (this.data.elements || []).forEach(el => {
+      const p = el.props || {};
+      if (p.resourceId === id || (Array.isArray(p.frames) && p.frames.includes(id))) {
+        usage.push({ type: 'element', id: el.id, name: el.name });
+      }
+    });
+    const bgUsed = bg => bg && bg.type === 'image' && bg.value && bg.value.resourceId === id;
+    if (bgUsed(this.data.stage && this.data.stage.background)) {
+      usage.push({ type: 'stage', id: 'stage', name: '舞台背景' });
+    }
+    (this.data.chapters || []).forEach(ch => {
+      if (bgUsed(ch.preset && ch.preset.background)) {
+        usage.push({ type: 'chapter', id: ch.id, name: ch.name });
+      }
+    });
+    if (this.data.music && this.data.music.resourceId === id) {
+      usage.push({ type: 'music', id: 'music', name: '背景音乐' });
+    }
+    return usage;
+  },
+
+  removeResource(id, force = false) {
+    const i = this.data.resources.findIndex(r => r.id === id);
+    if (i < 0) return { ok: false, reason: '资源不存在' };
+    const usage = this.resourceUsage(id);
+    if (usage.length && !force) return { ok: false, reason: '素材仍被使用', usage };
+    this.data.resources.splice(i, 1);
+    return { ok: true, usage };
+  },
+
+  renameResource(id, name) {
+    const r = this.getResource(id);
+    if (!r) return false;
+    const cleanName = String(name || '').split(/[\\/]/).pop().replace(/[\x00-\x1f\x7f]/g, '').slice(0, 140);
+    if (!cleanName) return false;
+    r.name = cleanName;
+    return true;
+  },
 
   resourceUrl(id) {
     const r = this.getResource(id);
@@ -168,21 +237,76 @@ const Project = {
         id: sc.id,
         name: sc.name,
         preset: { background: JSON.parse(JSON.stringify(sc.background || firstBg)), visibility },
-        blocks: sc.blocks || null
+        blocks: sc.blocks || null,
+        flow: { version: 1, steps: [] },
+        flowMode: sc.blocks ? 'manual' : 'auto'
       };
     });
     if (!data.chapters.length) {
       data.chapters.push({
         id: this.uid('ch'), name: '章节 1',
         preset: { background: JSON.parse(JSON.stringify(firstBg)), visibility: {} },
-        blocks: null
+        blocks: null,
+        flow: { version: 1, steps: [] },
+        flowMode: 'auto'
       });
     }
     return data;
   },
 
+  normalizeChapterFlow() {
+    (this.data.chapters || []).forEach(ch => {
+      if (!ch.flow || typeof ch.flow !== 'object') {
+        ch.flow = { version: 1, steps: [] };
+      }
+      if (!Array.isArray(ch.flow.steps)) ch.flow.steps = [];
+      ch.flow.version = 1;
+      if (ch.flowMode !== 'auto' && ch.flowMode !== 'manual') {
+        ch.flowMode = ch.blocks ? 'manual' : 'auto';
+      }
+    });
+  },
+
+  _scanBlockState(state, risks) {
+    const walk = b => {
+      if (!b || typeof b !== 'object') return;
+      if (b.type === 'jimu_js' || b.type === 'jimu_self_js') risks.push('执行代码积木');
+      (b.inputs ? Object.values(b.inputs) : []).forEach(v => {
+        if (v && v.block) walk(v.block);
+        if (v && v.shadow) walk(v.shadow);
+      });
+      if (b.next && b.next.block) walk(b.next.block);
+    };
+    (state && state.blocks && state.blocks.blocks || []).forEach(walk);
+  },
+
+  executableRisks(data = this.data) {
+    const risks = new Set();
+    if (!data) return [];
+    const scan = state => {
+      const found = [];
+      this._scanBlockState(state, found);
+      found.forEach(x => risks.add(x));
+    };
+    scan(data.globalBlocks);
+    (data.chapters || []).forEach(ch => scan(ch.blocks));
+    (data.elements || []).forEach(el => {
+      scan(el.blocks);
+      if (el.type === 'webapp' && el.props && (el.props.inline || el.props.resourceId)) {
+        risks.add('嵌入网页小程序');
+      }
+    });
+    (data.resources || []).forEach(r => {
+      if (/^text\/html/i.test(r.mime || '') || /\.html?$/i.test(r.name || '')) {
+        risks.add('HTML 资源');
+      }
+    });
+    return [...risks];
+  },
+
   // ---------- .bdp 打包 / 解包 ----------
   async pack() {
+    if (typeof ChapterFlow !== 'undefined') ChapterFlow.syncAll();
     const zip = new JSZip();
     const data = JSON.parse(JSON.stringify(this.data));
     for (const r of data.resources) {
@@ -197,7 +321,7 @@ const Project = {
     return await zip.generateAsync({ type: 'base64' });
   },
 
-  async unpack(base64) {
+  async parse(base64) {
     const zip = await JSZip.loadAsync(base64, { base64: true });
     const pj = zip.file('project.json');
     if (!pj) throw new Error('不是有效的 .bdp 项目文件');
@@ -211,8 +335,18 @@ const Project = {
       if (f) r.data = await f.async('base64');
       else r.data = '';
     }
-    this.data = data;
-    this.idSeq = 1;
     return data;
+  },
+
+  applyLoadedData(data) {
+    this.data = data;
+    this.normalizeChapterFlow();
+    this.idSeq = 1;
+    return this.data;
+  },
+
+  async unpack(base64) {
+    const data = await this.parse(base64);
+    return this.applyLoadedData(data);
   }
 };

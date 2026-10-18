@@ -21,16 +21,24 @@ declare -A TESTS=(
   [uiscale]="--test-uiscale"
   [ctabs]="--test-ctabs"
   [templates]="--test-templates"
+  [ai]="--test-ai"
   [ppt]="--test-ppt"
   [pack]="--test-pack"
   [interactive]="--test-interactive"
   [playtpl]="--test-playtpl"
   [pdf]="--test-pdf"
+  [modes]="--test-modes"
+  [security]="--test-security"
+  [assets]="--test-assets"
+  [exe]="--test-exe"
 )
-ORDER=(canvaszoom playview layout elbar record hotkeys play save2 fx uiscale ctabs templates interactive playtpl pdf)
+ORDER=(canvaszoom playview layout elbar record hotkeys play save2 fx uiscale ctabs templates ai interactive playtpl pdf modes security assets exe)
 if [ "$#" -gt 0 ]; then ORDER=("$@"); fi
 
 fail=0
+if ! node tools/check-blocks.js; then fail=1; fi
+if ! node tools/check-chapter-flow.js; then fail=1; fi
+if ! node tools/check-mcp.js; then fail=1; fi
 for name in "${ORDER[@]}"; do
   arg="${TESTS[$name]:-}"
   if [ -z "$arg" ]; then echo "[$name] 未知测试（可选：${!TESTS[*]}）"; fail=1; continue; fi

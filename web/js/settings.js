@@ -9,6 +9,8 @@ const Settings = {
     leftWidth: 0,            // 0=自适应；>0=积木区拖拽宽度(px)
     leftCollapsed: false,    // 积木区收起
     propsCollapsed: false,   // 属性面板折叠
+    workspaceMode: 'blocks', // blocks=积木模式；chapters=章节模式
+    securityModeVersion: 1,  // 一次性安全默认迁移版本（内部键）
     // 编辑器
     autosaveMin: 2,          // 0=关闭
     alignGuides: true,
@@ -33,7 +35,7 @@ const Settings = {
     // 高级
     showAdvanced: true,
     cloneLimit: 200,
-    apiEnabled: true,
+    apiEnabled: false,
     // AI 助手（DeepSeek）
     aiKey: '',
     aiModel: 'deepseek-chat'
@@ -57,7 +59,20 @@ const Settings = {
     if (!host || !host.getPref) return;
     try {
       const raw = await host.getPref('settingsJson');
-      if (raw) this.data = Object.assign({}, this.defaults, JSON.parse(raw));
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.aiKey) {
+          // 旧版本曾把 Key 放在 settingsJson 里：迁移到独立设置项并从页面配置中移除。
+          try { host.setPref('aiKey', String(saved.aiKey)); } catch (e) { }
+        }
+        delete saved.aiKey;
+        if (Number(saved.securityModeVersion || 0) < 1) {
+          saved.apiEnabled = false;
+          saved.securityModeVersion = 1;
+        }
+        this.data = Object.assign({}, this.defaults, saved);
+        this.persist();
+      }
     } catch (e) {
       console.warn('读取设置失败', e);
     }
@@ -65,7 +80,9 @@ const Settings = {
 
   persist() {
     if (this.host && this.host.setPref) {
-      try { this.host.setPref('settingsJson', JSON.stringify(this.data)); } catch (e) { }
+      const safe = Object.assign({}, this.data);
+      delete safe.aiKey;
+      try { this.host.setPref('settingsJson', JSON.stringify(safe)); } catch (e) { }
     }
   },
 
@@ -74,7 +91,14 @@ const Settings = {
   },
 
   set(key, val) {
-    this.data[key] = val;
+    if (key === 'aiKey') {
+      if (this.host && this.host.setPref) {
+        try { this.host.setPref('aiKey', String(val || '')); } catch (e) { }
+      }
+      this.data.aiKey = '';
+    } else {
+      this.data[key] = val;
+    }
     this.persist();
     if (typeof App !== 'undefined' && App.applySettings) {
       try { App.applySettings(); } catch (e) { console.warn('应用设置失败', e); }
@@ -83,6 +107,9 @@ const Settings = {
 
   reset() {
     this.data = Object.assign({}, this.defaults);
+    if (this.host && this.host.setPref) {
+      try { this.host.setPref('aiKey', ''); } catch (e) { }
+    }
     this.persist();
     if (typeof App !== 'undefined' && App.applySettings) App.applySettings();
   },

@@ -14,6 +14,10 @@ const Templates = (() => {
   const finish = (bg) => {
     Project.data.stage.background = JSON.parse(JSON.stringify(bg));
     Project.data.globalBlocks = { blocks: { languageVersion: 0, blocks: [] } };
+    Project.data.chapters.forEach(ch => {
+      if (ch.blocks) ch.flowMode = 'manual';
+      else if (ch.flowMode !== 'manual') ch.flowMode = 'auto';
+    });
   };
   const grad = (angle, c1, c2) => ({ type: 'gradient', value: { kind: 'linear', angle, stops: [[c1, '0'], [c2, '1']] } });
   const T = (text, x, y, w, h, size, color, extra) => Project.createElement('text', {

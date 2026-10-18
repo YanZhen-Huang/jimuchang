@@ -27,6 +27,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QScreen>
+#include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTextStream>
@@ -61,11 +62,17 @@ protected:
     }
 };
 
+static void secureOwnerOnly(const QString &path) {
+    if (path.isEmpty()) return;
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
 class HostBridge : public QObject {
     Q_OBJECT
 public:
     explicit HostBridge(QObject *parent = nullptr) : QObject(parent) {}
     void setWindow(QWidget *w) { m_win = w; }
+    void grantUserPath(const QString &path) { grantPath(path); }
     QNetworkAccessManager *m_nam = nullptr;
 
 signals:
@@ -139,10 +146,15 @@ public slots:
             QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("未命名演示.bdp") : suggestedName),
             QStringLiteral("积木剧场项目 (*.bdp)"));
         if (path.isEmpty()) return QString();
+        grantPath(path);
         return saveProjectDirect(path, base64) ? path : QString();
     }
 
     bool saveProjectDirect(const QString &path, const QString &base64) {
+        if (!mayAccessPath(path, true)) {
+            qWarning() << "[安全] 拒绝写入未授权路径:" << path;
+            return false;
+        }
         QFile f(path);
         if (!f.open(QIODevice::WriteOnly)) return false;
         f.write(QByteArray::fromBase64(base64.toLatin1()));
@@ -151,8 +163,13 @@ public slots:
     }
 
     QString readFileBase64(const QString &path) {
+        if (!mayAccessPath(path, false)) {
+            qWarning() << "[安全] 拒绝读取未授权路径:" << path;
+            return QString();
+        }
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly)) return QString();
+        if (f.size() > kMaxBridgeFileBytes) return QString();
         return QString::fromLatin1(f.readAll().toBase64());
     }
 
@@ -163,13 +180,20 @@ public slots:
             m_win, QStringLiteral("打开项目"), QDir::homePath(),
             QStringLiteral("积木剧场项目 (*.bdp)"));
         if (path.isEmpty()) return r;
+        grantPath(path);
         return readProjectFile(path);
     }
 
     QVariantMap readProjectFile(const QString &path) {
         QVariantMap r;
+        if (!mayAccessPath(path, false, true)) {
+            qWarning() << "[安全] 拒绝打开未授权项目:" << path;
+            return r;
+        }
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly)) return r;
+        if (f.size() > kMaxProjectFileBytes) return r;
+        grantPath(path);
         r.insert(QStringLiteral("path"), path);
         r.insert(QStringLiteral("base64"), QString::fromLatin1(f.readAll().toBase64()));
         return r;
@@ -189,6 +213,8 @@ public slots:
             filter = QStringLiteral("3D 模型 (*.glb *.gltf)");
         else if (kind == QLatin1String("webapp"))
             filter = QStringLiteral("网页 (*.html *.htm)");
+        else if (kind == QLatin1String("asset"))
+            filter = QStringLiteral("项目素材 (*.png *.jpg *.jpeg *.gif *.webp *.svg *.bmp *.mp3 *.wav *.ogg *.m4a *.aac *.mp4 *.webm *.mov *.glb *.gltf *.html *.htm)");
         else
             filter = QStringLiteral("所有文件 (*)");
         const QString path = QFileDialog::getOpenFileName(
@@ -197,6 +223,7 @@ public slots:
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly)) return r;
         const QByteArray data = f.readAll();
+        if (data.size() > kMaxBridgeFileBytes) return r;
         QMimeDatabase db;
         r.insert(QStringLiteral("name"), QFileInfo(path).fileName());
         r.insert(QStringLiteral("mime"), db.mimeTypeForFileNameAndData(path, data).name());
@@ -210,6 +237,8 @@ public slots:
         QString filter;
         if (kind == QLatin1String("image"))
             filter = QStringLiteral("图片 (*.png *.jpg *.jpeg *.gif *.webp *.bmp)");
+        else if (kind == QLatin1String("asset"))
+            filter = QStringLiteral("项目素材 (*.png *.jpg *.jpeg *.gif *.webp *.svg *.bmp *.mp3 *.wav *.ogg *.m4a *.aac *.mp4 *.webm *.mov *.glb *.gltf *.html *.htm)");
         else
             filter = QStringLiteral("所有文件 (*)");
         const QStringList paths = QFileDialog::getOpenFileNames(
@@ -219,6 +248,7 @@ public slots:
             QFile f(path);
             if (!f.open(QIODevice::ReadOnly)) continue;
             const QByteArray data = f.readAll();
+            if (data.size() > kMaxBridgeFileBytes) continue;
             QVariantMap r;
             r.insert(QStringLiteral("name"), QFileInfo(path).fileName());
             r.insert(QStringLiteral("mime"), db.mimeTypeForFileNameAndData(path, data).name());
@@ -235,6 +265,7 @@ public slots:
             QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("放映机.html") : suggestedName),
             QStringLiteral("网页 (*.html)"));
         if (path.isEmpty()) return QString();
+        grantPath(path);
         QFile f(path);
         if (!f.open(QIODevice::WriteOnly)) return QString();
         f.write(QByteArray::fromBase64(base64.toLatin1()));
@@ -248,7 +279,10 @@ public slots:
         list.removeAll(QString());   // 过滤历史空项（列表序列化的尾巴逗号会产生幽灵条目）
         QVariantList out;
         out.reserve(list.size());
-        for (const QString &x : list) out.append(x);
+        for (const QString &x : list) {
+            grantPath(x);
+            out.append(x);
+        }
         return out;
     }
 
@@ -261,6 +295,9 @@ public slots:
         list.prepend(path);
         while (list.size() > 8) list.removeLast();
         s.setValue(QStringLiteral("recentFiles"), list);
+        s.sync();
+        secureOwnerOnly(s.fileName());
+        grantPath(path);
     }
 
     void removeRecentFile(const QString &path) {
@@ -287,6 +324,10 @@ public slots:
                 QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("演示.pdf") : suggestedName),
                 QStringLiteral("PDF (*.pdf)"));
             if (path.isEmpty()) return QString();
+            grantPath(path);
+        } else if (!mayAccessPath(path, true)) {
+            qWarning() << "[安全] 拒绝写入未授权 PDF 路径:" << path;
+            return QString();
         }
         QPdfWriter writer(path);
         writer.setPageSize(QPageSize(QPageSize::A4));
@@ -322,12 +363,28 @@ public slots:
     // 全局偏好读写（设置面板用；部分项重启生效）
     void setPref(const QString &key, const QString &val) {
         QSettings s;
-        s.setValue(key, val);
+        QString stored = val;
+        // AI Key 只保存在独立的 QSettings 项里，不能随 settingsJson 回传给网页。
+        if (key == QLatin1String("settingsJson")) {
+            QJsonObject obj = QJsonDocument::fromJson(val.toUtf8()).object();
+            obj.remove(QStringLiteral("aiKey"));
+            stored = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+        }
+        s.setValue(key, stored);
+        s.sync();
+        secureOwnerOnly(s.fileName());
     }
 
     QString getPref(const QString &key) {
+        if (key == QLatin1String("aiKey")) return QString();
         QSettings s;
-        return s.value(key).toString();
+        QString value = s.value(key).toString();
+        if (key == QLatin1String("settingsJson")) {
+            QJsonObject obj = QJsonDocument::fromJson(value.toUtf8()).object();
+            obj.remove(QStringLiteral("aiKey"));
+            value = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+        }
+        return value;
     }
 
     // 导出 Windows 单文件程序：[外壳 exe] + [HTML] + [8字节偏移]
@@ -355,10 +412,12 @@ public slots:
             QDir::homePath() + QLatin1Char('/') + suggestedName,
             QStringLiteral("Windows 程序 (*.exe)"));
         if (path.isEmpty()) return QString();
+        grantPath(path);
         return writeExeBundle(path, htmlBase64) ? path : QString();
     }
 
     QString exportExeTo(const QString &path, const QString &htmlBase64) {
+        if (!mayAccessPath(path, true)) return QString();
         return writeExeBundle(path, htmlBase64) ? path : QString();
     }
 
@@ -369,6 +428,7 @@ public slots:
             QDir::homePath() + QLatin1Char('/') + (suggestedName.isEmpty() ? QStringLiteral("演示.pptx") : suggestedName),
             QStringLiteral("PPT 演示文稿 (*.pptx)"));
         if (path.isEmpty()) return QString();
+        grantPath(path);
         QFile f(path);
         if (!f.open(QIODevice::WriteOnly)) return QString();
         f.write(QByteArray::fromBase64(base64.toLatin1()));
@@ -502,6 +562,82 @@ public:
     bool isDirty() const { return m_dirty; }
 
 private:
+    static constexpr qint64 kMaxBridgeFileBytes = 512LL * 1024 * 1024;
+    static constexpr qint64 kMaxProjectFileBytes = 1024LL * 1024 * 1024;
+
+    QString normalizedPath(const QString &path) const {
+        if (path.startsWith(QLatin1String(":/"))) return path;
+        const QFileInfo fi(path);
+        const QString existing = fi.exists() ? fi.canonicalFilePath() : QString();
+        if (!existing.isEmpty()) return QDir::cleanPath(existing);
+        const QString parent = fi.absolutePath();
+        const QFileInfo pfi(parent);
+        const QString canonicalParent = pfi.exists() ? pfi.canonicalFilePath() : QDir::cleanPath(parent);
+        return QDir(canonicalParent).filePath(fi.fileName());
+    }
+
+    void grantPath(const QString &path) {
+        if (path.isEmpty() || path.startsWith(QLatin1String(":/"))) return;
+        m_grantedPaths.insert(normalizedPath(path));
+    }
+
+    bool isUnder(const QString &path, const QString &root) const {
+        if (root.isEmpty()) return false;
+        const QString canonicalRoot = normalizedPath(root);
+        const QString canonicalPath = normalizedPath(path);
+        return canonicalPath == canonicalRoot
+            || canonicalPath.startsWith(canonicalRoot + QDir::separator());
+    }
+
+    bool isTestPath(const QString &path) const {
+        return isUnder(path, QStringLiteral("/tmp/opencode"))
+            || isUnder(path, QStringLiteral("/tmp/jimuchang-regress"))
+            || path.startsWith(QStringLiteral("/tmp/test_"));
+    }
+
+    bool isCachePath(const QString &path) const {
+        return isUnder(path, QDir::homePath() + QStringLiteral("/.cache/jimuchang"));
+    }
+
+    bool isCommonUserPath(const QString &path) const {
+        return isUnder(path, QDir::homePath() + QStringLiteral("/Documents"))
+            || isUnder(path, QDir::homePath() + QStringLiteral("/Desktop"))
+            || isUnder(path, QDir::homePath() + QStringLiteral("/下载"))
+            || isUnder(path, QDir::homePath() + QStringLiteral("/Downloads"));
+    }
+
+    bool extensionAllowed(const QString &path, bool write, bool projectOnly) const {
+        const QString suffix = QFileInfo(path).suffix().toLower();
+        if (projectOnly) return suffix == QLatin1String("bdp");
+        if (write) {
+            static const QSet<QString> exts{
+                QStringLiteral("bdp"), QStringLiteral("html"), QStringLiteral("htm"),
+                QStringLiteral("pptx"), QStringLiteral("pdf"), QStringLiteral("mp4"),
+                QStringLiteral("js"), QStringLiteral("exe")
+            };
+            return exts.contains(suffix);
+        }
+        static const QSet<QString> exts{
+            QStringLiteral("bdp"), QStringLiteral("html"), QStringLiteral("htm"),
+            QStringLiteral("pdf"), QStringLiteral("png"), QStringLiteral("jpg"),
+            QStringLiteral("jpeg"), QStringLiteral("webp"), QStringLiteral("gif"),
+            QStringLiteral("svg"), QStringLiteral("bmp"), QStringLiteral("mp3"),
+            QStringLiteral("wav"), QStringLiteral("ogg"), QStringLiteral("mp4"),
+            QStringLiteral("webm"), QStringLiteral("glb"), QStringLiteral("gltf")
+        };
+        return exts.contains(suffix);
+    }
+
+    bool mayAccessPath(const QString &path, bool write, bool projectOnly = false) const {
+        if (path.isEmpty()) return false;
+        if (path.startsWith(QLatin1String(":/"))) return !write;
+        const QString canonical = normalizedPath(path);
+        if (!extensionAllowed(canonical, write, projectOnly)) return false;
+        if (m_grantedPaths.contains(canonical)) return true;
+        if (isCachePath(canonical) || isTestPath(canonical)) return true;
+        return isCommonUserPath(canonical);
+    }
+
     // 抓一帧：裁剪舞台区域 → 缩放到输出分辨率 → JPEG 落盘（时间戳相对录制开始）
     void recordTick() {
         if (!m_view || m_recDir.isEmpty()) return;
@@ -543,6 +679,7 @@ private:
     QWidget *m_win = nullptr;
     QWebEngineView *m_view = nullptr;
     ApiServer *m_api = nullptr;
+    QSet<QString> m_grantedPaths;
     bool m_dirty = false;
 };
 
@@ -637,6 +774,15 @@ int main(int argc, char *argv[]) {
     QCoreApplication::setApplicationName(QStringLiteral("jimuchang"));
     QCoreApplication::setOrganizationName(QStringLiteral("jimuchang"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.4.1"));
+    {
+        const QString configDir = QDir::homePath() + QStringLiteral("/.config/jimuchang");
+        QDir().mkpath(configDir);
+        QFile::setPermissions(configDir, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+        QSettings settings;
+        settings.sync();
+        secureOwnerOnly(settings.fileName());
+        secureOwnerOnly(configDir + QStringLiteral("/api.json"));
+    }
 
     MainWindow win;
     win.resize(1440, 900);
@@ -739,6 +885,18 @@ int main(int argc, char *argv[]) {
         }
         if (args.contains(QStringLiteral("--test-settings"))) {
             q.addQueryItem(QStringLiteral("testsettings"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-modes"))) {
+            q.addQueryItem(QStringLiteral("testmodes"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-security"))) {
+            q.addQueryItem(QStringLiteral("testsecurity"), QStringLiteral("1"));
+            hasQuery = true;
+        }
+        if (args.contains(QStringLiteral("--test-assets"))) {
+            q.addQueryItem(QStringLiteral("testassets"), QStringLiteral("1"));
             hasQuery = true;
         }
         if (args.contains(QStringLiteral("--test-blocks2"))) {
@@ -858,6 +1016,7 @@ int main(int argc, char *argv[]) {
         for (int i = 1; i < args.size(); ++i) {
             const QString a = args.at(i);
             if (!a.startsWith(QStringLiteral("--")) && a.endsWith(QStringLiteral(".bdp"), Qt::CaseInsensitive)) {
+                bridge->grantUserPath(a);
                 q.addQueryItem(QStringLiteral("file"), a);
                 hasQuery = true;
                 break;
@@ -905,7 +1064,7 @@ int main(int argc, char *argv[]) {
 
     // 本地 AI 接口（127.0.0.1 + Bearer 令牌，配置见 ~/.config/jimuchang/api.json）
     const bool noApi = args.contains(QStringLiteral("--no-api"))
-        || !QSettings().value(QStringLiteral("apiEnabled"), true).toBool();
+        || !QSettings().value(QStringLiteral("apiEnabled"), false).toBool();
     if (!noApi) {
         auto *api = new ApiServer(view, &app);
         bridge->setApiServer(api);
