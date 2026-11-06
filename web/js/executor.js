@@ -47,6 +47,18 @@ const Executor = {
   },
 
   // ---------- 播放控制 ----------
+  // “当演示开始”可能被用户放在全局页、章节页或元素脚本页。
+  // 章节页原先虽然能保存和编译，但播放时不会被调度，导致整段脚本静默失效。
+  onStartScripts() {
+    const list = [];
+    const collect = arr => (arr || []).forEach(s => {
+      if (s && s.kind === 'onStart') list.push(s);
+    });
+    collect(this.scripts.global);
+    (Project.data.chapters || []).forEach(ch => collect(this.scripts.scenes[ch.id]));
+    return list;
+  },
+
   async start() {
     if (!Project.data.chapters.length) return;
     this.playing = true;
@@ -66,8 +78,9 @@ const Executor = {
     }
     const first = Project.data.chapters[0].id;
     await Stage.goScene(first, { duration: 0 });
-    // 全局"当演示开始"脚本并发长跑
-    this.scripts.global.filter(s => s.kind === 'onStart').forEach(s => {
+    // “当演示开始”脚本并发长跑。章节页里的同名帽子也执行，
+    // 避免用户在当前章节页搭好积木后播放毫无反应。
+    this.onStartScripts().forEach(s => {
       this.run(s.body, this.newCtx());
     });
     // v2 元素"当我开始"脚本（每个母体元素各跑一次，self=自己；克隆体不跑）

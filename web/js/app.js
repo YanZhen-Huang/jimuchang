@@ -1,10 +1,10 @@
 // 主控：UI 绑定、标签页、播放、存取、示例
-function toast(msg) {
+function toast(msg, duration = 2000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+  t._timer = setTimeout(() => t.classList.remove('show'), duration);
 }
 
 // Blockly 序列化链式构造小工具
@@ -295,11 +295,21 @@ const App = {
         console.log('KFTEST|dots|x=' + el.keyframes.tracks.x.length + ' y=' + el.keyframes.tracks.y.length + ' op=' + el.keyframes.tracks.opacity.length);
         console.log('KFTEST|sample@1s|x=' + Keyframes.sampleTrack(el.keyframes.tracks.x, 1).toFixed(1) + ' op=' + Keyframes.sampleTrack(el.keyframes.tracks.opacity, 1).toFixed(2));
         console.log('KFTEST|panel|dots=' + document.querySelectorAll('#kf-overlay .kf-dot').length);
-        await sleep(300);
-        Keyframes.preview();
-        console.log('KFTEST|play|started');
+        const dom = Stage.elDom(el.id);
+        const preview = Keyframes.preview();
+        await sleep(250);
+        const running = !!dom._kfRaf;
+        document.getElementById('kf-close').click();
+        await preview;
+        await sleep(80);
+        const closed = document.getElementById('kf-overlay').classList.contains('hidden');
+        const stopped = !dom._kfRaf;
+        console.log(`KFTEST|preview|running=${running}|stopped=${stopped}`);
+        console.log(`KFTEST|close|closed=${closed}`);
+        console.log((running && stopped && closed) ? 'KFTEST|PASS' : 'KFTEST|FAIL');
       } catch (e) {
         console.log('KFTEST|error|' + e.message);
+        console.log('KFTEST|FAIL');
       }
     }
     if (params.get('testplay') === '1') {
@@ -1562,8 +1572,24 @@ window.__JC_PLAYER_DATA__ = ${JSON.stringify(data)};
   async play() {
     if (this.playing) return;
     if (!Project.data.elements.length) {
-      toast('演示是空的——先添加元素，或从主页模板 / 示例开始');
+      toast('演示是空的——先添加元素，或从主页模板 / 示例开始', 4500);
       return;
+    }
+    // 播放前预编译：只有动作块、没有橙色事件帽时，直接说明原因，
+    // 不再进入全屏后才显示一个容易被忽略的短提示。
+    try {
+      JimuBlocks.save();
+      const preflight = Executor.compileAll();
+      const lists = [preflight.global]
+        .concat(Object.values(preflight.scenes || {}))
+        .concat(Object.values(preflight.elements || {}));
+      const runnable = lists.some(list => Array.isArray(list) && list.length > 0);
+      if (!runnable && preflight.orphans > 0) {
+        toast('积木没有接到橙色「当…」事件帽，当前不会执行。请先放「当演示开始」或「当进入章节」再把动作接在下面。', 6000);
+        return;
+      }
+    } catch (e) {
+      console.warn('播放预检失败', e);
     }
     await this.enterPlayMode();
     await this.runPlayScripts();

@@ -15,6 +15,7 @@ declare -A TESTS=(
   [elbar]="--test-elbar"
   [record]="--test-record"
   [hotkeys]="--test-hotkeys"
+  [kf]="--test-kf"
   [play]="--test-play"
   [save2]="--test-save2"
   [fx]="--test-fx"
@@ -32,12 +33,13 @@ declare -A TESTS=(
   [assets]="--test-assets"
   [exe]="--test-exe"
 )
-ORDER=(canvaszoom playview layout elbar record hotkeys play save2 fx uiscale ctabs templates ai interactive playtpl pdf modes security assets exe)
+ORDER=(canvaszoom playview layout elbar record hotkeys kf play save2 fx uiscale ctabs templates ai interactive playtpl pdf modes security assets exe)
 if [ "$#" -gt 0 ]; then ORDER=("$@"); fi
 
 fail=0
 if ! node tools/check-blocks.js; then fail=1; fi
 if ! node tools/check-chapter-flow.js; then fail=1; fi
+if ! node tools/check-executor-events.js; then fail=1; fi
 if ! node tools/check-mcp.js; then fail=1; fi
 for name in "${ORDER[@]}"; do
   arg="${TESTS[$name]:-}"

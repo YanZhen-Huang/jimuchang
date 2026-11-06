@@ -78,6 +78,12 @@ const Keyframes = {
     this.stop(dom);
     return new Promise(resolve => {
       const t0 = performance.now();
+      const finish = () => {
+        dom._kfRaf = null;
+        dom._kfResolve = null;
+        resolve();
+      };
+      dom._kfResolve = finish;
       const step = () => {
         const t = (performance.now() - t0) / 1000;
         if (loop) {
@@ -85,8 +91,7 @@ const Keyframes = {
           dom._kfRaf = requestAnimationFrame(step);
         } else if (t >= duration) {
           this.applyAt(el, dom, duration);
-          dom._kfRaf = null;
-          resolve();
+          finish();
         } else {
           this.applyAt(el, dom, t);
           dom._kfRaf = requestAnimationFrame(step);
@@ -97,10 +102,19 @@ const Keyframes = {
   },
 
   stop(dom) {
-    if (dom && dom._kfRaf) {
-      cancelAnimationFrame(dom._kfRaf);
-      dom._kfRaf = null;
-    }
+    if (!dom) return;
+    if (dom._kfRaf) cancelAnimationFrame(dom._kfRaf);
+    dom._kfRaf = null;
+    const finish = dom._kfResolve;
+    dom._kfResolve = null;
+    if (finish) finish();
+  },
+
+  resetElement(el, dom) {
+    if (!el || !dom) return;
+    this.stop(dom);
+    Anim.reset(el, dom);
+    Elements.applyBox(el, dom);
   },
 
   // ---------- 编辑器面板 ----------
@@ -157,8 +171,13 @@ const Keyframes = {
   close() {
     const el = this.currentEl();
     const dom = el && Stage.elDom(el.id);
-    if (dom) this.reset(el, dom);
-    this.panelEl.classList.add('hidden');
+    try {
+      this.resetElement(el, dom);
+    } catch (e) {
+      console.warn('关键帧预览重置失败', e);
+    } finally {
+      this.panelEl.classList.add('hidden');
+    }
   },
 
   render() {
@@ -299,7 +318,7 @@ const Keyframes = {
     if (!sel) return;
     const dom = Stage.elDom(sel.element.id);
     if (!dom) return;
-    this.reset(sel.element, dom);
+    this.resetElement(sel.element, dom);
     await sleep(30);
     await this.play(sel.element, dom, { loop: false });
   },
